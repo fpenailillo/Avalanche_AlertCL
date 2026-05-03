@@ -1564,23 +1564,52 @@ El LLM veía `FUSION_ACTIVA` como valor de salida válido. Al pasarse al clasifi
 - `agentes/prompts/registro_versiones.py`: meteorologico 5.0.0→5.1.0, orquestador 3.0.0→3.1.0, **VERSION_GLOBAL: 6.0→6.1**
 - `notebooks_validacion/reprocesar_retroactivo.py`: `ya_procesado_v6()` ahora verifica `STARTS_WITH('v6.1')` → fuerza re-run de todos los 120 boletines
 
-### Reproceso v6.1
-**Estado:** Lanzado en background (PID 6761) el 2026-05-03 ~07:31 AM
-- 120 runs: 30 Suiza (H1/H3) + 90 La Parva (H4)
-- ETA: ~3.5 horas
-- Comando de seguimiento: `tail -f /tmp/reproceso_v61.log`
-- Objetivo: sesgo H4 +1.61→≤+0.80, QWK -0.000→≥+0.20
+### Reproceso v6.1 → v6.2
+**Estado:** Reproceso v6.1 fue reemplazado por v6.2 (FIX-HIST + FIX-STORE críticos descubiertos).
+- FIX-HIST: `consultor_bigquery.py` pasaba `QueryJobConfig` donde se esperaba `list` → historial siempre 0 → REQ-01 nunca activaba
+- FIX-STORE: `almacenador.py` retornaba temprano ante streaming buffer sin campo `guardado_bigquery` → reproceso reportaba ERROR
+- VERSION_GLOBAL: 6.1→6.2
 
-### Hipótesis esperadas para Ronda 5 (v6.1)
-| Fix | Mecanismo | Efecto esperado |
-|-----|-----------|-----------------|
-| FIX-T | tamano≤3 en calma | Nivel 3→2 en ~50% días calmos |
-| FIX-V | excluir DIA_ALTO_RIESGO del contador | Menos falsos bumps de frecuencia |
-| FIX-D | dias_consecutivos SIEMPRE pasado | REQ-01 calma sostenida activa correctamente |
-| FIX-S3 | FUSION_ACTIVA eliminada del template | S3 emite CICLO_DIURNO_NORMAL → factor neutro → nivel baja |
+**Reproceso v6.2:** Completado 2026-05-03 15:01 (PID 43915, después de restart por TCP hang en PID 16037)
+- 120 runs: ok=30, skip=90, err=0
+- Duración efectiva: ~100 min (2 TCP hangs resueltos por reintentos automáticos)
+- Log: `/tmp/reproceso_v62d.log`
 
-### Pendiente
-- [ ] Esperar reproceso v6.1 (~3.5h desde las 07:31)
-- [ ] Ejecutar Ronda 5: `python notebooks_validacion/07_validacion_slf_suiza.py --version v6.1` y `python notebooks_validacion/08_validacion_snowlab.py --version v6.1`
-- [ ] Actualizar tabla hipótesis en CLAUDE.md y RESULTADOS_VALIDACION.md
-- [ ] Commit con resultados de validación
+### Ronda 5 — Resultados v6.2 (2026-05-03)
+
+**H1/H3 SLF Suiza** (n=24 pares, 3 estaciones × 10 fechas invierno 2023-2024):
+
+| Métrica | v5.0 R4 | v6.2 R5 | Δ | Objetivo |
+|---------|---------|---------|---|----------|
+| QWK | +0.143 | −0.031 | −0.174 | ≥ 0.59 |
+| F1-macro | 0.235 | 0.244 | +0.009 | ≥ 0.75 |
+| Acc exacta | 0.292 | 0.333 | +0.041 | — |
+| Acc ±1 | 0.833 | 0.750 | −0.083 | — |
+| Sesgo | −0.67 | −0.75 | −0.08 | — |
+
+*Regresión QWK en Suiza: FIX-T (calibrado para La Parva) aumentó la subestimación en los Alpes (54.2% nivel 1 vs 12.5% real). Gap estructural de dominio (CR-4) es la causa raíz.*
+
+**H4 Snowlab La Parva** (n=87 pares, 3 sectores × 30 boletines):
+
+| Métrica | v5.0 R4 | v6.2 R5 | Δ | Objetivo |
+|---------|---------|---------|---|----------|
+| QWK | −0.000 | −0.031 | −0.031 | ≥ 0.40 |
+| MAE | 1.724 | 1.230 | −0.494 | — |
+| Sesgo | +1.609 | +0.885 | −0.724 | ≤ +0.80 |
+| F1-macro | 0.084 | 0.145 | +0.061 | — |
+| % nivel 1-2 | 21% | 58% | +37pp | ≥ 30% ✓ |
+
+*FIX-T funcionó: nivel 1-2 pasó de 21%→58% (objetivo 30% cumplido). Sesgo −45% (objetivo ≤+0.80 casi alcanzado, margen 0.085). QWK sigue negativo por gap distribucional: Snowlab 69% nivel 1 vs AndesAI 15%.*
+
+### Análisis de causas raíz residuales
+
+El gap en QWK persiste porque:
+1. **CR-1 residual**: topografía La Parva sigue siendo extrema incluso con FIX-T; `tamano=3` con `ventanas≥1` sigue produciendo nivel 2-3
+2. **CR-5 nuevo (distribución Snowlab)**: Snowlab clasifica el 69% como nivel 1 — posiblemente metodología EAWS local más conservadora, o sesgo de temporada
+3. **FIX-T efecto colateral**: en Alpes, cap tamano≤3 reduce niveles incluso cuando el terreno justificaría nivel 2-3 (subestimación adicional)
+
+### Pendiente v7.0
+- [ ] FIX-H: `estabilidad_satelital='poor'` default en Alpes sin ViT (mejora H1/H3)
+- [ ] Investigar distribución Snowlab: ¿por qué 69% nivel 1?
+- [ ] Ajuste tamano por dominio geográfico (factor regional Andes vs Alpes)
+- [ ] Reprocesar Ronda 6 con v7.0
