@@ -1085,12 +1085,10 @@ class ConsultorBigQuery:
                 WHERE z.nombre_zona = @zona
                 LIMIT 1
             """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("zona", "STRING", ubicacion),
-                ]
-            )
-            filas = list(self._ejecutar_query(sql, job_config))
+            parametros_st = [
+                bigquery.ScalarQueryParameter("zona", "STRING", ubicacion),
+            ]
+            filas = self._ejecutar_query(sql, parametros_st)
             if not filas:
                 return {"disponible": False, "razon": f"Zona '{ubicacion}' no encontrada en zonas_objetivo"}
 
@@ -1138,12 +1136,10 @@ class ConsultorBigQuery:
                 WHERE nombre_zona = @zona
                 LIMIT 1
             """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("zona", "STRING", ubicacion),
-                ]
-            )
-            filas = list(self._ejecutar_query(sql, job_config))
+            parametros = [
+                bigquery.ScalarQueryParameter("zona", "STRING", ubicacion),
+            ]
+            filas = self._ejecutar_query(sql, parametros)
             if not filas:
                 return {"disponible": False, "razon": f"Zona '{ubicacion}' no encontrada"}
 
@@ -1184,14 +1180,12 @@ class ConsultorBigQuery:
                 ORDER BY fecha_emision DESC
                 LIMIT 14
             """
-            job_config = bigquery.QueryJobConfig(
-                query_parameters=[
-                    bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
-                    bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", fecha_ref),
-                    bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
-                ]
-            )
-            filas = list(self._ejecutar_query(sql, job_config))
+            parametros_hist = [
+                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", fecha_ref),
+                bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
+            ]
+            filas = self._ejecutar_query(sql, parametros_hist)
 
             if not filas:
                 return {

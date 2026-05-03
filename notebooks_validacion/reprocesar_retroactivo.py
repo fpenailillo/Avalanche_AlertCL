@@ -1,10 +1,15 @@
 """
-Reprocesamiento retroactivo v6.1 — AndesAI (FIX-T + FIX-V + FIX-D + FIX-S3 implementados)
+Reprocesamiento retroactivo v6.2 — AndesAI (FIX-T + FIX-V + FIX-D + FIX-S3 + FIX-HIST implementados)
 
 Genera nuevas predicciones para las fechas de validación usando el código
-actualizado (v6.1) y las guarda en clima.boletines_riesgo (upsert).
+actualizado (v6.2) y las guarda en clima.boletines_riesgo (upsert).
 
-v6.1 cambios respecto a v6.0:
+v6.2 cambios respecto a v6.2:
+  - FIX-HIST: bug QueryJobConfig en obtener_historial_boletines y obtener_zona_geografica;
+              _ejecutar_query recibía QueryJobConfig en vez de lista → historial siempre 0;
+              dia_consecutivos_nivel_bajo ahora lee correctamente desde BigQuery
+
+v6.2 cambios respecto a v6.0:
   - FIX-S3: template de salida S3 corregido; FUSION_ACTIVA legacy eliminado del prompt;
             LLM ahora emite FUSION_ACTIVA_CON_CARGA o CICLO_DIURNO_NORMAL correctamente
 
@@ -82,13 +87,13 @@ SECTORES_LAPARVA = [
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v6.1 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v6.2 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v6.1')
+          AND STARTS_WITH(version_prompts, 'v6.2')
     """
     job = cliente.query(
         q,
@@ -130,7 +135,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     total = len(runs)
 
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v6.1 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v6.2 — {total} ejecuciones")
     print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
     print(f"{'='*65}\n")
@@ -145,7 +150,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
 
         # Saltar si ya procesado con v5
         if ya_procesado_v6(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v6.1) — {ubicacion} {fecha_str}")
+            logger.info(f"{prefijo} SKIP (ya v6.2) — {ubicacion} {fecha_str}")
             skip += 1
             continue
 
@@ -199,7 +204,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v6.1)")
+    print(f"  Skip: {skip} (ya v6.2)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -207,17 +212,17 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 5 validación v6.1:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v6.1")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v6.1")
-        print("\nObjetivo v6.1:")
+        print("\nPróximo paso — Ronda 5 validación v6.2:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v6.2")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v6.2")
+        print("\nObjetivo v6.2:")
         print("  H4 sesgo: +1.61 → ≤ +0.80 (FIX-T tamano cap + FIX-V ventanas + FIX-S3)")
         print("  H4 QWK:   -0.00 → ≥ +0.20 (FIX-D cadena REQ-01 + FIX-S3 CICLO_DIURNO)")
         print("  H4 nivel 1-2: 21% → ≥ 30% (FIX-T nivel 3→2 en días calmos)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v6.1")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v6.2")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
