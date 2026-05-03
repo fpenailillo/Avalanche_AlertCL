@@ -420,19 +420,14 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
                 _eliminar_boletin_existente(cliente_bq, nombre_ubicacion, fecha_emision)
             except Exception as e_del:
                 if "streaming buffer" in str(e_del).lower():
-                    # Fila recién insertada vía streaming — no se puede DELETE todavía.
-                    # El boletín existente es fresco (< 90 min), se omite re-inserción.
+                    # Fila en streaming buffer (< 90 min) — DELETE no disponible.
+                    # Se inserta igualmente; las queries usan QUALIFY ROW_NUMBER para deduplicar.
                     logger.warning(
                         f"Boletín {nombre_ubicacion} en streaming buffer — "
-                        "omitiendo re-inserción (datos recientes válidos)"
+                        "insertando nueva versión (QUALIFY deduplicará)"
                     )
-                    return {
-                        "guardado": True,
-                        "razon": "ya_existe_streaming_buffer",
-                        "uri_gcs": None,
-                        "errores": [],
-                    }
-                raise
+                else:
+                    raise
 
         errores_bq = cliente_bq.insert_rows_json(tabla_ref, [fila])
 
