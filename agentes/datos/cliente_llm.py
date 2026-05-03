@@ -137,7 +137,13 @@ class ClienteDatabricks:
         base_url = os.environ.get("DATABRICKS_BASE_URL", self.BASE_URL_DEFAULT)
         self._modelo = os.environ.get("DATABRICKS_MODEL", self.MODELO_DEFAULT)
 
-        self._cliente = OpenAI(api_key=token, base_url=base_url)
+        import httpx
+        self._cliente = OpenAI(
+            api_key=token,
+            base_url=base_url,
+            max_retries=0,
+            http_client=httpx.Client(timeout=httpx.Timeout(120.0, connect=10.0)),
+        )
         logger.debug(
             f"ClienteDatabricks inicializado → modelo: {self._modelo}, "
             f"base_url: {base_url}"
@@ -301,7 +307,7 @@ class ClienteDatabricks:
             usage=uso,
         )
 
-    TIMEOUT_SEGUNDOS = 300  # 5 minutos por llamada LLM
+    TIMEOUT_SEGUNDOS = 120  # 2 minutos por llamada LLM (httpx.Client ya tiene 120s)
 
     def crear_mensaje(self, *, model, max_tokens, system, tools, messages):
         tools_oi = self._tools_a_openai(tools)
