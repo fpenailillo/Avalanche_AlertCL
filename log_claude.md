@@ -1533,3 +1533,54 @@ La hipótesis se rechaza, pero el hallazgo es **publicable y significativo**:
 #### Contribución a la tesis
 
 H4 documenta una limitación fundamental de sistemas multi-agente basados en LLM sin acceso a datos in situ: la incapacidad de distinguir calma de riesgo bajo sin retroalimentación del manto real. Propone línea de trabajo futura: integración de datos NIVOLOG/CEAZA o sensor de snowpack para calibrar S5.
+
+---
+
+## Sesión 2026-05-03 — Sprint REQ-07a + REQ-07b + Reproceso v6.1
+
+### Contexto
+Continuación de sesión anterior. Reproceso v6.0 tenía solo 5/120 boletines completados.
+Se identificaron dos bugs críticos que impedían evaluar correctamente v6.0:
+1. Scripts de validación no filtraban por `version_prompts` → mezclaban v5 y v6
+2. Prompt de S3 aún tenía `FUSION_ACTIVA` (legacy) en el template de salida → LLM emitía este valor incorrecto
+
+### REQ-07a: Filtro version_prompts en scripts de validación (COMPLETADO)
+**Archivos modificados:**
+- `notebooks_validacion/07_validacion_slf_suiza.py`: `obtener_nuestros_boletines()` extendida con `version: str = "v6"`, filtro `STARTS_WITH(version_prompts, @version)` + `QUALIFY ROW_NUMBER()`, argumento CLI `--version`
+- `notebooks_validacion/08_validacion_snowlab.py`: `SQL_BOLETINES_ANDESAI` idem, `cargar_datos()` con `version: str = "v6"`, argumento CLI `--version`
+
+**Problema resuelto:** Sin filtro, la función `QUALIFY ROW_NUMBER()` ya existía pero no el filtro de versión — ambas versiones v5 y v6 del mismo boletín podían mezclarse.
+
+### REQ-07b / FIX-S3: Corrección FUSION_ACTIVA en prompts (COMPLETADO)
+**Hallazgo:** El template de salida de `subagente_meteorologico/prompts.py` línea 68 tenía:
+```
+[PRECIPITACION_CRITICA|NEVADA_RECIENTE|VIENTO_FUERTE|FUSION_ACTIVA|ESTABLE|combinación]
+```
+El LLM veía `FUSION_ACTIVA` como valor de salida válido. Al pasarse al clasificador EAWS, mapeaba a `poor` → piso nivel 3 en días calmos aunque S3 internamente generara `CICLO_DIURNO_NORMAL`.
+
+**Archivos modificados:**
+- `agentes/subagentes/subagente_meteorologico/prompts.py`: template → `FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL`
+- `agentes/orquestador/prompts.py`: mapping estabilidad actualizado de `FUSION_ACTIVA` a `FUSION_ACTIVA_CON_CARGA`
+- `agentes/prompts/registro_versiones.py`: meteorologico 5.0.0→5.1.0, orquestador 3.0.0→3.1.0, **VERSION_GLOBAL: 6.0→6.1**
+- `notebooks_validacion/reprocesar_retroactivo.py`: `ya_procesado_v6()` ahora verifica `STARTS_WITH('v6.1')` → fuerza re-run de todos los 120 boletines
+
+### Reproceso v6.1
+**Estado:** Lanzado en background (PID 6761) el 2026-05-03 ~07:31 AM
+- 120 runs: 30 Suiza (H1/H3) + 90 La Parva (H4)
+- ETA: ~3.5 horas
+- Comando de seguimiento: `tail -f /tmp/reproceso_v61.log`
+- Objetivo: sesgo H4 +1.61→≤+0.80, QWK -0.000→≥+0.20
+
+### Hipótesis esperadas para Ronda 5 (v6.1)
+| Fix | Mecanismo | Efecto esperado |
+|-----|-----------|-----------------|
+| FIX-T | tamano≤3 en calma | Nivel 3→2 en ~50% días calmos |
+| FIX-V | excluir DIA_ALTO_RIESGO del contador | Menos falsos bumps de frecuencia |
+| FIX-D | dias_consecutivos SIEMPRE pasado | REQ-01 calma sostenida activa correctamente |
+| FIX-S3 | FUSION_ACTIVA eliminada del template | S3 emite CICLO_DIURNO_NORMAL → factor neutro → nivel baja |
+
+### Pendiente
+- [ ] Esperar reproceso v6.1 (~3.5h desde las 07:31)
+- [ ] Ejecutar Ronda 5: `python notebooks_validacion/07_validacion_slf_suiza.py --version v6.1` y `python notebooks_validacion/08_validacion_snowlab.py --version v6.1`
+- [ ] Actualizar tabla hipótesis en CLAUDE.md y RESULTADOS_VALIDACION.md
+- [ ] Commit con resultados de validación
