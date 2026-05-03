@@ -172,6 +172,22 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         pendiente_max_grados=pendiente_max_grados
     )
 
+    # FIX-T: cap tamano≤3 en condiciones calmas.
+    # El tamano topográfico (desnivel/ha/pendiente) refleja el potencial máximo
+    # del terreno, no las condiciones actuales del manto. En días sin precipitación
+    # reciente ni viento, aludes de tamaño 4-5 no son posibles aunque el terreno
+    # tenga ese potencial. Condición: factor neutro Y ventanas_criticas < 2.
+    _factor_activo_tamano = bool(
+        factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
+    )
+    if tamano_final > 3 and not _factor_activo_tamano and ventanas_criticas_detectadas < 2:
+        logger.info(
+            f"[ClasificarEAWS] FIX-T: tamano capado {tamano_final}→3 "
+            f"(factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
+        )
+        tamano_final = 3
+        fuente_tamano = f"{fuente_tamano}→cap_calmo"
+
     # ─── 4. Consultar matriz EAWS ─────────────────────────────────────────────
     # consultar_matriz_eaws devuelve Tuple[int, Optional[int]] → (D1, D2)
     nivel_d1, nivel_d2 = consultar_matriz_eaws(
@@ -335,8 +351,8 @@ def _determinar_tamano(
     Returns:
         tuple: (tamano_int, fuente_str)
     """
-    # Si se pasó explícitamente un tamaño, usarlo
-    if tamano_eaws and tamano_eaws in ["1", "2", "3", "4", "5"]:
+    # Si se pasó explícitamente un tamaño, usarlo (acepta entero o string)
+    if tamano_eaws and str(tamano_eaws) in ["1", "2", "3", "4", "5"]:
         return int(tamano_eaws), "explicito"
 
     # Calcular dinámicamente si hay datos topográficos suficientes

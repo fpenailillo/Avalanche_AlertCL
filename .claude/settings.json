@@ -18,6 +18,7 @@
       "Bash(gcloud run services list *)",
       "Bash(bq ls *)",
       "Bash(gcloud run jobs executions list *)",
+      "Bash(gcloud run jobs list *)",
       "Bash(gcloud projects get-iam-policy *)",
       "Bash(gcloud auth list *)",
       "Bash(gsutil cat *)"

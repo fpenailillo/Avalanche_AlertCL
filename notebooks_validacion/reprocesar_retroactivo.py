@@ -1,13 +1,19 @@
 """
-Reprocesamiento retroactivo v5 — AndesAI (REQ-06+REQ-03+REQ-07+REQ-01 implementados)
+Reprocesamiento retroactivo v6.1 — AndesAI (FIX-T + FIX-V + FIX-D + FIX-S3 implementados)
 
 Genera nuevas predicciones para las fechas de validación usando el código
-actualizado (v5.0) y las guarda en clima.boletines_riesgo (upsert).
+actualizado (v6.1) y las guarda en clima.boletines_riesgo (upsert).
 
-v5.0 cambios respecto a v4.0:
-  - REQ-06: CICLO_DIURNO_NORMAL neutro (ya no empuja nivel 3 en calma andina)
-  - REQ-03: corrección orográfica ERA5 no aplica en Alpes (factor=1.0)
-  - REQ-01: cap calma se activa también con CICLO_DIURNO_NORMAL
+v6.1 cambios respecto a v6.0:
+  - FIX-S3: template de salida S3 corregido; FUSION_ACTIVA legacy eliminado del prompt;
+            LLM ahora emite FUSION_ACTIVA_CON_CARGA o CICLO_DIURNO_NORMAL correctamente
+
+v6.0 cambios respecto a v5.0:
+  - FIX-T: tamano_eaws capado en ≤3 cuando factor neutro y ventanas<2;
+           bug integer/string corregido en _determinar_tamano()
+  - FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO excluido del conteo de ventanas_criticas
+           que se usa para bump de frecuencia en la matriz EAWS
+  - FIX-D: prompt S5 reforzado para siempre pasar dias_consecutivos_nivel_bajo
 
 Procesamiento CRONOLÓGICO para que REQ-01 (persistencia temporal) pueda
 leer la cadena de predicciones v5 anteriores al evaluar calma sostenida.
@@ -75,14 +81,14 @@ SECTORES_LAPARVA = [
 ]
 
 
-def ya_procesado_v5(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v5 para esta (ubicacion, fecha)."""
+def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
+    """Retorna True si ya existe un boletín v6.1 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v5')
+          AND STARTS_WITH(version_prompts, 'v6.1')
     """
     job = cliente.query(
         q,
@@ -124,7 +130,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     total = len(runs)
 
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v5 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v6.1 — {total} ejecuciones")
     print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
     print(f"{'='*65}\n")
@@ -138,8 +144,8 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         prefijo = f"[{i:3d}/{total}]"
 
         # Saltar si ya procesado con v5
-        if ya_procesado_v5(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v5) — {ubicacion} {fecha_str}")
+        if ya_procesado_v6(cliente, ubicacion, fecha_str):
+            logger.info(f"{prefijo} SKIP (ya v6.1) — {ubicacion} {fecha_str}")
             skip += 1
             continue
 
@@ -193,7 +199,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v4)")
+    print(f"  Skip: {skip} (ya v6.1)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -201,16 +207,17 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 4 validación v5.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py")
-        print("  python notebooks_validacion/08_validacion_snowlab.py")
-        print("\nObjetivo v5.0:")
-        print("  H1/H3 sesgo: −0.92 → −0.50 (REQ-03 regional Alpes)")
-        print("  H4 sesgo: +2.02 → ≤ +0.80 (REQ-06 ciclo diurno)")
+        print("\nPróximo paso — Ronda 5 validación v6.1:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v6.1")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v6.1")
+        print("\nObjetivo v6.1:")
+        print("  H4 sesgo: +1.61 → ≤ +0.80 (FIX-T tamano cap + FIX-V ventanas + FIX-S3)")
+        print("  H4 QWK:   -0.00 → ≥ +0.20 (FIX-D cadena REQ-01 + FIX-S3 CICLO_DIURNO)")
+        print("  H4 nivel 1-2: 21% → ≥ 30% (FIX-T nivel 3→2 en días calmos)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v5")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v6.1")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",

@@ -77,13 +77,18 @@ SELECT
     DATE(br.fecha_emision)  AS fecha_eaws,
     br.nivel_eaws_24h,
     br.nivel_eaws_48h,
-    br.nivel_eaws_72h,
+    br.nivel_eaws_72h
 FROM `climas-chileno.clima.boletines_riesgo` br
 WHERE br.nombre_ubicacion IN (
     'La Parva Sector Alto', 'La Parva Sector Medio', 'La Parva Sector Bajo'
 )
   AND br.nivel_eaws_24h IS NOT NULL
   AND DATE(br.fecha_emision) >= '2024-06-01'
+  AND STARTS_WITH(br.version_prompts, @version)
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY br.nombre_ubicacion, DATE(br.fecha_emision)
+    ORDER BY br.fecha_emision DESC
+) = 1
 ORDER BY nombre_ubicacion, fecha_eaws
 """
 
@@ -111,8 +116,11 @@ MAPA_SECTOR = {
 }
 
 
-def cargar_datos(cliente):
-    df_eaws = cliente.query(SQL_BOLETINES_ANDESAI).to_dataframe()
+def cargar_datos(cliente, version: str = "v6"):
+    job_config = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("version", "STRING", version),
+    ])
+    df_eaws = cliente.query(SQL_BOLETINES_ANDESAI, job_config=job_config).to_dataframe()
     df_snow = cliente.query(SQL_SNOWLAB).to_dataframe()
 
     # Asegurar tipo fecha
@@ -300,12 +308,14 @@ def main():
                         help="'banda' usa el nivel por elevación; 'max' usa nivel_max global")
     parser.add_argument("--exportar", type=str, default=None,
                         help="Ruta CSV para exportar los pares (ej. /tmp/pares_h4.csv)")
+    parser.add_argument("--version", default="v6",
+                        help="Prefijo de version_prompts a evaluar (default: v6)")
     args = parser.parse_args()
 
     cliente = bigquery.Client(project=GCP_PROJECT)
 
-    print("Cargando datos de BigQuery...")
-    df_eaws, df_snow = cargar_datos(cliente)
+    print(f"Cargando datos de BigQuery (versión={args.version})...")
+    df_eaws, df_snow = cargar_datos(cliente, version=args.version)
     print(f"  AndesAI: {len(df_eaws)} boletines")
     print(f"  Snowlab: {len(df_snow)} boletines")
 

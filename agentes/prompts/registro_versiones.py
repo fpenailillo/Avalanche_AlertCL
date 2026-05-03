@@ -39,9 +39,9 @@ REGISTRO_PROMPTS = {
     "orquestador": {
         "modulo": "agentes.orquestador.prompts",
         "variable": "SYSTEM_PROMPT",
-        "version": "3.0.0",
-        "descripcion": "Pipeline 6 pasos: DEM → satélite → meteo → EAWS → boletín",
-        "hash_sha256": "50c62aa5b22af4bf",
+        "version": "3.1.0",
+        "descripcion": "FIX-S3: FUSION_ACTIVA → FUSION_ACTIVA_CON_CARGA en mapping estabilidad",
+        "hash_sha256": "1e7e2fd35c00e9b5",
     },
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
@@ -60,9 +60,9 @@ REGISTRO_PROMPTS = {
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
         "variable": "SYSTEM_PROMPT_METEOROLOGICO",
-        "version": "5.0.0",
-        "descripcion": "REQ-06: CICLO_DIURNO_NORMAL neutro vs FUSION_ACTIVA_CON_CARGA; precipitacion_72h_mm chain",
-        "hash_sha256": "819b6fddb6adf48a",
+        "version": "5.1.0",
+        "descripcion": "FIX-S3: template salida corregido a FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL (elimina FUSION_ACTIVA legacy)",
+        "hash_sha256": "7b02011031ec7b05",
     },
     "nlp": {
         "modulo": "agentes.subagentes.subagente_nlp.prompts",
@@ -74,14 +74,14 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "5.0.0",
-        "descripcion": "REQ-06: CICLO_DIURNO_NORMAL sin ajuste EAWS; FUSION_ACTIVA_CON_CARGA → poor",
-        "hash_sha256": "5f65608c80fc378c",
+        "version": "6.0.0",
+        "descripcion": "FIX-D: instrucción explícita dias_consecutivos_nivel_bajo SIEMPRE obligatorio",
+        "hash_sha256": "1c1f675934f3f2ae",
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "5.0"
+VERSION_GLOBAL = "6.1"
 
 
 def _calcular_hash(contenido: str) -> str:

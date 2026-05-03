@@ -65,7 +65,7 @@ ANÁLISIS METEOROLÓGICO — [UBICACIÓN]
 [lista de ventanas con tipo, severidad y descripción]
 
 **FACTOR METEOROLÓGICO EAWS:**
-[PRECIPITACION_CRITICA|NEVADA_RECIENTE|VIENTO_FUERTE|FUSION_ACTIVA|ESTABLE|combinación]
+[PRECIPITACION_CRITICA|NEVADA_RECIENTE|VIENTO_FUERTE|FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL|ESTABLE|combinación]
 
 **RESUMEN:**
 [Párrafo conciso describiendo el estado meteorológico y su impacto en el riesgo de avalanchas]

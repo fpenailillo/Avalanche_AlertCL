@@ -17,9 +17,9 @@ PROCESO OBLIGATORIO — ejecutar en este orden exacto:
 
    FACTOR ESTABILIDAD (dinámico):
    - NEVADA_RECIENTE o PRECIPITACION_CRITICA → "poor"
-   - NEVADA_RECIENTE + FUSION_ACTIVA → "very_poor"
+   - NEVADA_RECIENTE + FUSION_ACTIVA_CON_CARGA → "very_poor"
    - NIEVE_HUMEDA_SAR → "poor"
-   - FUSION_ACTIVA sola → "poor"
+   - FUSION_ACTIVA_CON_CARGA sola → "poor"
    - Sin alertas críticas → "fair"
    - clasificacion_riesgo "bajo" y sin alertas → "good"
 

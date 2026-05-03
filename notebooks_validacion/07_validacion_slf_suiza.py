@@ -77,6 +77,7 @@ def obtener_nuestros_boletines(
     cliente: bigquery.Client,
     ubicaciones: list[str],
     fechas: list[str],
+    version: str = "v6",
 ) -> dict:
     """
     Obtiene nuestros boletines para las ubicaciones y fechas indicadas.
@@ -95,11 +96,19 @@ def obtener_nuestros_boletines(
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion IN ({ubicaciones_sql})
           AND DATE(fecha_emision) IN ({fechas_sql})
+          AND STARTS_WITH(version_prompts, @version)
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY nombre_ubicacion, DATE(fecha_emision)
+            ORDER BY fecha_emision DESC
+        ) = 1
         ORDER BY nombre_ubicacion, fecha
     """
 
     try:
-        resultados = list(cliente.query(query).result())
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("version", "STRING", version),
+        ])
+        resultados = list(cliente.query(query, job_config=job_config).result())
         boletines = {}
         for row in resultados:
             clave = (row["nombre_ubicacion"], str(row["fecha"]))
@@ -280,6 +289,10 @@ def main():
         help="Usar mapeo legado (modal cantón) en lugar del mapeo preciso por sector (REQ-04)"
     )
     parser.add_argument("--verbose", action="store_true", help="Logging detallado")
+    parser.add_argument(
+        "--version", default="v6",
+        help="Prefijo de version_prompts a evaluar (default: v6)"
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -293,6 +306,7 @@ def main():
     print(f"Mapeo: {modo_mapeo}")
     print(f"Objetivo H1: F1-macro ≥ 75%")
     print(f"Objetivo H3: QWK comparable a Techel (2022) kappa={TECHEL_2022_REFERENCIA['kappa_ponderado']}")
+    print(f"Versión:     {args.version}.*")
     print("=" * 70)
 
     if not args.mapeo_canton:
@@ -302,8 +316,8 @@ def main():
     ubicaciones = list(MAPEO_ESTACIONES_SLF.keys())
 
     print(f"\n[1/4] Obteniendo boletines de AndesAI para {len(ubicaciones)} estaciones suizas...")
-    nuestros = obtener_nuestros_boletines(cliente, ubicaciones, FECHAS_VALIDACION)
-    print(f"      {len(nuestros)} boletines encontrados")
+    nuestros = obtener_nuestros_boletines(cliente, ubicaciones, FECHAS_VALIDACION, version=args.version)
+    print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
 
     if not nuestros:
         print("ERROR: Sin boletines — ejecutar generar_boletines_invierno.py primero")

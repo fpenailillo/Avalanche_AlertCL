@@ -200,9 +200,16 @@ def ejecutar_detectar_ventanas_criticas(
         temperatura=temperatura_actual_C
     )
 
+    # FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO refleja ciclos térmicos normales del pronóstico
+    # (siempre presentes en Andes verano). Excluirlo del conteo usado para el bump de
+    # frecuencia en la matriz EAWS evita inflar el nivel en días sin evento activo.
+    _TIPOS_SOLO_PRONOSTICO = {"DIA_ALTO_RIESGO_PRONOSTICADO"}
+    num_ventanas_eaws = sum(1 for v in ventanas if v["tipo"] not in _TIPOS_SOLO_PRONOSTICO)
+
     return {
         "ventanas_criticas": ventanas,
-        "num_ventanas_criticas": len(ventanas),
+        "num_ventanas_criticas": num_ventanas_eaws,
+        "num_ventanas_totales": len(ventanas),
         "periodo_mayor_riesgo": periodo_mayor_riesgo,
         "factor_meteorologico_eaws": factor_meteorologico_eaws,
         "condiciones_actuales_resumen": {
