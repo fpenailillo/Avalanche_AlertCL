@@ -81,7 +81,7 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "6.2"
+VERSION_GLOBAL = "7.0"
 
 
 def _calcular_hash(contenido: str) -> str:
