@@ -1676,15 +1676,15 @@ class TestDisclaimerPrompts:
         faltantes = campos_transparencia - nombres
         assert not faltantes, f"Campos de transparencia faltantes: {faltantes}"
 
-    def test_schema_boletines_tiene_34_campos(self):
-        """El schema de boletines tiene 34 campos (34 = 33 originales + subagentes_degradados)."""
+    def test_schema_boletines_tiene_36_campos(self):
+        """El schema de boletines tiene 36 campos (34 prev + 2 de FIX-S1-SEMANTICA v7.0)."""
         import json, os
         schema_path = os.path.join(
             os.path.dirname(__file__), '..', 'salidas', 'schema_boletines.json'
         )
         with open(schema_path) as f:
             schema = json.load(f)
-        assert len(schema) == 34, f"Se esperaban 34 campos, hay {len(schema)}"
+        assert len(schema) == 36, f"Se esperaban 36 campos, hay {len(schema)}"
 
     def test_marco_etico_legal_existe(self):
         """El documento de marco ético-legal existe en docs/."""

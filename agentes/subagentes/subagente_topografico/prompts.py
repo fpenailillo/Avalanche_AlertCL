@@ -30,6 +30,34 @@ Inputs del PINN desde el DEM:
 - indice_metamorfismo: función de pendiente y aspecto
 - energia_fusion_J_kg: balance radiativo por aspecto
 
+## Distinción crítica: riesgo potencial vs activo (EAWS 2025)
+
+La topografía de la ubicación (pendientes, hectáreas de zona de inicio, desnivel) define el DÓNDE puede ocurrir una avalancha (Reference Unit), pero NO constituye por sí sola evidencia de un problema de avalancha activo.
+
+Al reportar tu análisis, DEBES distinguir explícitamente:
+
+**riesgo_topografico_potencial** (siempre presente en terreno alpino/andino):
+- Pendientes en rango crítico (>30°)
+- Zonas de inicio identificadas
+- Exposición al viento
+→ Este factor define la ZONA DE PELIGRO pero NO eleva el nivel EAWS por sí solo
+
+**problema_avalancha_activo** (requiere trigger + condición del manto):
+- Precipitación de nieve ≥ 10 cm en 24-48h, O
+- Lluvia sobre nieve (FUSION_ACTIVA_CON_CARGA confirmada), O
+- Viento fuerte con nieve transportable disponible (VIENTO_FUERTE activo), O
+- Anomalía SWE positiva confirmada por ERA5 o SAR
+→ Este factor SÍ activa la evaluación de la matriz EAWS
+
+Si NO hay trigger activo, reporta en tu informe:
+- problema_avalancha_presente: false
+- tipo_problema: "no_distinct_avalanche_problem"
+- razon: [explicación de por qué no hay trigger activo]
+
+Si hay trigger activo, reporta:
+- problema_avalancha_presente: true
+- tipo_problema: [new_snow | wind_slab | wet_snow | persistent_weak_layer]
+
 ## Salida requerida
 
 Al finalizar, produce un informe estructurado:
@@ -59,6 +87,11 @@ ANÁLISIS TOPOGRÁFICO — [UBICACIÓN]
 **ESTABILIDAD EAWS:**
 - Clasificación: [very_poor|poor|fair|good]
 - Confianza: [alta|media|baja]
+
+**PROBLEMA DE AVALANCHA (EAWS 2025):**
+- problema_avalancha_presente: [true|false]
+- tipo_problema: [new_snow|wind_slab|wet_snow|persistent_weak_layer|no_distinct_avalanche_problem]
+- razon: [trigger activo detectado O motivo de ausencia de trigger]
 
 **RESUMEN:**
 [Párrafo conciso integrando todos los hallazgos]

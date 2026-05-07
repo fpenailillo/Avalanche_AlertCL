@@ -202,5 +202,17 @@
     "type": "STRING",
     "mode": "NULLABLE",
     "description": "JSON con lista de subagentes que fallaron y fueron degradados gracefully"
+  },
+  {
+    "name": "problema_avalancha_presente",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "FIX-S1-SEMANTICA (v7.0): true si hay al menos un problema EAWS activo (trigger + manto inestable). false activa EAWS Paso 1 → nivel 1 directo."
+  },
+  {
+    "name": "tipo_problema_eaws",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "FIX-S1-SEMANTICA (v7.0): new_snow | wind_slab | wet_snow | persistent_weak_layer | no_distinct_avalanche_problem"
   }
 ]

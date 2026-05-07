@@ -158,6 +158,7 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
     res_condiciones = _extraer_resultado_tool(tools_llamadas, "obtener_condiciones_actuales_meteo")
     res_nlp_sint = _extraer_resultado_tool(tools_llamadas, "sintetizar_conocimiento_historico")
     res_patrones = _extraer_resultado_tool(tools_llamadas, "extraer_patrones_riesgo")
+    res_clasificar = _extraer_resultado_tool(tools_llamadas, "clasificar_riesgo_eaws_integrado")
 
     # Extraer viento_kmh desde condiciones (viene en m/s → convertir)
     viento_ms = (res_condiciones.get("condiciones") or {}).get("velocidad_viento_ms")
@@ -203,6 +204,9 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
             else {},
             ensure_ascii=False, default=str
         ),
+        # FIX-S1-SEMANTICA (v7.0): trazabilidad EAWS Paso 1
+        "problema_avalancha_presente": res_clasificar.get("problema_avalancha_presente"),
+        "tipo_problema_eaws": res_clasificar.get("tipo_problema_eaws"),
     }
 
 
@@ -410,6 +414,9 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
             "subagentes_degradados": json.dumps(
                 resultado_boletin.get("subagentes_degradados", [])
             ),
+            # FIX-S1-SEMANTICA (v7.0)
+            "problema_avalancha_presente": campos_sa["problema_avalancha_presente"],
+            "tipo_problema_eaws": campos_sa["tipo_problema_eaws"],
         }
 
         tabla_ref = f"{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}"
