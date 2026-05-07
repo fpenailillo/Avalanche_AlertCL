@@ -24,6 +24,17 @@ from analizador_avalanchas.eaws_constantes import (
     NIVELES_PELIGRO
 )
 
+# FIX-GEO / FIX-H (v7.0): región por ubicación para caps condicionales
+try:
+    from agentes.datos.constantes_zonas import obtener_region as _obtener_region
+except ImportError:
+    try:
+        sys.path.insert(0, os.path.join(_ROOT, 'agentes'))
+        from datos.constantes_zonas import obtener_region as _obtener_region
+    except ImportError:
+        def _obtener_region(zona: str) -> str:  # type: ignore[misc]
+            return "andes_chile"
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +97,18 @@ TOOL_CLASIFICAR_EAWS_INTEGRADO = {
             "dias_consecutivos_nivel_bajo": {
                 "type": "integer",
                 "description": "Días consecutivos con nivel ≤ 2 (de obtener_historial_ubicacion). Si ≥ 4 y factor ESTABLE, confirma calma sostenida."
+            },
+            "nombre_ubicacion": {
+                "type": "string",
+                "description": "Nombre de la ubicación analizada (e.g. 'La Parva Sector Alto', 'Interlaken'). Usado para aplicar caps y defaults condicionales por región (FIX-GEO/FIX-H v7.0)."
+            },
+            "problema_avalancha_presente": {
+                "type": "boolean",
+                "description": "FIX-S1-SEMANTICA: true si hay al menos un problema EAWS activo (trigger + manto inestable). false activa EAWS Paso 1 (nivel 1 directo). Omitir para comportamiento pre-v7.0."
+            },
+            "tipo_problema_eaws": {
+                "type": "string",
+                "description": "Tipo de problema EAWS activo: new_snow, wind_slab, wet_snow, persistent_weak_layer, no_distinct_avalanche_problem."
             }
         },
         "required": [
@@ -128,6 +151,9 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     pendiente_max_grados: float = None,
     tendencia_pronostico: str = None,
     dias_consecutivos_nivel_bajo: int = 0,
+    nombre_ubicacion: str = None,
+    problema_avalancha_presente: bool = None,
+    tipo_problema_eaws: str = None,
 ) -> dict:
     """
     Clasifica el riesgo EAWS integrando los análisis de todos los subagentes.
@@ -147,12 +173,46 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
+    # ─── EAWS Paso 1 (FIX-S1-SEMANTICA v7.0) ────────────────────────────────
+    # Si S1 confirmó que no hay problema de avalancha activo → nivel 1 directo.
+    # Implementa EAWS 2025 Tabla 6 Paso 1: "no_distinct_avalanche_problem → level 1".
+    if problema_avalancha_presente is False:
+        logger.info(
+            f"[ClasificarEAWS] EAWS Paso 1: problema_avalancha_presente=False "
+            f"(tipo={tipo_problema_eaws}) → nivel 1 directo sin consultar matriz"
+        )
+        return {
+            "nivel_eaws_24h": 1,
+            "nivel_eaws_48h": 1,
+            "nivel_eaws_72h": 1,
+            "nombre_nivel_24h": "Débil",
+            "factores_eaws": {
+                "estabilidad": "good",
+                "frecuencia": "nearly_none",
+                "tamano": 1,
+                "fuente_tamano": "eaws_paso1_no_problema",
+            },
+            "fuentes_estabilidad": {
+                "topografica_pinn": estabilidad_topografica,
+                "satelital_vit": estabilidad_satelital,
+                "ajuste_meteorologico": None,
+            },
+            "factor_meteorologico": factor_meteorologico,
+            "tendencia_pronostico": tendencia_pronostico,
+            "viento_kmh": viento_kmh,
+            "recomendaciones": [],
+            "descripcion_nivel": "Sin problemas de avalancha identificados (EAWS Paso 1). Terreno técnico pero manto estable.",
+            "problema_avalancha_presente": False,
+            "tipo_problema_eaws": tipo_problema_eaws or "no_distinct_avalanche_problem",
+        }
+
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
     estabilidad_final = _determinar_estabilidad_dominante(
         estabilidad_topografica=estabilidad_topografica,
         estabilidad_satelital=estabilidad_satelital,
         factor_meteorologico=factor_meteorologico,
         dias_consecutivos_nivel_bajo=dias_consecutivos_nivel_bajo,
+        nombre_ubicacion=nombre_ubicacion,
     )
 
     # ─── 2. Ajustar frecuencia ───────────────────────────────────────────────
@@ -172,18 +232,24 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         pendiente_max_grados=pendiente_max_grados
     )
 
-    # FIX-T: cap tamano≤3 en condiciones calmas.
-    # El tamano topográfico (desnivel/ha/pendiente) refleja el potencial máximo
-    # del terreno, no las condiciones actuales del manto. En días sin precipitación
-    # reciente ni viento, aludes de tamaño 4-5 no son posibles aunque el terreno
-    # tenga ese potencial. Condición: factor neutro Y ventanas_criticas < 2.
+    # FIX-T+FIX-GEO (v7.0): cap tamano≤3 en condiciones calmas, solo en Andes Chile.
+    # FIX-T (v6.2): en días sin factor activo ni ventanas críticas, el terreno andino
+    #   de alta pendiente (desnivel/ha) sobreestima el tamaño posible.
+    # FIX-GEO (v7.0): este cap solo aplica en Andes Chile. En Alpes suizos, ERA5/SLF
+    #   reflejan las condiciones reales y el cap produce subestimación sistemática.
     _factor_activo_tamano = bool(
         factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
     )
-    if tamano_final > 3 and not _factor_activo_tamano and ventanas_criticas_detectadas < 2:
+    _region = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if (
+        _region == "andes_chile"
+        and tamano_final > 3
+        and not _factor_activo_tamano
+        and ventanas_criticas_detectadas < 2
+    ):
         logger.info(
-            f"[ClasificarEAWS] FIX-T: tamano capado {tamano_final}→3 "
-            f"(factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
+            f"[ClasificarEAWS] FIX-T+FIX-GEO: tamano capado {tamano_final}→3 "
+            f"(region={_region}, factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
         )
         tamano_final = 3
         fuente_tamano = f"{fuente_tamano}→cap_calmo"
@@ -237,7 +303,9 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         "tendencia_pronostico": tendencia_pronostico,
         "viento_kmh": viento_kmh,
         "recomendaciones": recomendaciones,
-        "descripcion_nivel": info_nivel.get("descripcion", "")
+        "descripcion_nivel": info_nivel.get("descripcion", ""),
+        "problema_avalancha_presente": problema_avalancha_presente,
+        "tipo_problema_eaws": tipo_problema_eaws,
     }
 
 
@@ -246,6 +314,7 @@ def _determinar_estabilidad_dominante(
     estabilidad_satelital: str,
     factor_meteorologico: str,
     dias_consecutivos_nivel_bajo: int = 0,
+    nombre_ubicacion: str = None,
 ) -> str:
     """
     Determina la estabilidad dominante combinando todas las fuentes.
@@ -260,7 +329,20 @@ def _determinar_estabilidad_dominante(
 
     # Estabilidad base: la peor entre topo y satelital
     idx_topo = escala.index(estabilidad_topografica) if estabilidad_topografica in escala else 1
-    idx_sat = escala.index(estabilidad_satelital) if estabilidad_satelital in escala else 1
+
+    # FIX-H (v7.0): cuando ViT no tiene datos, el default de estabilidad satelital
+    # depende de la región. En Andes Chile, ViT fue entrenado aquí → default 'fair'.
+    # En Alpes suizos, ViT no tiene datos de entrenamiento → default conservador 'poor'.
+    if estabilidad_satelital in escala:
+        idx_sat = escala.index(estabilidad_satelital)
+    else:
+        _region_sat = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+        _default_sat = "fair" if _region_sat == "andes_chile" else "poor"
+        idx_sat = escala.index(_default_sat)
+        logger.info(
+            f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
+            f"default '{_default_sat}' (region={_region_sat})"
+        )
     idx_base = max(idx_topo, idx_sat)
 
     # Ajuste meteorológico
