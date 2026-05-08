@@ -46,9 +46,9 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "3.0.0",
-        "descripcion": "PINN con Mohr-Coulomb, difusión térmica, gradiente desde LST satelital",
-        "hash_sha256": "1ceef64e71741bc4",
+        "version": "7.0.0",
+        "descripcion": "FIX-S1-SEMANTICA: sección distinción riesgo potencial vs activo (EAWS 2025 Paso 1)",
+        "hash_sha256": "01d85d6368d7c110",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
@@ -74,9 +74,9 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "6.0.0",
-        "descripcion": "FIX-D: instrucción explícita dias_consecutivos_nivel_bajo SIEMPRE obligatorio",
-        "hash_sha256": "1c1f675934f3f2ae",
+        "version": "7.0.0",
+        "descripcion": "FIX-S1-SEMANTICA: Workflow EAWS Paso 1 + propagación nombre_ubicacion y problema_avalancha_presente",
+        "hash_sha256": "54c779c1a5529a85",
     },
 }
 
