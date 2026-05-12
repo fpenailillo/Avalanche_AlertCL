@@ -102,13 +102,9 @@ TOOL_CLASIFICAR_EAWS_INTEGRADO = {
                 "type": "string",
                 "description": "Nombre de la ubicación analizada (e.g. 'La Parva Sector Alto', 'Interlaken'). Usado para aplicar caps y defaults condicionales por región (FIX-GEO/FIX-H v7.0)."
             },
-            "problema_avalancha_presente": {
+            "condiciones_meteo_disponibles": {
                 "type": "boolean",
-                "description": "FIX-S1-SEMANTICA: true si hay al menos un problema EAWS activo (trigger + manto inestable). false activa EAWS Paso 1 (nivel 1 directo). Omitir para comportamiento pre-v7.0."
-            },
-            "tipo_problema_eaws": {
-                "type": "string",
-                "description": "Tipo de problema EAWS activo: new_snow, wind_slab, wet_snow, persistent_weak_layer, no_distinct_avalanche_problem."
+                "description": "v7.5: True si S3 reportó datos meteorológicos reales (temperatura, precipitación, viento medidos). False o ausente cuando S3 no tuvo datos (e.g. runs retroactivos sin condiciones_actuales). EAWS Paso 1 solo se activa con True."
             }
         },
         "required": [
@@ -152,8 +148,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     tendencia_pronostico: str = None,
     dias_consecutivos_nivel_bajo: int = 0,
     nombre_ubicacion: str = None,
-    problema_avalancha_presente: bool = None,
-    tipo_problema_eaws: str = None,
+    condiciones_meteo_disponibles: bool = None,
 ) -> dict:
     """
     Clasifica el riesgo EAWS integrando los análisis de todos los subagentes.
@@ -173,13 +168,36 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
-    # ─── EAWS Paso 1 (FIX-S1-SEMANTICA v7.0) ────────────────────────────────
-    # Si S1 confirmó que no hay problema de avalancha activo → nivel 1 directo.
-    # Implementa EAWS 2025 Tabla 6 Paso 1: "no_distinct_avalanche_problem → level 1".
-    if problema_avalancha_presente is False:
+    # ─── FIX-CR7A-REGIONAL (v9.0): forzar condiciones_meteo_disponibles por región ──
+    # En Andes Chile, `condiciones_actuales` nunca tiene mediciones reales en runs
+    # retroactivos (solo existe para datos en tiempo real del sistema operacional).
+    # S5 a veces pasa True leyendo datos ERA5 de pronóstico — esto es incorrecto para
+    # La Parva retroactivo. Forzar False independiente de lo que S5 decidió.
+    # Alpes / otras regiones: se respeta el valor que pasó S5 (ERA5 es proxy válido).
+    _region_meteo = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if _region_meteo == "andes_chile" and condiciones_meteo_disponibles is True:
         logger.info(
-            f"[ClasificarEAWS] EAWS Paso 1: problema_avalancha_presente=False "
-            f"(tipo={tipo_problema_eaws}) → nivel 1 directo sin consultar matriz"
+            f"[ClasificarEAWS] FIX-CR7A-REGIONAL: Andes Chile sin mediciones reales "
+            f"en condiciones_actuales → condiciones_meteo_disponibles forzado a False "
+            f"(ubicacion={nombre_ubicacion})"
+        )
+        condiciones_meteo_disponibles = False
+
+    # ─── EAWS Paso 1 (v7.5 — gate basado en datos, no en supuestos) ─────────
+    # Implementa EAWS 2025 Tabla 6 Paso 1: "no avalanche problems → level 1-Low".
+    # CONDICIÓN: solo se activa cuando S3 tenía datos meteorológicos REALES que
+    # permiten confirmar la ausencia de trigger. Si S3 no tuvo datos (e.g. runs
+    # retroactivos donde condiciones_actuales está vacío), "sin datos" ≠ "sin trigger"
+    # → se toma el camino conservador (matriz estándar).
+    _eaws_paso1 = (
+        condiciones_meteo_disponibles is True
+        and factor_meteorologico in _FACTORES_NEUTROS
+        and ventanas_criticas_detectadas == 0
+    )
+    if _eaws_paso1:
+        logger.info(
+            f"[ClasificarEAWS] EAWS Paso 1 (v7.5): datos_meteo=True, "
+            f"factor={factor_meteorologico}, ventanas=0 → nivel 1 directo"
         )
         return {
             "nivel_eaws_24h": 1,
@@ -190,7 +208,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
                 "estabilidad": "good",
                 "frecuencia": "nearly_none",
                 "tamano": 1,
-                "fuente_tamano": "eaws_paso1_no_problema",
+                "fuente_tamano": "eaws_paso1_sin_problema_confirmado",
             },
             "fuentes_estabilidad": {
                 "topografica_pinn": estabilidad_topografica,
@@ -201,10 +219,33 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "tendencia_pronostico": tendencia_pronostico,
             "viento_kmh": viento_kmh,
             "recomendaciones": [],
-            "descripcion_nivel": "Sin problemas de avalancha identificados (EAWS Paso 1). Terreno técnico pero manto estable.",
+            "descripcion_nivel": "Sin problemas de avalancha confirmados por datos meteorológicos (EAWS Paso 1). Manto estable con condiciones calmas.",
             "problema_avalancha_presente": False,
-            "tipo_problema_eaws": tipo_problema_eaws or "no_distinct_avalanche_problem",
+            "tipo_problema_eaws": "no_distinct_avalanche_problem",
         }
+
+    # ─── CR-10C (v10.0): corrección fallback PINN para Alpes ────────────────
+    # Cuando S1 (PINN) no tiene datos para una estación alpina, el LLM infiere
+    # estabilidad_topografica="good" y tamano_eaws="2" como fallback conservador.
+    # La distribución observada SLF (87.5% nivel≥2 en n=24 pares) confirma que
+    # "good" es sistemáticamente incorrecto para terreno alpino sin datos PINN.
+    # Patrón detectado: good + nearly_none + tamano≤2 + region=alpes_swiss.
+    # Corrección estadística: good→fair, tamano=2→3.
+    # No aplica si EAWS Paso 1 ya salió (región alpina con condiciones_meteo=True).
+    _pinn_fallback_alpes = (
+        _region_meteo == "alpes_swiss"
+        and estabilidad_topografica == "good"
+        and (tamano_eaws is None or str(tamano_eaws) == "2")
+        and (frecuencia_topografica is None or frecuencia_topografica == "nearly_none")
+    )
+    if _pinn_fallback_alpes:
+        logger.info(
+            "[ClasificarEAWS] CR-10C: patrón PINN-fallback Alpes detectado "
+            f"(estab={estabilidad_topografica}, tamano={tamano_eaws}, "
+            f"frec={frecuencia_topografica}) → estabilidad=fair, tamano=3"
+        )
+        estabilidad_topografica = "fair"
+        tamano_eaws = "3"
 
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
     estabilidad_final = _determinar_estabilidad_dominante(
@@ -253,6 +294,23 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         )
         tamano_final = 3
         fuente_tamano = f"{fuente_tamano}→cap_calmo"
+
+    # FIX-CR7C (v8.0): cap adicional para tamano EXPLÍCITO en Andes Chile con factor neutro.
+    # Cuando S5 provee tamano_eaws=4/5 basado en área topográfica pero el factor es neutro,
+    # el LLM sobreestima el tamaño posible. Este cap es independiente de ventanas_criticas
+    # (defensa en profundidad vs CR-7b donde vc inflado bloqueaba el cap anterior).
+    if (
+        fuente_tamano == "explicito"
+        and _region == "andes_chile"
+        and tamano_final > 3
+        and not _factor_activo_tamano
+    ):
+        logger.info(
+            f"[ClasificarEAWS] FIX-CR7C: tamano explícito capado {tamano_final}→3 "
+            f"(region={_region}, fuente=explicito, factor_neutro)"
+        )
+        tamano_final = 3
+        fuente_tamano = "explicito→cap_cr7c"
 
     # ─── 4. Consultar matriz EAWS ─────────────────────────────────────────────
     # consultar_matriz_eaws devuelve Tuple[int, Optional[int]] → (D1, D2)
@@ -304,8 +362,8 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         "viento_kmh": viento_kmh,
         "recomendaciones": recomendaciones,
         "descripcion_nivel": info_nivel.get("descripcion", ""),
-        "problema_avalancha_presente": problema_avalancha_presente,
-        "tipo_problema_eaws": tipo_problema_eaws,
+        "problema_avalancha_presente": None,
+        "tipo_problema_eaws": None,
     }
 
 

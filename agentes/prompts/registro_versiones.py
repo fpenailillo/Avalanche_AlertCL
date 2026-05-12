@@ -46,9 +46,9 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "7.0.0",
-        "descripcion": "FIX-S1-SEMANTICA: sección distinción riesgo potencial vs activo (EAWS 2025 Paso 1)",
-        "hash_sha256": "01d85d6368d7c110",
+        "version": "7.5.0",
+        "descripcion": "v7.5: eliminados triggers meteo de S1 (S1 no tiene datos meteo); S5 determina EAWS Paso 1",
+        "hash_sha256": "4ec8d80b0da9fd97",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
@@ -74,14 +74,14 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "7.0.0",
-        "descripcion": "FIX-S1-SEMANTICA: Workflow EAWS Paso 1 + propagación nombre_ubicacion y problema_avalancha_presente",
-        "hash_sha256": "54c779c1a5529a85",
+        "version": "10.0.0",
+        "descripcion": "v10.0: CR-10C — corrección fallback PINN Alpes (good→fair, tamano 2→3) basada en distribución SLF observada",
+        "hash_sha256": None,
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "7.0"
+VERSION_GLOBAL = "10.0"
 
 
 def _calcular_hash(contenido: str) -> str:

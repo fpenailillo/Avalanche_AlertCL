@@ -6,6 +6,23 @@ para el riesgo de avalanchas: combinaciones de nevada + viento,
 ciclos fusión-congelación, y períodos de lluvia sobre nieve.
 """
 
+import logging
+import os
+import sys
+
+_ROOT = os.path.join(os.path.dirname(__file__), '../../../..')
+try:
+    from agentes.datos.constantes_zonas import obtener_region as _obtener_region
+except ImportError:
+    try:
+        sys.path.insert(0, os.path.join(_ROOT, 'agentes'))
+        from datos.constantes_zonas import obtener_region as _obtener_region
+    except ImportError:
+        def _obtener_region(zona: str) -> str:  # type: ignore[misc]
+            return "andes_chile"
+
+logger = logging.getLogger(__name__)
+
 TOOL_VENTANAS_CRITICAS = {
     "name": "detectar_ventanas_criticas",
     "description": (
@@ -54,6 +71,10 @@ TOOL_VENTANAS_CRITICAS = {
             "precipitacion_72h_mm": {
                 "type": "number",
                 "description": "Precipitación acumulada en las últimas 72h en mm (desde analizar_tendencia_72h)"
+            },
+            "nombre_ubicacion": {
+                "type": "string",
+                "description": "Nombre de la ubicación (e.g. 'Interlaken', 'La Parva Sector Alto'). Usado para calibrar umbrales ERA5 por región."
             }
         },
         "required": [
@@ -75,6 +96,7 @@ def ejecutar_detectar_ventanas_criticas(
     dia_mayor_riesgo_nivel: str = None,
     ciclo_fusion_congelacion: bool = False,
     precipitacion_72h_mm: float = 0,
+    nombre_ubicacion: str = None,
 ) -> dict:
     """
     Detecta ventanas críticas de riesgo meteorológico.
@@ -88,6 +110,8 @@ def ejecutar_detectar_ventanas_criticas(
         dia_mayor_riesgo_fecha: fecha del día de mayor riesgo
         dia_mayor_riesgo_nivel: nivel de riesgo del día más peligroso
         ciclo_fusion_congelacion: ¿ciclo activo?
+        precipitacion_72h_mm: precipitación acumulada 72h desde analizar_tendencia_72h
+        nombre_ubicacion: nombre de la ubicación para calibración regional ERA5
 
     Returns:
         dict con ventanas críticas, periodo de mayor riesgo y recomendaciones
@@ -95,13 +119,44 @@ def ejecutar_detectar_ventanas_criticas(
     alertas_tendencia = alertas_tendencia or []
     ventanas = []
 
+    # ─── Umbrales calibrados por región (CR-10A + CR-10B, v10.0) ─────────────
+    # ERA5 a 9km promedia espacialmente: en Alpes, el valor puntual de estaciones
+    # IMIS es ~2-3× el valor ERA5. En Andes, la subestimación es menor pero
+    # también presente (precipitación convectiva verano austral).
+    # Viento: ERA5 subestima velocidades de cresta en terreno alpino por factor ~1.4
+    # (pendientes complejas no resueltas a 9km). Umbral reducido a 7 m/s para Alpes.
+    _region = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    _es_alpes = _region == "alpes_swiss"
+
+    # CR-10A: precipitación efectiva — usa precipitacion_72h_mm/3 cuando
+    # precipitacion_actual es 0 (ERA5 instantáneo a 12:00 UTC, frecuentemente 0
+    # incluso en días con precipitación real). Umbral ERA5 reducido para Alpes.
+    _precip_diaria_72h = (precipitacion_72h_mm or 0) / 3
+    precip_efectiva = precipitacion_actual_mm if precipitacion_actual_mm > 0 else _precip_diaria_72h
+    if _precip_diaria_72h > precipitacion_actual_mm:
+        logger.info(
+            f"[VentanasCriticas] CR-10A: precip_efectiva={precip_efectiva:.1f}mm "
+            f"(actual={precipitacion_actual_mm}mm, 72h/3={_precip_diaria_72h:.1f}mm, "
+            f"region={_region})"
+        )
+
+    _umbral_nevada     = 2.0  if _es_alpes else 5.0
+    _umbral_lluvia     = 1.5  if _es_alpes else 3.0
+    _umbral_carga_72h  = 5.0  if _es_alpes else 10.0
+
+    # CR-10B: umbral viento reducido en Alpes (ERA5 subestima vientos de cresta)
+    _umbral_viento_fuerte         = 7.0  if _es_alpes else 10.0
+    # Redistribución: en Alpes coincide con el umbral base (cualquier viento fuerte
+    # redistribuye nieve en terreno alpino complejo). En Andes requiere umbral mayor.
+    _umbral_viento_redistribucion = 7.0  if _es_alpes else 15.0
+
     # ─── Ventana 1: Nevada + Viento simultáneos ──────────────────────────────
     nevada_activa = (
-        precipitacion_actual_mm > 5
+        precip_efectiva > _umbral_nevada
         and temperatura_actual_C is not None
         and temperatura_actual_C <= 0
     )
-    viento_fuerte = velocidad_viento_actual_ms > 10
+    viento_fuerte = velocidad_viento_actual_ms > _umbral_viento_fuerte
 
     if nevada_activa and viento_fuerte:
         ventanas.append({
@@ -117,7 +172,7 @@ def ejecutar_detectar_ventanas_criticas(
 
     # ─── Ventana 2: Lluvia sobre nieve ───────────────────────────────────────
     lluvia_sobre_nieve = (
-        precipitacion_actual_mm > 3
+        precip_efectiva > _umbral_lluvia
         and temperatura_actual_C is not None
         and temperatura_actual_C > 2
     )
@@ -146,7 +201,7 @@ def ejecutar_detectar_ventanas_criticas(
         })
 
     # ─── Ventana 4: Viento fuerte sin nevada (transporte de nieve vieja) ─────
-    if viento_fuerte and not nevada_activa and velocidad_viento_actual_ms > 15:
+    if viento_fuerte and not nevada_activa and velocidad_viento_actual_ms > _umbral_viento_redistribucion:
         ventanas.append({
             "tipo": "VIENTO_FUERTE_REDISTRIBUCION",
             "severidad": "alta",
@@ -194,10 +249,12 @@ def ejecutar_detectar_ventanas_criticas(
     factor_meteorologico_eaws = _clasificar_factor_meteorologico(
         ventanas=ventanas,
         alertas_tendencia=alertas_tendencia,
-        precipitacion=precipitacion_actual_mm,
+        precipitacion=precip_efectiva,
         precipitacion_72h=precipitacion_72h_mm,
         viento=velocidad_viento_actual_ms,
-        temperatura=temperatura_actual_C
+        temperatura=temperatura_actual_C,
+        umbral_carga_72h=_umbral_carga_72h,
+        umbral_nevada=_umbral_nevada,
     )
 
     # FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO refleja ciclos térmicos normales del pronóstico
@@ -265,7 +322,9 @@ def _clasificar_factor_meteorologico(
     precipitacion: float,
     precipitacion_72h: float,
     viento: float,
-    temperatura: float
+    temperatura: float,
+    umbral_carga_72h: float = 10.0,
+    umbral_nevada: float = 5.0,
 ) -> str:
     """
     Clasifica el factor meteorológico para EAWS.
@@ -290,7 +349,7 @@ def _clasificar_factor_meteorologico(
 
     if precipitacion > 30:
         factores.append("PRECIPITACION_CRITICA")
-    elif precipitacion > 10:
+    elif precipitacion > umbral_nevada:
         factores.append("NEVADA_RECIENTE")
 
     if viento > 10:
@@ -301,7 +360,7 @@ def _clasificar_factor_meteorologico(
     # en climas continentales de alta montaña (Andes centrales, 33°S).
     # Solo es señal de inestabilidad cuando el manto lleva carga reciente.
     hay_ciclo = "CICLO_FUSION_CONGELACION" in tipos_ventanas
-    hay_carga = precipitacion_72h >= 10 or precipitacion > 3
+    hay_carga = precipitacion_72h >= umbral_carga_72h or precipitacion > 3
 
     if hay_ciclo or (temperatura is not None and temperatura > 2):
         if hay_carga:
