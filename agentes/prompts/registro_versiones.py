@@ -74,14 +74,14 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "10.0.0",
-        "descripcion": "v10.0: CR-10C — corrección fallback PINN Alpes (good→fair, tamano 2→3) basada en distribución SLF observada",
+        "version": "10.1.0",
+        "descripcion": "v10.1: CR-10A+CR-10B — calibración ERA5 regional (precip efectiva 72h, umbral viento Alpes 7m/s); CR-10C revertido (sobreimpulso)",
         "hash_sha256": None,
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "10.0"
+VERSION_GLOBAL = "10.1"
 
 
 def _calcular_hash(contenido: str) -> str:

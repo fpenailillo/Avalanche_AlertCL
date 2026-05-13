@@ -224,29 +224,6 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "tipo_problema_eaws": "no_distinct_avalanche_problem",
         }
 
-    # ─── CR-10C (v10.0): corrección fallback PINN para Alpes ────────────────
-    # Cuando S1 (PINN) no tiene datos para una estación alpina, el LLM infiere
-    # estabilidad_topografica="good" y tamano_eaws="2" como fallback conservador.
-    # La distribución observada SLF (87.5% nivel≥2 en n=24 pares) confirma que
-    # "good" es sistemáticamente incorrecto para terreno alpino sin datos PINN.
-    # Patrón detectado: good + nearly_none + tamano≤2 + region=alpes_swiss.
-    # Corrección estadística: good→fair, tamano=2→3.
-    # No aplica si EAWS Paso 1 ya salió (región alpina con condiciones_meteo=True).
-    _pinn_fallback_alpes = (
-        _region_meteo == "alpes_swiss"
-        and estabilidad_topografica == "good"
-        and (tamano_eaws is None or str(tamano_eaws) == "2")
-        and (frecuencia_topografica is None or frecuencia_topografica == "nearly_none")
-    )
-    if _pinn_fallback_alpes:
-        logger.info(
-            "[ClasificarEAWS] CR-10C: patrón PINN-fallback Alpes detectado "
-            f"(estab={estabilidad_topografica}, tamano={tamano_eaws}, "
-            f"frec={frecuencia_topografica}) → estabilidad=fair, tamano=3"
-        )
-        estabilidad_topografica = "fair"
-        tamano_eaws = "3"
-
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
     estabilidad_final = _determinar_estabilidad_dominante(
         estabilidad_topografica=estabilidad_topografica,
