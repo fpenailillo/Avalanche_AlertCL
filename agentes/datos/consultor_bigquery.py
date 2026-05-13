@@ -186,7 +186,7 @@ class ConsultorBigQuery:
                     FROM `{proyecto}.{dataset}.condiciones_actuales`
                     WHERE nombre_ubicacion = @ubicacion
                       AND hora_actual >= TIMESTAMP_SUB(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
-                      AND hora_actual <= TIMESTAMP(@fecha_ref)
+                      AND hora_actual <= TIMESTAMP_ADD(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
                     ORDER BY hora_actual DESC
                     LIMIT 1
                 """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
@@ -1277,38 +1277,73 @@ class ConsultorBigQuery:
             f"(reciente ≤{n_dias_reciente}d, baseline {n_dias_reciente}-{n_dias_baseline}d)"
         )
         try:
-            sql_reciente = """
-                SELECT
-                    sar_vv_medio_db,
-                    sar_pct_nieve_humeda,
-                    sar_pct_nieve_seca,
-                    fecha_captura
-                FROM `climas-chileno.clima.imagenes_satelitales`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND sar_disponible = TRUE
-                  AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
-                ORDER BY fecha_captura DESC
-                LIMIT 1
-            """
-            parametros_reciente = [
-                bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
-            ]
+            _fref = _fecha_referencia_global
+            if _fref is not None:
+                sql_reciente = """
+                    SELECT
+                        sar_vv_medio_db,
+                        sar_pct_nieve_humeda,
+                        sar_pct_nieve_seca,
+                        fecha_captura
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_reciente DAY)
+                      AND fecha_captura <= DATE(@fecha_ref)
+                    ORDER BY fecha_captura DESC
+                    LIMIT 1
+                """
+                parametros_reciente = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                    bigquery.ScalarQueryParameter("fecha_ref",  "TIMESTAMP", _fref),
+                ]
+                sql_baseline = """
+                    SELECT AVG(sar_vv_medio_db) AS baseline_vv
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_baseline DAY)
+                      AND fecha_captura <  DATE_SUB(DATE(@fecha_ref), INTERVAL @n_reciente DAY)
+                """
+                parametros_baseline = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                    bigquery.ScalarQueryParameter("fecha_ref",  "TIMESTAMP", _fref),
+                ]
+            else:
+                sql_reciente = """
+                    SELECT
+                        sar_vv_medio_db,
+                        sar_pct_nieve_humeda,
+                        sar_pct_nieve_seca,
+                        fecha_captura
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
+                    ORDER BY fecha_captura DESC
+                    LIMIT 1
+                """
+                parametros_reciente = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                ]
+                sql_baseline = """
+                    SELECT AVG(sar_vv_medio_db) AS baseline_vv
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_baseline DAY)
+                      AND fecha_captura <  DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
+                """
+                parametros_baseline = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                ]
             filas_reciente = self._ejecutar_query(sql_reciente, parametros_reciente)
-
-            sql_baseline = """
-                SELECT AVG(sar_vv_medio_db) AS baseline_vv
-                FROM `climas-chileno.clima.imagenes_satelitales`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND sar_disponible = TRUE
-                  AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_baseline DAY)
-                  AND fecha_captura <  DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
-            """
-            parametros_baseline = [
-                bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
-                bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
-            ]
             filas_baseline = self._ejecutar_query(sql_baseline, parametros_baseline)
 
             if not filas_reciente:
@@ -1381,25 +1416,43 @@ class ConsultorBigQuery:
         """
         logger.info(f"[ConsultorBigQuery] estado manto → {ubicacion} (últimos {n_dias} días)")
         try:
-            sql = """
-                SELECT
+            _fref = _fecha_referencia_global
+            _cols = """
                     fecha,
                     lst_celsius,
                     temp_suelo_l1_celsius,
                     temp_suelo_l2_celsius,
                     gradiente_termico,
                     cobertura_nubosa_pct,
-                    fuente_lst
-                FROM `climas-chileno.clima.estado_manto_gee`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_dias DAY)
-                ORDER BY fecha DESC
-                LIMIT 14
-            """
-            parametros = [
-                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
-            ]
+                    fuente_lst"""
+            if _fref is not None:
+                sql = f"""
+                    SELECT{_cols}
+                    FROM `climas-chileno.clima.estado_manto_gee`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND fecha >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_dias DAY)
+                      AND fecha <= DATE(@fecha_ref)
+                    ORDER BY fecha DESC
+                    LIMIT 14
+                """
+                parametros = [
+                    bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
+                    bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", _fref),
+                ]
+            else:
+                sql = f"""
+                    SELECT{_cols}
+                    FROM `climas-chileno.clima.estado_manto_gee`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_dias DAY)
+                    ORDER BY fecha DESC
+                    LIMIT 14
+                """
+                parametros = [
+                    bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
+                ]
             filas = self._ejecutar_query(sql, parametros)
 
             if not filas:

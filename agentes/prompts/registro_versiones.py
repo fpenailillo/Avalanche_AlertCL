@@ -81,7 +81,11 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "10.1"
+# v13.0: FIX-CA-WINDOW — obtener_condiciones_actuales extendida a fecha_ref ±12h.
+#   Bug anterior: hora_actual <= fecha_ref (12:00 UTC) excluía registros a 18:00 UTC.
+#   Suiza 2023-2024: 10 registros/estación en condiciones_actuales ahora recuperables.
+#   condiciones_meteo_disponibles=True en runs retroactivos → EAWS Paso 1 activo.
+VERSION_GLOBAL = "13.0"
 
 
 def _calcular_hash(contenido: str) -> str:

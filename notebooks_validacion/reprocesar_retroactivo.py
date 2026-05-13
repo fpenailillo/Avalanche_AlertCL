@@ -36,6 +36,7 @@ Uso:
 """
 
 import argparse
+import concurrent.futures
 import logging
 import os
 import sys
@@ -79,6 +80,8 @@ FECHAS_SNOWLAB = [
     "2025-08-01", "2025-08-08", "2025-08-15", "2025-08-22",
     "2025-08-29", "2025-09-05", "2025-09-12", "2025-09-19",
 ]
+TIMEOUT_POR_RUN_SEGUNDOS = 360  # 6 min — techo duro contra cuelgues TCP
+
 SECTORES_LAPARVA = [
     "La Parva Sector Alto",
     "La Parva Sector Medio",
@@ -86,14 +89,25 @@ SECTORES_LAPARVA = [
 ]
 
 
+def _ejecutar_run(orquestador, ubicacion: str, fecha_ref: datetime) -> tuple:
+    """Helper ejecutado en thread con timeout: generar + guardar boletín."""
+    resultado = orquestador.generar_boletin(
+        nombre_ubicacion=ubicacion,
+        fecha_referencia=fecha_ref,
+    )
+    nivel = resultado.get("nivel_eaws_24h", "?")
+    guardado = guardar_boletin(resultado)
+    return resultado, nivel, guardado
+
+
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v7.0 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v10.0 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v7.0')
+          AND STARTS_WITH(version_prompts, 'v13.0')
     """
     job = cliente.query(
         q,
@@ -135,7 +149,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     total = len(runs)
 
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v7.0 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v9.0 — {total} ejecuciones")
     print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
     print(f"{'='*65}\n")
@@ -150,7 +164,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
 
         # Saltar si ya procesado con v5
         if ya_procesado_v6(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v7.0) — {ubicacion} {fecha_str}")
+            logger.info(f"{prefijo} SKIP (ya v9.0) — {ubicacion} {fecha_str}")
             skip += 1
             continue
 
@@ -163,15 +177,11 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         logger.info(f"\n{prefijo} INICIANDO — {ubicacion} {fecha_str}")
 
         t0 = time.time()
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        future = executor.submit(_ejecutar_run, orquestador, ubicacion, fecha_ref)
         try:
-            resultado = orquestador.generar_boletin(
-                nombre_ubicacion=ubicacion,
-                fecha_referencia=fecha_ref,
-            )
-            nivel = resultado.get("nivel_eaws_24h", "?")
-            dur   = round(time.time() - t0, 1)
-
-            guardado = guardar_boletin(resultado)
+            resultado, nivel, guardado = future.result(timeout=TIMEOUT_POR_RUN_SEGUNDOS)
+            dur = round(time.time() - t0, 1)
 
             estado_guardado = "BQ+GCS" if guardado.get("guardado_bigquery") and guardado.get("guardado_gcs") else \
                               "BQ"     if guardado.get("guardado_bigquery") else \
@@ -183,10 +193,21 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
             )
             ok += 1
 
+        except concurrent.futures.TimeoutError:
+            dur = round(time.time() - t0, 1)
+            logger.error(
+                f"{prefijo} TIMEOUT ({TIMEOUT_POR_RUN_SEGUNDOS}s) — {ubicacion} {fecha_str} "
+                f"(thread abandonado, continuando con siguiente run)"
+            )
+            err += 1
+
         except Exception as exc:
             dur = round(time.time() - t0, 1)
             logger.error(f"{prefijo} ERROR — {ubicacion} {fecha_str} ({dur}s): {exc}")
             err += 1
+
+        finally:
+            executor.shutdown(wait=False)
 
         # Progreso parcial cada 10 ejecuciones
         if i % 10 == 0:
@@ -204,7 +225,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v6.2)")
+    print(f"  Skip: {skip} (ya v7.5)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -212,14 +233,13 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 6 validación v7.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v7.0")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v7.0")
-        print("\nObjetivos v7.0:")
-        print("  H4 QWK:    -0.031 → ≥ +0.05  (FIX-S1: EAWS Paso 1)")
-        print("  H4 sesgo:  +0.885 → ≤ +0.60  (FIX-S1: menos nivel 2-3 en días calmos)")
-        print("  H1/H3 QWK: -0.031 → ≥ +0.10  (FIX-GEO: sin cap en Alpes)")
-        print("  MAE tormentas: ≤ 1.00 (constraint no-regression)")
+        print("\nPróximo paso — Ronda 9 validación v9.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v9.0")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v9.0")
+        print("\nObjetivos v9.0 (FIX-CR7A-REGIONAL):")
+        print("  H3 QWK:  -0.073 → ≥ +0.05 (recuperar regresión de v8.0)")
+        print("  H1/H3 mantener sesgo Suiza < -0.70")
+        print("  H4 QWK: mantener ≥ +0.028 (no regresar)")
 
 
 def main():
