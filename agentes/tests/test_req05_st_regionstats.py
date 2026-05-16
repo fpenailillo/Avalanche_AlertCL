@@ -26,10 +26,13 @@ class TestConstantesZonas:
         assert "Valle Nevado" in BBOX_ZONAS
 
     def test_coordenadas_en_andes_central(self):
-        from agentes.datos.constantes_zonas import COORDENADAS_ZONAS
-        for zona, (lat, lon) in COORDENADAS_ZONAS.items():
-            assert -34.0 <= lat <= -33.0, f"{zona}: lat fuera de rango"
-            assert -71.0 <= lon <= -70.0, f"{zona}: lon fuera de rango"
+        from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, ZONAS_ANDES_CHILE
+        for zona in ZONAS_ANDES_CHILE:
+            if zona not in COORDENADAS_ZONAS:
+                continue
+            lat, lon = COORDENADAS_ZONAS[zona]
+            assert -34.0 <= lat <= -33.0, f"{zona}: lat fuera de rango Andes central"
+            assert -71.0 <= lon <= -70.0, f"{zona}: lon fuera de rango Andes central"
 
     def test_bbox_coherente(self):
         from agentes.datos.constantes_zonas import BBOX_ZONAS

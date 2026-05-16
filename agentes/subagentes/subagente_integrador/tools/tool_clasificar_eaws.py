@@ -183,16 +183,34 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         )
         condiciones_meteo_disponibles = False
 
+    # ─── CR-14 (v14.0): bloqueo EAWS Paso 1 en Alpes suizos ────────────────────
+    # En Alpes, EAWS nivel 1 requiere confirmación explícita del manto nival
+    # (Sclass2, pwl_100 — datos IMIS). Sin ellos, capas persistentes débiles son
+    # invisibles a mediciones de superficie y el Paso 1 produce nivel 1 espurio.
+    # La matriz estándar (estabilidad_pinn=poor, factor=ESTABLE) da nivel 2 → correcto.
+    _paso1_bloqueado_alpes = (
+        _region_meteo == "alpes_swiss"
+        and condiciones_meteo_disponibles is True
+    )
+    if _paso1_bloqueado_alpes:
+        logger.info(
+            f"[ClasificarEAWS] CR-14 (v14.0): EAWS Paso 1 bloqueado en Alpes — "
+            f"sin datos manto nival (Sclass2/pwl_100) → matriz estándar "
+            f"(ubicacion={nombre_ubicacion})"
+        )
+
     # ─── EAWS Paso 1 (v7.5 — gate basado en datos, no en supuestos) ─────────
     # Implementa EAWS 2025 Tabla 6 Paso 1: "no avalanche problems → level 1-Low".
     # CONDICIÓN: solo se activa cuando S3 tenía datos meteorológicos REALES que
     # permiten confirmar la ausencia de trigger. Si S3 no tuvo datos (e.g. runs
     # retroactivos donde condiciones_actuales está vacío), "sin datos" ≠ "sin trigger"
     # → se toma el camino conservador (matriz estándar).
+    # Excepción: Alpes suizos bloqueados por CR-14 (sin datos de manto nival).
     _eaws_paso1 = (
         condiciones_meteo_disponibles is True
         and factor_meteorologico in _FACTORES_NEUTROS
         and ventanas_criticas_detectadas == 0
+        and not _paso1_bloqueado_alpes
     )
     if _eaws_paso1:
         logger.info(

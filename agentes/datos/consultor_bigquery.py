@@ -223,6 +223,81 @@ class ConsultorBigQuery:
             logger.error(f"Error consultando condiciones actuales para {ubicacion}: {e}")
             return {"error": str(e)}
 
+    def _tendencia_desde_imis(
+        self,
+        ubicacion: str,
+        fecha_referencia,
+    ) -> dict | None:
+        """
+        Fallback v14.0: construye tendencia meteorológica desde condiciones_actuales
+        cuando pronostico_horas está vacío (fechas DEAPSnow 2018-2020).
+
+        Solo activa si hay un registro IMIS (fuente='IMIS_DEAPSnow_RF2') en
+        condiciones_actuales para la ubicación y fecha de referencia.
+        """
+        import json as _json
+
+        try:
+            sql = """
+                SELECT
+                    temperatura, velocidad_viento, precipitacion_acumulada,
+                    humedad_relativa, datos_json_crudo
+                FROM `{proyecto}.{dataset}.condiciones_actuales`
+                WHERE nombre_ubicacion = @ubicacion
+                  AND hora_actual >= TIMESTAMP_SUB(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
+                  AND hora_actual <= TIMESTAMP_ADD(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
+                  AND JSON_VALUE(datos_json_crudo, '$.fuente') = 'IMIS_DEAPSnow_RF2'
+                ORDER BY hora_actual DESC
+                LIMIT 1
+            """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
+
+            parametros = [
+                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", fecha_referencia),
+            ]
+            filas = self._ejecutar_query(sql, parametros)
+            if not filas:
+                return None
+
+            fila = filas[0]
+            ta = fila.get("temperatura")
+            vw_kmh = fila.get("velocidad_viento")
+            vw_ms = round(vw_kmh / 3.6, 2) if vw_kmh is not None else None
+
+            # HN24 del JSON crudo para estimar precipitación 72h
+            crudo = fila.get("datos_json_crudo") or "{}"
+            if isinstance(crudo, str):
+                crudo = _json.loads(crudo)
+            hn24_cm = crudo.get("HN24_cm")
+            precip_proxy = round(hn24_cm / 10.0, 2) if (hn24_cm is not None and hn24_cm > 0) else 0.0
+
+            alertas = []
+            if precip_proxy > 10:
+                alertas.append({"tipo": "PRECIPITACION_CRITICA", "valor": f"{precip_proxy}mm (proxy IMIS)"})
+            if vw_ms and vw_ms > 15:
+                alertas.append({"tipo": "VIENTO_FUERTE", "valor": f"{round(vw_ms, 1)} m/s"})
+
+            logger.info(
+                f"[IMIS fallback] tendencia desde condiciones_actuales: "
+                f"{ubicacion} TA={ta}°C VW={vw_kmh}km/h HN24={hn24_cm}cm"
+            )
+            return {
+                "disponible": True,
+                "fuente": "IMIS_DEAPSnow_RF2_proxy",
+                "temp_min_72h": ta,
+                "temp_max_72h": ta,
+                "precip_total_acumulada_mm": precip_proxy,
+                "viento_max_ms": vw_ms,
+                "hora_viento_max": None,
+                "horas_con_precipitacion": 1 if precip_proxy > 0 else 0,
+                "tendencia_temperatura": "estable",
+                "alertas": alertas,
+            }
+
+        except Exception as e:
+            logger.warning(f"[IMIS fallback] error en _tendencia_desde_imis: {e}")
+            return None
+
     def obtener_tendencia_meteorologica(
         self,
         ubicacion: str,
@@ -332,6 +407,10 @@ class ConsultorBigQuery:
             filas_futuro = self._ejecutar_query(sql_futuro, parametros)
 
             if not filas_pasado and not filas_futuro:
+                # FIX-IMIS-TENDENCIA (v14.0): fallback a condiciones_actuales con IMIS
+                imis_tendencia = self._tendencia_desde_imis(ubicacion, fecha_referencia)
+                if imis_tendencia:
+                    return imis_tendencia
                 return {
                     "disponible": False,
                     "razon": "Sin datos de pronóstico horario"

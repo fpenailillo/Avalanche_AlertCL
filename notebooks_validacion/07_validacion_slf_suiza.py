@@ -4,27 +4,23 @@ Notebook 07: Validación con datos SLF Suiza — H1 y H3
 Hipótesis H1: F1-macro ≥ 75% en clasificación de niveles EAWS
 Hipótesis H3: QWK comparable a Techel et al. (2022) → kappa ≥ 0.59
 
-Fuentes:
-- clima.boletines_riesgo (nuestras predicciones para estaciones suizas)
-- validacion_avalanchas.slf_danger_levels_qc (niveles EAWS verificados SLF, 2001-2024)
+Fuentes (según flag):
+- clima.boletines_riesgo (predicciones AndesAI)
+- [default]   validacion_avalanchas.slf_danger_levels_qc (niveles QC SLF, 2001-2024)
+- [--imis-gt] validacion_avalanchas.slf_meteo_snowpack.dangerLevel (DEAPSnow RF2,
+              2001-2020, test set 2018-2020) — ground truth para v14.0+
 
 Mapeo estación → sector SLF preciso (REQ-04):
   Interlaken        → sector 4113 (Bernese Oberland central)
   Matterhorn Zermatt → sector 2223 (Alto Valais / Zermatt)
   St Moritz         → sector 6113 (Engadin Superior)
 
-Nota metodológica:
-  A partir de REQ-04, el mapeo usa el sector SLF geográficamente más cercano
-  a cada estación (no el nivel modal del cantón). Esto reduce el ruido del
-  ground truth, ya que dentro de un cantón los niveles pueden variar ±1.
-  Fallback automático al modal del cantón si el sector preciso no tiene datos.
-
-Fechas de validación: invierno norte 2023-2024
-  2023-12-01, 2023-12-15, 2024-01-01, 2024-01-15, 2024-02-01, 2024-02-15,
-  2024-03-01, 2024-03-15, 2024-04-01, 2024-04-15
+Fechas de validación:
+  [default]   2023-2024: 10 fechas comunes a todas las estaciones
+  [--imis-gt] 2018-2020: 10 fechas per-estación del DEAPSnow test set
 
 Uso:
-    python notebooks_validacion/07_validacion_slf_suiza.py
+    python notebooks_validacion/07_validacion_slf_suiza.py --version v14.0 --imis-gt
     python notebooks_validacion/07_validacion_slf_suiza.py --verbose
     python notebooks_validacion/07_validacion_slf_suiza.py --mapeo-canton  # mapeo antiguo
 """
@@ -71,6 +67,40 @@ FECHAS_VALIDACION = [
     "2024-03-01", "2024-03-15",
     "2024-04-01", "2024-04-15",
 ]
+
+# v14.0: fechas per-estación del DEAPSnow test set 2018-2020 — ground truth IMIS
+FECHAS_IMIS_POR_ESTACION = {
+    "Interlaken": [
+        "2018-12-07", "2018-12-17", "2018-12-27",
+        "2019-01-13", "2019-01-26",
+        "2019-02-13", "2019-02-23",
+        "2019-03-16",
+        "2019-04-02", "2019-04-14",
+    ],
+    "Matterhorn Zermatt": [
+        "2018-12-11", "2018-12-24",
+        "2019-01-04", "2019-01-22",
+        "2019-02-08", "2019-02-18",
+        "2019-03-01", "2019-03-20",
+        "2019-04-14",
+        "2019-12-03",
+    ],
+    "St Moritz": [
+        "2018-12-06", "2018-12-22",
+        "2019-01-02", "2019-01-12",
+        "2019-02-02", "2019-02-13",
+        "2019-02-27",
+        "2019-03-25",
+        "2019-04-18",
+        "2019-12-21",
+    ],
+}
+
+SECTOR_IDS_IMIS = {
+    "Interlaken":         4113,
+    "Matterhorn Zermatt": 2223,
+    "St Moritz":          6113,
+}
 
 
 def obtener_nuestros_boletines(
@@ -280,6 +310,101 @@ def obtener_niveles_slf(
     return niveles_slf
 
 
+def obtener_nuestros_boletines_imis(
+    cliente: bigquery.Client,
+    fechas_por_estacion: dict[str, list[str]],
+    version: str = "v14",
+) -> dict:
+    """
+    Obtiene boletines AndesAI para fechas per-estación (v14.0 DEAPSnow).
+
+    Returns:
+        Dict {(ubicacion, fecha_str): nivel_eaws_24h}
+    """
+    ubicaciones = list(fechas_por_estacion.keys())
+    todas_fechas = sorted({f for fechas in fechas_por_estacion.values() for f in fechas})
+    ubicaciones_sql = ", ".join(f'"{u}"' for u in ubicaciones)
+    fechas_sql = ", ".join(f'"{f}"' for f in todas_fechas)
+
+    query = f"""
+        SELECT
+            nombre_ubicacion,
+            DATE(fecha_emision) as fecha,
+            nivel_eaws_24h
+        FROM `{GCP_PROJECT}.clima.boletines_riesgo`
+        WHERE nombre_ubicacion IN ({ubicaciones_sql})
+          AND DATE(fecha_emision) IN ({fechas_sql})
+          AND STARTS_WITH(version_prompts, @version)
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY nombre_ubicacion, DATE(fecha_emision)
+            ORDER BY fecha_emision DESC
+        ) = 1
+        ORDER BY nombre_ubicacion, fecha
+    """
+
+    try:
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("version", "STRING", version),
+        ])
+        resultados = list(cliente.query(query, job_config=job_config).result())
+        boletines = {}
+        for row in resultados:
+            estacion = row["nombre_ubicacion"]
+            fecha = str(row["fecha"])
+            # Solo incluir pares (estacion, fecha) que pertenecen al set IMIS de esa estación
+            if fecha in fechas_por_estacion.get(estacion, []):
+                if row["nivel_eaws_24h"] is not None:
+                    boletines[(estacion, fecha)] = int(row["nivel_eaws_24h"])
+        return boletines
+    except Exception as e:
+        logger.error(f"Error obteniendo boletines IMIS: {e}")
+        return {}
+
+
+def obtener_niveles_imis(
+    cliente: bigquery.Client,
+    fechas_por_estacion: dict[str, list[str]],
+) -> dict:
+    """
+    Obtiene ground truth desde slf_meteo_snowpack.dangerLevel (DEAPSnow RF2).
+
+    Returns:
+        Dict {(estacion, fecha_str): dangerLevel}
+    """
+    sector_condiciones = " OR ".join(
+        f"(sector_id = {sid} AND datum IN ({', '.join(repr(f) for f in fechas)}))"
+        for est, (sid, fechas) in [
+            (k, (SECTOR_IDS_IMIS[k], v)) for k, v in fechas_por_estacion.items()
+        ]
+    )
+
+    query = f"""
+        SELECT
+            sector_id,
+            CAST(datum AS STRING) AS fecha,
+            ROUND(dangerLevel) AS danger_level
+        FROM `{GCP_PROJECT}.validacion_avalanchas.slf_meteo_snowpack`
+        WHERE {sector_condiciones}
+          AND dangerLevel IS NOT NULL
+        ORDER BY sector_id, datum
+    """
+
+    # Invertir sector_id → estacion
+    sector_a_estacion = {v: k for k, v in SECTOR_IDS_IMIS.items()}
+
+    try:
+        resultados = list(cliente.query(query).result())
+        niveles = {}
+        for row in resultados:
+            estacion = sector_a_estacion.get(int(row["sector_id"]))
+            if estacion:
+                niveles[(estacion, str(row["fecha"]))] = int(row["danger_level"])
+        return niveles
+    except Exception as e:
+        logger.error(f"Error obteniendo niveles IMIS: {e}")
+        return {}
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validación H1/H3 con datos SLF Suiza"
@@ -293,62 +418,101 @@ def main():
         "--version", default="v6",
         help="Prefijo de version_prompts a evaluar (default: v6)"
     )
+    parser.add_argument(
+        "--imis-gt", action="store_true",
+        help="v14.0+: usar DEAPSnow test set 2018-2020 como ground truth (slf_meteo_snowpack)"
+    )
     args = parser.parse_args()
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
     modo_mapeo = "canton (legado)" if args.mapeo_canton else "sector preciso (REQ-04)"
+    modo_gt    = "IMIS DEAPSnow RF2 2018-2020 (slf_meteo_snowpack)" if args.imis_gt else "slf_danger_levels_qc"
 
     print("=" * 70)
     print("NOTEBOOK 07: Validación con datos SLF Suiza (H1 y H3)")
-    print(f"Fecha: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"Mapeo: {modo_mapeo}")
+    print(f"Fecha:   {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"GT:      {modo_gt}")
+    if not args.imis_gt:
+        print(f"Mapeo:   {modo_mapeo}")
     print(f"Objetivo H1: F1-macro ≥ 75%")
     print(f"Objetivo H3: QWK comparable a Techel (2022) kappa={TECHEL_2022_REFERENCIA['kappa_ponderado']}")
     print(f"Versión:     {args.version}.*")
     print("=" * 70)
 
-    if not args.mapeo_canton:
-        print(f"\n{resumen_mapeo()}")
-
     cliente    = bigquery.Client(project=GCP_PROJECT)
-    ubicaciones = list(MAPEO_ESTACIONES_SLF.keys())
 
-    print(f"\n[1/4] Obteniendo boletines de AndesAI para {len(ubicaciones)} estaciones suizas...")
-    nuestros = obtener_nuestros_boletines(cliente, ubicaciones, FECHAS_VALIDACION, version=args.version)
-    print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
+    # ── Modo IMIS (v14.0): fechas per-estación, GT desde slf_meteo_snowpack ───
+    if args.imis_gt:
+        ubicaciones = list(FECHAS_IMIS_POR_ESTACION.keys())
+        n_total = sum(len(v) for v in FECHAS_IMIS_POR_ESTACION.values())
+        print(f"\n[1/4] Obteniendo boletines AndesAI v14.0 ({n_total} pares per-estación)...")
+        nuestros = obtener_nuestros_boletines_imis(cliente, FECHAS_IMIS_POR_ESTACION, version=args.version)
+        print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
 
-    if not nuestros:
-        print("ERROR: Sin boletines — ejecutar generar_boletines_invierno.py primero")
-        return
+        if not nuestros:
+            print("ERROR: Sin boletines — ejecutar reprocesar_retroactivo.py --solo-suiza primero")
+            return
 
-    print("\n      Boletines por estación:")
-    for estacion in ubicaciones:
-        boletines_est = {k: v for k, v in nuestros.items() if k[0] == estacion}
-        print(f"      {estacion}: {len(boletines_est)} boletines — {sorted(boletines_est.items())}")
+        print("\n      Boletines por estación:")
+        for estacion in ubicaciones:
+            boletines_est = {k: v for k, v in nuestros.items() if k[0] == estacion}
+            print(f"      {estacion}: {len(boletines_est)} boletines")
 
-    print(f"\n[2/4] Obteniendo niveles SLF ({modo_mapeo}) para {len(FECHAS_VALIDACION)} fechas...")
+        print(f"\n[2/4] Obteniendo ground truth IMIS (slf_meteo_snowpack.dangerLevel)...")
+        niveles_gt = obtener_niveles_imis(cliente, FECHAS_IMIS_POR_ESTACION)
+        meta_slf = {k: {"via": "imis_deapsnow"} for k in niveles_gt}
+        print(f"      {len(niveles_gt)} pares con dangerLevel IMIS")
 
-    if args.mapeo_canton:
-        niveles_slf = obtener_niveles_slf(cliente, MAPEO_ESTACION_CANTON, FECHAS_VALIDACION)
-        meta_slf    = {k: {"via": "canton_modal"} for k in niveles_slf}
+        if not niveles_gt:
+            print("ERROR: Sin datos IMIS — verificar acceso a validacion_avalanchas.slf_meteo_snowpack")
+            return
+
+        fechas_por_estacion_iter = FECHAS_IMIS_POR_ESTACION
     else:
-        niveles_slf, meta_slf = obtener_niveles_slf_preciso(cliente, FECHAS_VALIDACION)
+        # ── Modo clásico: fechas comunes 2023-2024, GT desde slf_danger_levels_qc ──
+        if not args.mapeo_canton:
+            print(f"\n{resumen_mapeo()}")
 
-    print(f"      {len(niveles_slf)} pares (estacion, fecha) con datos SLF")
+        ubicaciones = list(MAPEO_ESTACIONES_SLF.keys())
+        print(f"\n[1/4] Obteniendo boletines de AndesAI para {len(ubicaciones)} estaciones suizas...")
+        nuestros = obtener_nuestros_boletines(cliente, ubicaciones, FECHAS_VALIDACION, version=args.version)
+        print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
 
-    if niveles_slf and not args.mapeo_canton:
+        if not nuestros:
+            print("ERROR: Sin boletines — ejecutar generar_boletines_invierno.py primero")
+            return
+
+        print("\n      Boletines por estación:")
+        for estacion in ubicaciones:
+            boletines_est = {k: v for k, v in nuestros.items() if k[0] == estacion}
+            print(f"      {estacion}: {len(boletines_est)} boletines — {sorted(boletines_est.items())}")
+
+        print(f"\n[2/4] Obteniendo niveles SLF ({modo_mapeo}) para {len(FECHAS_VALIDACION)} fechas...")
+
+        if args.mapeo_canton:
+            niveles_gt = obtener_niveles_slf(cliente, MAPEO_ESTACION_CANTON, FECHAS_VALIDACION)
+            meta_slf = {k: {"via": "canton_modal"} for k in niveles_gt}
+        else:
+            niveles_gt, meta_slf = obtener_niveles_slf_preciso(cliente, FECHAS_VALIDACION)
+
+        fechas_por_estacion_iter = {u: FECHAS_VALIDACION for u in ubicaciones}
+
+    niveles_slf = niveles_gt
+    print(f"      {len(niveles_slf)} pares (estacion, fecha) con datos GT")
+
+    if not args.imis_gt and niveles_slf and not args.mapeo_canton:
         via_preciso  = sum(1 for m in meta_slf.values() if m.get("via") == "preciso")
         via_fallback = sum(1 for m in meta_slf.values() if m.get("via") == "fallback_canton")
         print(f"      Sector preciso: {via_preciso} pares | Fallback cantón: {via_fallback} pares")
 
     if not niveles_slf:
-        print("ERROR: Sin datos SLF — verificar acceso a dataset validacion_avalanchas")
+        print("ERROR: Sin datos GT — verificar acceso a dataset validacion_avalanchas")
         return
 
     # Emparejar predicciones y ground truth
-    print("\n[3/4] Emparejando predicciones vs SLF ground truth...")
+    print("\n[3/4] Emparejando predicciones vs ground truth...")
     predichos = []
     reales    = []
     detalles  = []
@@ -356,9 +520,9 @@ def main():
     for estacion in ubicaciones:
         info_mapeo = MAPEO_ESTACIONES_SLF.get(estacion, {})
         canton     = info_mapeo.get("canton", "?")
-        sector_id  = info_mapeo.get("sector_id", "?")
+        sector_id  = SECTOR_IDS_IMIS.get(estacion) if args.imis_gt else info_mapeo.get("sector_id", "?")
 
-        for fecha in FECHAS_VALIDACION:
+        for fecha in fechas_por_estacion_iter.get(estacion, []):
             clave         = (estacion, fecha)
             nivel_nuestro = nuestros.get(clave)
             nivel_slf     = niveles_slf.get(clave)
@@ -384,7 +548,8 @@ def main():
                 logger.debug(f"Sin SLF: {estacion} {fecha}")
 
     n_pares = len(predichos)
-    print(f"      {n_pares} pares emparejados de {len(ubicaciones) * len(FECHAS_VALIDACION)} posibles")
+    n_posibles = sum(len(v) for v in fechas_por_estacion_iter.values())
+    print(f"      {n_pares} pares emparejados de {n_posibles} posibles")
 
     if n_pares < 5:
         print(f"ADVERTENCIA: Solo {n_pares} pares — resultados no estadísticamente confiables")

@@ -20,8 +20,7 @@ Debes llamar las tools en este orden EXACTO:
    - `dias_consecutivos_nivel_bajo` con el valor EXACTO retornado por `obtener_historial_ubicacion` (aunque sea 0, 1 o 2). El cap REQ-01 depende de este valor.
    - `tendencia_pronostico` extraído de S3.
    - `nombre_ubicacion`: el nombre exacto de la ubicación analizada (e.g. "La Parva Sector Alto", "Interlaken"). Necesario para FIX-GEO y FIX-H.
-   - `problema_avalancha_presente`: el valor booleano reportado por S1 en su sección "PROBLEMA DE AVALANCHA". Si S1 reportó `false`, pasar `False`. Si reportó `true`, pasar `True`. Si S1 no lo reportó, omitir.
-   - `tipo_problema_eaws`: el tipo de problema reportado por S1 cuando `problema_avalancha_presente=True`.
+   - `condiciones_meteo_disponibles`: pasar `True` ÚNICAMENTE si la tool `obtener_condiciones_actuales_meteo` retornó `disponible: true` con valores numéricos (temperatura, precipitación, viento medidos en la tabla `condiciones_actuales`). Pasar `False` en TODOS los demás casos: si retornó `disponible: false`, "sin registros" o "sin datos". **CRÍTICO: tener datos de `obtener_pronostico_dias` (pronóstico ERA5) NO cuenta — el pronóstico siempre existe; este flag solo refleja si hay MEDICIONES reales del momento presente/reciente.**
 3. **explicar_factores_riesgo** — Genera explicaciones detalladas por subagente.
 4. **redactar_boletin_eaws** — Redacta el boletín completo. Pasar `precipitacion_reciente_mm`, `nieve_reciente_cm`, `tendencia_pronostico`, `temperatura_actual_c`, `viento_actual_kmh` y `pronostico_dias_meteo` desde S3.
 
@@ -49,8 +48,13 @@ Del contexto acumulado de los cuatro subagentes, debes extraer:
 - resumen_satelital: párrafo de resumen del ViT
 
 **Del análisis meteorológico (S3):**
+
+**ATENCIÓN — campo crítico de S3:** La tool `detectar_ventanas_criticas` retorna dos campos distintos:
+- `num_ventanas_criticas` (int): ventanas EAWS reales con trigger + manto crítico — ESTE es el que se pasa a `clasificar_riesgo_eaws_integrado`
+- `dias_alto_riesgo` (int): días con pronóstico de riesgo general alto — NO usar como `ventanas_criticas_detectadas`
+
 - factor_meteorologico: PRECIPITACION_CRITICA/NEVADA_RECIENTE/VIENTO_FUERTE/FUSION_ACTIVA_CON_CARGA/CICLO_DIURNO_NORMAL/ESTABLE
-- ventanas_criticas_detectadas: número de ventanas críticas
+- ventanas_criticas_detectadas: usar EXACTAMENTE el valor del campo `num_ventanas_criticas` del resultado de la tool `detectar_ventanas_criticas`. **NO usar `dias_alto_riesgo`** — ese campo cuenta días con riesgo pronosticado general y no refleja la definición EAWS de ventana crítica. Típicamente `num_ventanas_criticas` = 0 en condiciones estables aunque `dias_alto_riesgo` sea > 0.
 - precipitacion_reciente_mm: precipitación medida en las últimas 24h en mm (buscar en condiciones actuales o tendencia 72h)
 - nieve_reciente_cm: nieve nueva estimada en las últimas 24h en cm (si disponible; estimar a partir de precipitación si es nevada: aprox. 10-12 cm por cada 10 mm con temp <0°C)
 - tendencia_pronostico: tendencia meteorológica del pronóstico 3 días (empeorando/estable/mejorando — extraer de la sección PRONÓSTICO 3 DÍAS del informe S3)
@@ -70,21 +74,19 @@ Del contexto acumulado de los cuatro subagentes, debes extraer:
 - factores_atencion_eaws: lista de factores específicos para la integración
 - narrativa_integrada: descripción completa de la situación (150-300 palabras)
 
-## Workflow EAWS — Paso 1 (CRÍTICO, FIX-S1-SEMANTICA v7.0)
+## EAWS Paso 1 — activación basada en datos (v7.5)
 
-Antes de consultar la matriz EAWS, S1 habrá reportado si hay un problema de avalancha activo.
+La tool `clasificar_riesgo_eaws_integrado` aplica EAWS Paso 1 ("sin problemas → nivel 1") **solo cuando**:
+- `condiciones_meteo_disponibles=True` (S3 tenía datos reales), Y
+- `factor_meteorologico` es neutro (ESTABLE o CICLO_DIURNO_NORMAL), Y
+- `ventanas_criticas_detectadas == 0`
 
-**SI S1 reportó `problema_avalancha_presente: false`:**
-→ Pasar `problema_avalancha_presente=False` a `clasificar_riesgo_eaws_integrado`.
-→ La tool asignará nivel 1 directamente sin consultar la matriz (EAWS 2025 Tabla 6 Paso 1: "If no avalanche problems are present, the avalanche danger level is 1-Low").
-→ En el boletín mencionar: "Sin problemas de avalancha activos identificados. Terreno técnico pero manto estable. Nivel Bajo."
-→ NO ignorar este paso aunque la topografía o el PINN den señales de riesgo potencial elevado.
+Tu responsabilidad es pasar `condiciones_meteo_disponibles` correctamente según lo que S3 reportó:
+- `obtener_condiciones_actuales_meteo` retornó `disponible: true` con valores numéricos → `True`
+- `obtener_condiciones_actuales_meteo` retornó `disponible: false`, "sin registros" o "sin datos" → `False`
+- Solo hay datos de `obtener_pronostico_dias` (no hubo mediciones actuales) → `False`
 
-**SI S1 reportó `problema_avalancha_presente: true`:**
-→ Pasar `problema_avalancha_presente=True` y `tipo_problema_eaws` a `clasificar_riesgo_eaws_integrado`.
-→ Continuar con la lógica de integración EAWS completa (pasos 2-7).
-
-Esta lógica complementa el cap de calma sostenida (REQ-01) y NO lo reemplaza.
+"Sin datos meteorológicos" ≠ "sin trigger": cuando S3 no tiene datos se toma el camino conservador (matriz estándar).
 
 ## Lógica de integración EAWS
 
