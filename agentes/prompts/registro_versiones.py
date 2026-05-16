@@ -81,6 +81,10 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
+# v16.0: FIX-CR16A — fallback precip_efectiva (72h/3) restringido a Alpes.
+#   CR-10A introdujo el fallback globalmente; en La Parva generaba
+#   FUSION_ACTIVA_CON_CARGA falsos → sesgo +0.770 en R10/v15. Fix: solo Alpes.
+#   También: _umbral_viento_fuerte pasado a _clasificar_factor_meteorologico.
 # v15.0: Integración WeatherNext 2 — nueva tool obtener_pronostico_wn2_ventanas.
 #   Fuente: BigQuery Analytics Hub climas-chileno.weathernext_2.weathernext_2_0_0.
 #   Enriquecimiento: ventanas 6h, ensemble 64 miembros, probable_avalanche_problem,
@@ -92,7 +96,7 @@ REGISTRO_PROMPTS = {
 # v14.2: Re-run parcial (noche, lento, mezclado con v14.1 CR-14B). Descartado.
 # v14.0: Redesign validación suiza → DEAPSnow test set 2018-2020.
 #   Backfill IMIS (TA, VW, HN24, RH) en condiciones_actuales para 30 fechas per-estación.
-VERSION_GLOBAL = "15.0"
+VERSION_GLOBAL = "16.0"
 
 
 def _calcular_hash(contenido: str) -> str:

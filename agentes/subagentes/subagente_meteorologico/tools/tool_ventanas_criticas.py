@@ -128,17 +128,19 @@ def ejecutar_detectar_ventanas_criticas(
     _region = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
     _es_alpes = _region == "alpes_swiss"
 
-    # CR-10A: precipitación efectiva — usa precipitacion_72h_mm/3 cuando
-    # precipitacion_actual es 0 (ERA5 instantáneo a 12:00 UTC, frecuentemente 0
-    # incluso en días con precipitación real). Umbral ERA5 reducido para Alpes.
+    # CR-10A: precipitación efectiva — usa precipitacion_72h_mm/3 SOLO en Alpes.
+    # ERA5 instantáneo a 12:00 UTC subestima precipitación real ~2-3× en terreno
+    # alpino complejo. En Andes Chile la subestimación es menor y el fallback global
+    # generaba FUSION_ACTIVA_CON_CARGA falsos en La Parva (FIX-CR16A).
     _precip_diaria_72h = (precipitacion_72h_mm or 0) / 3
-    precip_efectiva = precipitacion_actual_mm if precipitacion_actual_mm > 0 else _precip_diaria_72h
-    if _precip_diaria_72h > precipitacion_actual_mm:
+    if _es_alpes and precipitacion_actual_mm == 0 and _precip_diaria_72h > 0:
+        precip_efectiva = _precip_diaria_72h
         logger.info(
-            f"[VentanasCriticas] CR-10A: precip_efectiva={precip_efectiva:.1f}mm "
-            f"(actual={precipitacion_actual_mm}mm, 72h/3={_precip_diaria_72h:.1f}mm, "
-            f"region={_region})"
+            f"[VentanasCriticas] CR-10A (Alpes only): precip_efectiva={precip_efectiva:.1f}mm "
+            f"desde 72h/3 (actual=0, region={_region})"
         )
+    else:
+        precip_efectiva = precipitacion_actual_mm
 
     _umbral_nevada     = 2.0  if _es_alpes else 5.0
     _umbral_lluvia     = 1.5  if _es_alpes else 3.0
@@ -255,6 +257,7 @@ def ejecutar_detectar_ventanas_criticas(
         temperatura=temperatura_actual_C,
         umbral_carga_72h=_umbral_carga_72h,
         umbral_nevada=_umbral_nevada,
+        umbral_viento_fuerte=_umbral_viento_fuerte,
     )
 
     # FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO refleja ciclos térmicos normales del pronóstico
@@ -325,6 +328,7 @@ def _clasificar_factor_meteorologico(
     temperatura: float,
     umbral_carga_72h: float = 10.0,
     umbral_nevada: float = 5.0,
+    umbral_viento_fuerte: float = 10.0,
 ) -> str:
     """
     Clasifica el factor meteorológico para EAWS.
@@ -352,7 +356,7 @@ def _clasificar_factor_meteorologico(
     elif precipitacion > umbral_nevada:
         factores.append("NEVADA_RECIENTE")
 
-    if viento > 10:
+    if viento > umbral_viento_fuerte:
         factores.append("VIENTO_FUERTE")
 
     # REQ-06: diferenciar ciclo diurno normal de fusión con manto cargado.

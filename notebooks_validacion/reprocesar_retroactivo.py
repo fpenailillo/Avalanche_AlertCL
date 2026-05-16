@@ -1,5 +1,10 @@
 """
-Reprocesamiento retroactivo v15.0 — AndesAI
+Reprocesamiento retroactivo v16.0 — AndesAI
+
+v16.0 cambios acumulados respecto a v15.0:
+  - v16.0: FIX-CR16A — fallback precip_efectiva (72h/3) restringido a Alpes.
+           CR-10A lo aplicaba globalmente; generaba FUSION_ACTIVA_CON_CARGA
+           falsos en La Parva (sesgo +0.770 → objetivo ≤ +0.45).
 
 v15.0 cambios acumulados respecto a v14.3 (última ronda validada con reproceso):
   - v15.0: integración WeatherNext 2 (WN2) como enriquecimiento opcional S3.
@@ -8,8 +13,7 @@ v15.0 cambios acumulados respecto a v14.3 (última ronda validada con reproceso)
   - v10.1: CR-10A+CR-10B — calibración ERA5 regional Alpes (precip 72h, viento 7m/s).
   - v7.5:  S1 eliminados triggers meteo; S5 determina EAWS Paso 1.
 
-La Parva (H4): sin IMIS ni WN2 histórico → mejora proviene de cambios en S1 (v7.5)
-  y S3 (nuevo prompt WN2 opcional que no altera flujo si disponible=False).
+La Parva (H4): sin IMIS ni WN2 histórico → mejora proviene de FIX-CR16A.
 
 Prerequisito (solo Suiza): ejecutar antes de este script:
     python agentes/datos/backfill/cargar_imis_condiciones_actuales.py
@@ -121,13 +125,13 @@ def _worker(queue: multiprocessing.Queue, ubicacion: str, fecha_ref: datetime) -
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v15 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v16 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v15')
+          AND STARTS_WITH(version_prompts, 'v16')
     """
     job = cliente.query(
         q,
@@ -168,7 +172,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     total = len(runs)
 
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v15.0 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v16.0 — {total} ejecuciones")
     print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
     print(f"{'='*65}\n")
@@ -182,7 +186,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         prefijo = f"[{i:3d}/{total}]"
 
         if ya_procesado_v6(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v15) — {ubicacion} {fecha_str}")
+            logger.info(f"{prefijo} SKIP (ya v16) — {ubicacion} {fecha_str}")
             skip += 1
             continue
 
@@ -254,7 +258,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v15)")
+    print(f"  Skip: {skip} (ya v16)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -262,17 +266,18 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 10 validación v15.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v15 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v15")
-        print("\nObjetivos v15.0:")
-        print("  H3 QWK:  mantener ≥ +0.049 (no regresar desde v9.0)")
-        print("  H4 QWK:  ≥ +0.028 (mantener desde v8.0)")
-        print("  H4 MAE:  ≤ 0.828 (mantener desde v8.0)")
+        print("\nPróximo paso — Ronda 11 validación v16.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v16 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v16")
+        print("\nObjetivos v16.0 (FIX-CR16A):")
+        print("  H4 QWK:  ≥ +0.028 (recuperar v8.0)")
+        print("  H4 MAE:  ≤ 0.828 (recuperar v8.0)")
+        print("  H4 Sesgo: ≤ +0.45")
+        print("  H3 QWK:  mantener ≥ +0.049 (sin regresión Suiza)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v15.0")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v16.0")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
