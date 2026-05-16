@@ -39,7 +39,7 @@ steps:
             --task-timeout=3600 \
             --max-retries=1 \
             --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
-            --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
+            --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1,USE_WEATHERNEXT2=false
 
 options:
   logging: CLOUD_LOGGING_ONLY
