@@ -1,0 +1,35 @@
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: ingestor-wn2
+  namespace: climas-chileno
+  labels:
+    sistema: snow-alert
+    version: "v15"
+spec:
+  template:
+    spec:
+      template:
+        spec:
+          containers:
+            - image: gcr.io/climas-chileno/snow-alert-agentes:latest
+              name: ingestor-wn2
+              command: ["python"]
+              args:
+                - "agentes/datos/ingestores/ingestor_wn2.py"
+              resources:
+                limits:
+                  memory: 2Gi
+                  cpu: "1"
+              env:
+                - name: GCP_PROJECT
+                  value: climas-chileno
+                - name: ID_PROYECTO
+                  value: climas-chileno
+                - name: DATASET_ID
+                  value: clima
+                - name: REGION
+                  value: us-central1
+          timeoutSeconds: 1800
+          serviceAccountName: funciones-clima-sa@climas-chileno.iam.gserviceaccount.com
+      maxRetries: 1
