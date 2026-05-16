@@ -27,6 +27,9 @@ from agentes.subagentes.subagente_meteorologico.tools.tool_ventanas_criticas imp
 from agentes.subagentes.subagente_meteorologico.tools.tool_pronostico_ensemble import (
     TOOL_PRONOSTICO_ENSEMBLE, ejecutar_obtener_pronostico_ensemble
 )
+from agentes.subagentes.subagente_meteorologico.tools.tool_pronostico_wn2_ventanas import (
+    TOOL_PRONOSTICO_WN2_VENTANAS, ejecutar_obtener_pronostico_wn2_ventanas
+)
 
 
 class SubagenteMeteorologico(BaseSubagente):
@@ -52,7 +55,8 @@ class SubagenteMeteorologico(BaseSubagente):
             TOOL_TENDENCIA_72H,
             TOOL_PRONOSTICO_DIAS,
             TOOL_VENTANAS_CRITICAS,
-            TOOL_PRONOSTICO_ENSEMBLE,  # Nueva — multi-fuente con WN2
+            TOOL_PRONOSTICO_ENSEMBLE,
+            TOOL_PRONOSTICO_WN2_VENTANAS,  # WN2 v15.0: ventanas 6h ensemble 64 miembros
         ]
 
     def _cargar_ejecutores(self) -> dict:
@@ -62,6 +66,7 @@ class SubagenteMeteorologico(BaseSubagente):
             "obtener_pronostico_dias": ejecutar_obtener_pronostico_dias,
             "detectar_ventanas_criticas": ejecutar_detectar_ventanas_criticas,
             "obtener_pronostico_ensemble": ejecutar_obtener_pronostico_ensemble,
+            "obtener_pronostico_wn2_ventanas": ejecutar_obtener_pronostico_wn2_ventanas,
         }
 
     def _obtener_system_prompt(self) -> str:

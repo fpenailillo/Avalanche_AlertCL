@@ -60,9 +60,9 @@ REGISTRO_PROMPTS = {
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
         "variable": "SYSTEM_PROMPT_METEOROLOGICO",
-        "version": "5.1.0",
-        "descripcion": "FIX-S3: template salida corregido a FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL (elimina FUSION_ACTIVA legacy)",
-        "hash_sha256": "7b02011031ec7b05",
+        "version": "5.2.0",
+        "descripcion": "v5.2: WN2 — nueva tool obtener_pronostico_wn2_ventanas (ensemble 64 miembros, ventanas 6h, probable_avalanche_problem)",
+        "hash_sha256": "da9c32af6aa0e78e",
     },
     "nlp": {
         "modulo": "agentes.subagentes.subagente_nlp.prompts",
@@ -76,16 +76,23 @@ REGISTRO_PROMPTS = {
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
         "version": "10.1.0",
         "descripcion": "v10.1: CR-10A+CR-10B — calibración ERA5 regional (precip efectiva 72h, umbral viento Alpes 7m/s); CR-10C revertido (sobreimpulso)",
-        "hash_sha256": None,
+        "hash_sha256": "6a58e1e70fcf8486",
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-# v13.0: FIX-CA-WINDOW — obtener_condiciones_actuales extendida a fecha_ref ±12h.
-#   Bug anterior: hora_actual <= fecha_ref (12:00 UTC) excluía registros a 18:00 UTC.
-#   Suiza 2023-2024: 10 registros/estación en condiciones_actuales ahora recuperables.
-#   condiciones_meteo_disponibles=True en runs retroactivos → EAWS Paso 1 activo.
-VERSION_GLOBAL = "13.0"
+# v15.0: Integración WeatherNext 2 — nueva tool obtener_pronostico_wn2_ventanas.
+#   Fuente: BigQuery Analytics Hub climas-chileno.weathernext_2.weathernext_2_0_0.
+#   Enriquecimiento: ventanas 6h, ensemble 64 miembros, probable_avalanche_problem,
+#   4 alertas booleanas (heavy_snow/storm_slab/wet_snow/wind_strong).
+#   Persistencia: 6 nuevos campos wn2_* en boletines_riesgo.
+# v14.3: Experimento limpio — mismo código que v14.0 (sin CR-14B).
+#   Fix timeout: ThreadPoolExecutor → multiprocessing.Process con .terminate() real.
+#   120 runs desde cero para verificar reproducibilidad H3 QWK≈0.24 + H4 QWK≈0.028.
+# v14.2: Re-run parcial (noche, lento, mezclado con v14.1 CR-14B). Descartado.
+# v14.0: Redesign validación suiza → DEAPSnow test set 2018-2020.
+#   Backfill IMIS (TA, VW, HN24, RH) en condiciones_actuales para 30 fechas per-estación.
+VERSION_GLOBAL = "15.0"
 
 
 def _calcular_hash(contenido: str) -> str:
