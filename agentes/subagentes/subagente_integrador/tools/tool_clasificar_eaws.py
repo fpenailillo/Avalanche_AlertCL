@@ -249,6 +249,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         factor_meteorologico=factor_meteorologico,
         dias_consecutivos_nivel_bajo=dias_consecutivos_nivel_bajo,
         nombre_ubicacion=nombre_ubicacion,
+        ventanas_criticas_detectadas=ventanas_criticas_detectadas,
     )
 
     # ─── 2. Ajustar frecuencia ───────────────────────────────────────────────
@@ -368,6 +369,7 @@ def _determinar_estabilidad_dominante(
     factor_meteorologico: str,
     dias_consecutivos_nivel_bajo: int = 0,
     nombre_ubicacion: str = None,
+    ventanas_criticas_detectadas: int = 0,
 ) -> str:
     """
     Determina la estabilidad dominante combinando todas las fuentes.
@@ -398,6 +400,31 @@ def _determinar_estabilidad_dominante(
         )
     idx_base = max(idx_topo, idx_sat)
 
+    _factor_activo = bool(
+        factor_meteorologico
+        and factor_meteorologico not in _FACTORES_NEUTROS
+    )
+
+    # FIX-CR17A (v17.0): en Andes Chile la topografía siempre reporta 'poor' porque
+    # el PINN refleja el terreno potencial (pendientes >35°, desnivel >600m). Sin embargo,
+    # la estabilidad topográfica es riesgo POTENCIAL, no ACTIVO. Sin trigger meteorológico
+    # ni ventanas críticas, la matriz EAWS no debe superar nivel 2. Capeamos idx_base en
+    # 'fair' para que max(fair, fair_sat_default) = 'fair' → matriz → nivel ≤ 2.
+    # No aplica a Alpes (guard de región) ni cuando hay trigger activo.
+    _region_dom = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if (
+        _region_dom == "andes_chile"
+        and not _factor_activo
+        and ventanas_criticas_detectadas == 0
+        and idx_base > 1  # solo si la base es peor que 'fair'
+    ):
+        logger.info(
+            f"[ClasificarEAWS] FIX-CR17A: Andes sin trigger → estabilidad base capada "
+            f"'fair' (original={escala[idx_base]}, factor={factor_meteorologico}, "
+            f"ventanas={ventanas_criticas_detectadas})"
+        )
+        idx_base = 1  # 'fair'
+
     # Ajuste meteorológico
     ajuste_meteo = _obtener_ajuste_meteorologico(factor_meteorologico)
     if ajuste_meteo and ajuste_meteo in escala:
@@ -410,10 +437,6 @@ def _determinar_estabilidad_dominante(
     # factor meteorológico activo, el PINN topográfico puede estar sobreestimando.
     # Cap en 'fair' (índice 1) para evitar piso artificial en nivel 3.
     # REQ-06: CICLO_DIURNO_NORMAL es neutro (igual que ESTABLE) para la lógica de calma
-    _factor_activo = bool(
-        factor_meteorologico
-        and factor_meteorologico not in _FACTORES_NEUTROS
-    )
     if dias_consecutivos_nivel_bajo >= 4 and not _factor_activo:
         idx_final = min(idx_final, 1)  # cap en 'fair'
         logger.info(

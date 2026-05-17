@@ -81,10 +81,11 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
+# v17.0: FIX-CR17A — cap estabilidad base en 'fair' (Andes + factor neutro + sin ventanas).
+#   El PINN siempre da 'poor' en La Parva (terreno potencial). Sin trigger meteo
+#   la estabilidad activa es 'fair' → matriz EAWS ≤ nivel 2. No afecta Alpes.
 # v15.5: REVERT FIX-CR16A — restaurar fallback precip_efectiva global (CR-10A).
 #   FIX-CR16A (v16.0) empeoró sesgo +0.770→+1.023 y QWK +0.022→-0.065.
-#   Causa real: S5 se apoya más en S1 cuando S3 neutral → niveles más altos.
-#   La causa del sesgo es v7.5/S1 + integración S5, no el fallback CR-10A.
 # v15.0: Integración WeatherNext 2 — nueva tool obtener_pronostico_wn2_ventanas.
 #   Fuente: BigQuery Analytics Hub climas-chileno.weathernext_2.weathernext_2_0_0.
 #   Enriquecimiento: ventanas 6h, ensemble 64 miembros, probable_avalanche_problem,
@@ -96,7 +97,7 @@ REGISTRO_PROMPTS = {
 # v14.2: Re-run parcial (noche, lento, mezclado con v14.1 CR-14B). Descartado.
 # v14.0: Redesign validación suiza → DEAPSnow test set 2018-2020.
 #   Backfill IMIS (TA, VW, HN24, RH) en condiciones_actuales para 30 fechas per-estación.
-VERSION_GLOBAL = "15.5"
+VERSION_GLOBAL = "17.0"
 
 
 def _calcular_hash(contenido: str) -> str:
