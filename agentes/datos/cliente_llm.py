@@ -83,12 +83,15 @@ class ClienteAnthropic:
         return self._sdk.APIStatusError
 
     def crear_mensaje(self, *, model, max_tokens, system, tools, messages):
+        # FIX-LLM-DETER (v20.0): temperature=0.0 para runs determinísticos.
+        # Anthropic no soporta seed; top_k=1 compensa parcialmente.
         return self._cliente.messages.create(
             model=model,
             max_tokens=max_tokens,
             system=system,
             tools=tools,
             messages=messages,
+            temperature=0.0,
         )
 
 
@@ -325,12 +328,16 @@ class ClienteDatabricks:
     def crear_mensaje(self, *, model, max_tokens, system, tools, messages):
         tools_oi = self._tools_a_openai(tools)
         messages_oi = self._mensajes_a_openai(system, messages)
+        # FIX-LLM-DETER (v20.0): temperature=0.0 + seed=42 para determinismo.
+        # Databricks Qwen3-80B soporta seed vía OpenAI compat.
         resp = self._cliente.chat.completions.create(
             model=self._modelo,
             max_tokens=max_tokens,
             tools=tools_oi,
             messages=messages_oi,
             timeout=self.TIMEOUT_SEGUNDOS,
+            temperature=0.0,
+            seed=42,
         )
         return self._normalizar_respuesta(resp)
 
@@ -548,12 +555,21 @@ class ClienteGemini:
         )
         tools_oi = self._tools_a_openai(tools)
         messages_oi = self._mensajes_a_openai(system, messages)
+        # FIX-LLM-DETER (v20.0): temperature=0.0 + seed=42 para determinismo.
+        # Vertex AI Gemini soporta ambos; si el endpoint no acepta seed,
+        # la llamada sigue funcionando sin él gracias al try/except.
+        kwargs_det: dict = {"temperature": 0.0}
+        try:
+            kwargs_det["seed"] = 42
+        except Exception:
+            pass
         resp = cliente.chat.completions.create(
             model=self._modelo,
             max_tokens=max_tokens,
             tools=tools_oi,
             messages=messages_oi,
             timeout=120,
+            **kwargs_det,
         )
         return self._normalizar_respuesta(resp)
 

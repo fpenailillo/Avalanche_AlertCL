@@ -74,13 +74,19 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "10.1.0",
-        "descripcion": "v10.1: CR-10A+CR-10B — calibración ERA5 regional (precip efectiva 72h, umbral viento Alpes 7m/s); CR-10C revertido (sobreimpulso)",
-        "hash_sha256": "6a58e1e70fcf8486",
+        "version": "10.2.0",
+        "descripcion": "v10.2: FIX-CR18-CH-1 — eliminar ref a obtener_condiciones_actuales_meteo (no tool de S5); añadir instrucción viento_kmh",
+        "hash_sha256": "a81bcf7f72639d7f",
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
+# v18.0: FIX-CR18-CH-1/2/3 — fixes H3 Suiza:
+#   CH-1 (prompt): S5 no intenta llamar obtener_condiciones_actuales_meteo (no registrada en S5);
+#         añadir instrucción de pasar siempre viento_kmh.
+#   CH-2 (tool): umbral ventanas_criticas >=2 para boost frecuencia en Alpes+NEVADA_RECIENTE (vs >=3 global).
+#   CH-3 (tool): tamano mínimo 3 en Alpes con NEVADA_RECIENTE + >=2 ventanas (tormenta masiva D3+).
+#   No afecta Andes Chile (guards region=alpes_swiss).
 # v17.0: FIX-CR17A — cap estabilidad base en 'fair' (Andes + factor neutro + sin ventanas).
 #   El PINN siempre da 'poor' en La Parva (terreno potencial). Sin trigger meteo
 #   la estabilidad activa es 'fair' → matriz EAWS ≤ nivel 2. No afecta Alpes.
@@ -97,7 +103,19 @@ REGISTRO_PROMPTS = {
 # v14.2: Re-run parcial (noche, lento, mezclado con v14.1 CR-14B). Descartado.
 # v14.0: Redesign validación suiza → DEAPSnow test set 2018-2020.
 #   Backfill IMIS (TA, VW, HN24, RH) en condiciones_actuales para 30 fechas per-estación.
-VERSION_GLOBAL = "17.0"
+# v19.0: FIX-CR19 — nieve_nueva_cm = HN24_cm (IMIS) en condiciones_actuales:
+#   consultor_bigquery: SELECT datos_json_crudo; parsear nieve_nueva_cm desde HN24_cm.
+#   tool_condiciones_actuales: surfacear nieve_nueva_cm al LLM; alerta CARGA_NIEVE_EXTREMA_30CM.
+#   tool_ventanas_criticas: param nieve_nueva_cm_imis; ventana CARGA_NIEVE_PROFUNDA
+#   cuando HN24>=25cm en Alpes (2a ventana -> activa CH-2/CH-3). Guard _es_alpes.
+# v20.0: FIX-VAL-FRAMEWORK (G): cache S1-S4 + --solo-s5 (3.5h → ~4 min por validación).
+#   FIX-LLM-DETER (C): temperature=0.0 + seed=42 en todos los LLM clients.
+#   FIX-HN24-PROMO (A): HN24 → precip_efectiva en Alpes cuando supera ERA5.
+#   FIX-IMIS-EXT (F): extracción extendida HS/TA/VW/VW_max desde JSON IMIS.
+#   FIX-HN24-SIZE (B): graduación tamaño D3/D4/D5 por HN24 en Alpes (reemplaza CH-3 binario).
+#   FIX-CR7A-REFACTOR (E): compuerta condicional Andes — reemplaza bloqueo absoluto CR-7A
+#     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
+VERSION_GLOBAL = "20.0"
 
 
 def _calcular_hash(contenido: str) -> str:

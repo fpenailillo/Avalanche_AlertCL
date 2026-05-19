@@ -157,7 +157,8 @@ class ConsultorBigQuery:
                         cobertura_nubes,
                         condicion_clima,
                         hora_actual,
-                        es_dia
+                        es_dia,
+                        datos_json_crudo
                     FROM `{proyecto}.{dataset}.condiciones_actuales`
                     WHERE nombre_ubicacion = @ubicacion
                       AND hora_actual >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR)
@@ -182,7 +183,8 @@ class ConsultorBigQuery:
                         cobertura_nubes,
                         condicion_clima,
                         hora_actual,
-                        es_dia
+                        es_dia,
+                        datos_json_crudo
                     FROM `{proyecto}.{dataset}.condiciones_actuales`
                     WHERE nombre_ubicacion = @ubicacion
                       AND hora_actual >= TIMESTAMP_SUB(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
@@ -209,6 +211,38 @@ class ConsultorBigQuery:
 
             resultado = filas[0]
             resultado["disponible"] = True
+
+            # FIX-CR19 + FIX-IMIS-EXT (v20.0): extraer señales IMIS de datos_json_crudo.
+            crudo_str = resultado.pop("datos_json_crudo", None)
+            if crudo_str:
+                import json as _json
+                try:
+                    crudo = _json.loads(crudo_str)
+                    # HN24 (original CR-19)
+                    nieve_cm = crudo.get("nieve_nueva_cm") or crudo.get("HN24_cm")
+                    if nieve_cm is not None:
+                        resultado["nieve_nueva_cm"] = float(nieve_cm)
+                    # FIX-IMIS-EXT: variables adicionales con filtro de outliers.
+                    # Prioridad sobre ERA5 cuando disponibles (ver subagente S3).
+                    imis: dict = {}
+                    for key, k_imis, lo, hi in [
+                        ("hs_cm",      "HS_cm",       0,   600),
+                        ("ta_imis_c",  "TA_C",      -40,    30),
+                        ("vw_imis_ms", "VW_ms",       0,    60),
+                        ("vw_max_ms",  "VW_max_ms",   0,    80),
+                    ]:
+                        v = crudo.get(k_imis)
+                        if v is not None:
+                            try:
+                                fv = float(v)
+                                if lo <= fv <= hi:
+                                    imis[key] = fv
+                            except (ValueError, TypeError):
+                                pass
+                    if imis:
+                        resultado["imis_directo"] = imis
+                except Exception:
+                    pass
 
             # Serializar tipos especiales
             if resultado.get("hora_actual") and hasattr(resultado["hora_actual"], "isoformat"):

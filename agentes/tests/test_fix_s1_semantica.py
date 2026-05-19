@@ -21,12 +21,14 @@ _SCHEMA_PATH = os.path.join(
 
 class TestEAWSPaso1V75:
     def test_paso1_activa_con_datos_y_factor_neutro(self):
-        """EAWS Paso 1 se activa cuando S3 tiene datos y factor es neutro y ventanas=0."""
+        """EAWS Paso 1 se activa cuando S3 tiene datos, factor es neutro, ventanas=0
+        y calma confirmada (dias_consecutivos_nivel_bajo>=2, FIX-CR7A-REFACTOR v20.0)."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="ESTABLE",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=3,
         )
         assert r["nivel_eaws_24h"] == 1
         assert r["nivel_eaws_48h"] == 1
@@ -35,35 +37,40 @@ class TestEAWSPaso1V75:
         assert "paso1" in r["factores_eaws"]["fuente_tamano"]
 
     def test_paso1_activa_con_ciclo_diurno_normal(self):
-        """EAWS Paso 1 también aplica con CICLO_DIURNO_NORMAL (factor neutro)."""
+        """EAWS Paso 1 también aplica con CICLO_DIURNO_NORMAL (factor neutro)
+        cuando calma está confirmada (FIX-CR7A-REFACTOR v20.0)."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="CICLO_DIURNO_NORMAL",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=3,
         )
         assert r["nivel_eaws_24h"] == 1
         assert r["problema_avalancha_presente"] is False
 
     def test_paso1_no_activa_sin_datos_meteo(self):
-        """EAWS Paso 1 NO se activa cuando condiciones_meteo_disponibles=False."""
+        """EAWS Paso 1 NO se activa cuando condiciones_meteo_disponibles=False.
+        El sistema toma el camino de la matriz (problema_avalancha_presente=None).
+        Nota: con FIX-CR17A el nivel puede ser 1 vía matriz en condiciones calmas."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="ESTABLE",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=False,
         )
-        assert r["nivel_eaws_24h"] >= 2
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
         assert r["problema_avalancha_presente"] is None
 
     def test_paso1_no_activa_sin_parametro(self):
-        """EAWS Paso 1 NO se activa cuando condiciones_meteo_disponibles se omite (None)."""
+        """EAWS Paso 1 NO se activa cuando condiciones_meteo_disponibles se omite (None).
+        El sistema toma el camino de la matriz (problema_avalancha_presente=None)."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="ESTABLE",
             ventanas_criticas_detectadas=0,
         )
-        assert r["nivel_eaws_24h"] >= 2
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
         assert r["problema_avalancha_presente"] is None
 
     def test_paso1_no_activa_con_factor_activo(self):
@@ -89,17 +96,21 @@ class TestEAWSPaso1V75:
         assert r["problema_avalancha_presente"] is None
 
     def test_paso1_preserva_factor_meteorologico(self):
-        """Cuando EAWS Paso 1 activa, factor_meteorologico se preserva para trazabilidad."""
+        """Cuando EAWS Paso 1 activa, factor_meteorologico se preserva para trazabilidad.
+        Requiere calma confirmada (dias_bajo>=2) para activar el Paso 1 (v20.0)."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="CICLO_DIURNO_NORMAL",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=3,
         )
         assert r["factor_meteorologico"] == "CICLO_DIURNO_NORMAL"
 
     def test_paso1_no_activa_retroactivo_simula_sin_datos(self):
-        """Simula un run retroactivo: S3 sin datos → camino conservador, no nivel 1."""
+        """Simula un run retroactivo: S3 sin datos → toma el mismo camino (matriz) que None.
+        Con FIX-CR17A el nivel puede ser 1 vía matriz en condiciones calmas — lo importante
+        es que ambos tomen el mismo camino (sin Paso 1)."""
         r_retro = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="CICLO_DIURNO_NORMAL",
@@ -112,7 +123,8 @@ class TestEAWSPaso1V75:
             ventanas_criticas_detectadas=0,
         )
         assert r_retro["nivel_eaws_24h"] == r_normal["nivel_eaws_24h"]
-        assert r_retro["nivel_eaws_24h"] >= 2
+        assert r_retro["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
+        assert r_normal["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
 
     def test_schema_boletines_incluye_campos(self):
         """schema_boletines.json debe conservar los dos campos BQ con tipos correctos."""

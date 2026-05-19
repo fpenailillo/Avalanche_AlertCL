@@ -75,6 +75,10 @@ TOOL_VENTANAS_CRITICAS = {
             "nombre_ubicacion": {
                 "type": "string",
                 "description": "Nombre de la ubicación (e.g. 'Interlaken', 'La Parva Sector Alto'). Usado para calibrar umbrales ERA5 por región."
+            },
+            "nieve_nueva_cm_imis": {
+                "type": "number",
+                "description": "FIX-CR19: nieve nueva en cm medida por IMIS (HN24). Cuando está disponible en condiciones actuales, pasar este valor — sobrescribe la señal de precipitacion_actual_mm para la evaluación de carga nival. Solo disponible en estaciones suizas con backfill IMIS."
             }
         },
         "required": [
@@ -97,6 +101,7 @@ def ejecutar_detectar_ventanas_criticas(
     ciclo_fusion_congelacion: bool = False,
     precipitacion_72h_mm: float = 0,
     nombre_ubicacion: str = None,
+    nieve_nueva_cm_imis: float = None,
 ) -> dict:
     """
     Detecta ventanas críticas de riesgo meteorológico.
@@ -143,6 +148,19 @@ def ejecutar_detectar_ventanas_criticas(
             f"region={_region})"
         )
 
+    # FIX-HN24-PROMO (v20.0): promover HN24 (IMIS) a precip_efectiva cuando supere ERA5.
+    # HN24 (medición directa) es más preciso que ERA5@9km en Alpes.
+    # Guard _es_alpes: solo Alpes por ahora (Fase F extiende extracción, actualizar si se añade IMIS Andes).
+    # 1 cm nieve fresca (densidad 100 kg/m³) ≈ 1 mm SWE.
+    if _es_alpes and nieve_nueva_cm_imis is not None and nieve_nueva_cm_imis > 0:
+        precip_hn24_mm = nieve_nueva_cm_imis * 1.0  # 100 kg/m³ / 100 = 1 mm/cm
+        if precip_hn24_mm > precip_efectiva:
+            logger.info(
+                f"[VentanasCriticas] FIX-HN24-PROMO: precip_efectiva "
+                f"{precip_efectiva:.1f}→{precip_hn24_mm:.1f}mm (HN24={nieve_nueva_cm_imis}cm)"
+            )
+            precip_efectiva = precip_hn24_mm
+
     _umbral_nevada     = 2.0  if _es_alpes else 5.0
     _umbral_lluvia     = 1.5  if _es_alpes else 3.0
     _umbral_carga_72h  = 5.0  if _es_alpes else 10.0
@@ -169,6 +187,33 @@ def ejecutar_detectar_ventanas_criticas(
                 f"Nevada activa ({precipitacion_actual_mm:.0f}mm) con "
                 f"viento fuerte ({velocidad_viento_actual_ms:.0f}m/s): "
                 "transporte y acumulación de placas de nieve"
+            ),
+            "tiempo": "actual"
+        })
+
+    # ─── Ventana FIX-CR19: Carga de nieve profunda (IMIS HN24) ──────────────
+    # nieve_nueva_cm_imis es la medición directa del pluviómetro IMIS (HN24).
+    # ERA5@9km subestima la precipitación local; HN24≥25cm indica tormenta D3+
+    # en terreno alpino → segunda ventana crítica → activa CH-2/CH-3.
+    # Guard: solo Alpes (Andes no tiene backfill IMIS).
+    if (
+        _es_alpes
+        and nieve_nueva_cm_imis is not None
+        and nieve_nueva_cm_imis >= 25
+        and temperatura_actual_C is not None
+        and temperatura_actual_C <= 0
+    ):
+        logger.info(
+            f"[VentanasCriticas] FIX-CR19: CARGA_NIEVE_PROFUNDA "
+            f"(HN24={nieve_nueva_cm_imis:.1f}cm, T={temperatura_actual_C:.1f}°C)"
+        )
+        ventanas.append({
+            "tipo": "CARGA_NIEVE_PROFUNDA",
+            "severidad": "muy_alta",
+            "descripcion": (
+                f"Nieve nueva IMIS: {nieve_nueva_cm_imis:.0f}cm en 24h (HN24). "
+                "Carga extrema sobre manto existente: riesgo de aludes de nieve reciente "
+                "y placas de viento en terreno ≥ 30°."
             ),
             "tiempo": "actual"
         })

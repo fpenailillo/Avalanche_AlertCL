@@ -1,8 +1,12 @@
 """
-Tests para los fixes CR-7 (v8.0): correcciones de semántica de prompt
-que causaron regresión H4 en Ronda 7.
+Tests para los fixes CR-7 (v8.0) y FIX-CR7A-REFACTOR (v20.0).
 
-CR-7a: condiciones_meteo_disponibles=False no activa EAWS Paso 1.
+CR-7a → FIX-CR7A-REFACTOR (v20.0): compuerta condicional en Andes Chile.
+  Antes (v9.0): bloqueo absoluto condiciones_meteo_disponibles → False.
+  Ahora (v20.0): gate basado en señales de calma (factor neutro + vc=0 +
+  p72h<5mm + viento<30 km/h + dias_consecutivos_nivel_bajo>=2).
+  Sin calma confirmada → mismo comportamiento que el bloqueo absoluto.
+  Con calma confirmada → EAWS Paso 1 habilitado (habilita nivel 1 en Andes).
 CR-7b: vc inflado (dias_alto_riesgo) ya no bloquea FIX-GEO cap gracias a FIX-CR7C.
 CR-7c: tamano explícito > 3 capado en Andes Chile con factor neutro,
        independiente de ventanas_criticas.
@@ -20,8 +24,9 @@ _INTERLAKEN = "Interlaken"
 
 class TestCR7a:
     def test_false_no_activa_eaws_paso1(self):
-        """CR-7a fix: condiciones_meteo_disponibles=False con factor neutro y vc=0
-        no activa EAWS Paso 1 — el sistema toma el camino conservador (matriz)."""
+        """condiciones_meteo_disponibles=False no activa EAWS Paso 1 — va por la matriz.
+        Con FIX-CR17A la matriz puede devolver nivel 1 en condiciones calmas; lo que
+        importa es que el path sea la matriz, no el Paso 1."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="CICLO_DIURNO_NORMAL",
@@ -29,9 +34,8 @@ class TestCR7a:
             condiciones_meteo_disponibles=False,
             nombre_ubicacion=_LA_PARVA,
         )
-        assert r["nivel_eaws_24h"] >= 2, (
-            "Con condiciones_meteo_disponibles=False el sistema debe ir por la "
-            "matriz, no emitir nivel 1 via EAWS Paso 1"
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado", (
+            "Con condiciones_meteo_disponibles=False, EAWS Paso 1 no debe activarse"
         )
 
     def test_cr14_bloquea_eaws_paso1_alpes(self):
@@ -47,24 +51,42 @@ class TestCR7a:
         assert r["nivel_eaws_24h"] >= 2, (
             "CR-14: Alpes sin datos de manto nival no puede emitir nivel 1 via EAWS Paso 1"
         )
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
 
-    def test_true_forzado_false_en_andes(self):
-        """FIX-CR7A-REGIONAL (v9.0): condiciones_meteo_disponibles=True en Andes Chile
-        se fuerza a False — La Parva retroactivo sin mediciones reales no activa Paso 1."""
+    def test_true_bloqueado_en_andes_sin_calma(self):
+        """FIX-CR7A-REFACTOR (v20.0): condiciones_meteo_disponibles=True en Andes Chile
+        sin calma confirmada (dias_bajo=0) → gate bloquea → EAWS Paso 1 no activa."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="CICLO_DIURNO_NORMAL",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=0,
             nombre_ubicacion=_LA_PARVA,
         )
-        assert r["nivel_eaws_24h"] >= 2, (
-            "Andes Chile debe tomar camino conservador aunque S5 pasó True"
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado", (
+            "Andes sin calma confirmada debe bloquear EAWS Paso 1"
         )
+
+    def test_true_habilita_paso1_con_calma_confirmada(self):
+        """FIX-CR7A-REFACTOR (v20.0): con calma confirmada en Andes Chile,
+        condiciones_meteo_disponibles=True habilita EAWS Paso 1 → nivel 1."""
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estabilidad_topografica="poor",
+            factor_meteorologico="CICLO_DIURNO_NORMAL",
+            ventanas_criticas_detectadas=0,
+            condiciones_meteo_disponibles=True,
+            precipitacion_72h_corregida_mm=1.0,
+            viento_kmh=20.0,
+            dias_consecutivos_nivel_bajo=3,
+            nombre_ubicacion=_LA_PARVA,
+        )
+        assert r["nivel_eaws_24h"] == 1, "Andes con calma confirmada → EAWS Paso 1 → nivel 1"
+        assert r["factores_eaws"]["fuente_tamano"] == "eaws_paso1_sin_problema_confirmado"
 
     def test_none_no_activa_eaws_paso1(self):
         """Compatibilidad retroactiva: condiciones_meteo_disponibles=None (default)
-        nunca activa EAWS Paso 1."""
+        nunca activa EAWS Paso 1 — va por la matriz."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="ESTABLE",
@@ -72,7 +94,7 @@ class TestCR7a:
             condiciones_meteo_disponibles=None,
             nombre_ubicacion=_LA_PARVA,
         )
-        assert r["nivel_eaws_24h"] >= 2
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
 
 
 class TestCR7b:
@@ -187,15 +209,17 @@ class TestCR14:
         assert r["nivel_eaws_24h"] >= 2
 
     def test_andes_paso1_no_afectado_por_cr14(self):
-        """CR-14 solo aplica a Alpes — La Parva sigue con FIX-CR7A-REGIONAL (forzado False)."""
+        """CR-14 solo aplica a Alpes suizos — La Parva usa FIX-CR7A-REFACTOR (v20.0).
+        Sin calma confirmada (dias_bajo=0), el gate bloquea EAWS Paso 1 igualmente."""
         r = ejecutar_clasificar_riesgo_eaws_integrado(
             estabilidad_topografica="poor",
             factor_meteorologico="ESTABLE",
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=0,
             nombre_ubicacion=_LA_PARVA,
         )
-        assert r["nivel_eaws_24h"] >= 2  # FIX-CR7A-REGIONAL fuerza False → mismo resultado
+        assert r["factores_eaws"]["fuente_tamano"] != "eaws_paso1_sin_problema_confirmado"
 
     def test_alpes_factor_activo_no_afectado(self):
         """CR-14 solo bloquea el Paso 1 — factor activo en Alpes usa la matriz normalmente."""

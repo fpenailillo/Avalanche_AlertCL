@@ -1,5 +1,13 @@
 """
-Reprocesamiento retroactivo v17.0 — AndesAI
+Reprocesamiento retroactivo v19.0 — AndesAI
+
+v19.0 cambios respecto a v18.0 (baseline FIX-CR18):
+  - v19.0: FIX-CR19 — nieve_nueva_cm = HN24_cm en condiciones_actuales.
+           consultor_bigquery incluye datos_json_crudo en SELECT.
+           tool_condiciones_actuales expone nieve_nueva_cm al LLM.
+           tool_ventanas_criticas: ventana CARGA_NIEVE_PROFUNDA cuando
+           HN24>=25cm en Alpes → segunda ventana crítica → activa CH-2/CH-3.
+           Guard _es_alpes: no afecta Andes Chile.
 
 v17.0 cambios respecto a v15.5 (baseline post-revert):
   - v17.0: FIX-CR17A — cap estabilidad base en 'fair' en Andes Chile cuando
@@ -111,13 +119,23 @@ SECTORES_LAPARVA = [
 ]
 
 
-def _worker(queue: multiprocessing.Queue, ubicacion: str, fecha_ref: datetime) -> None:
+def _worker(
+    queue: multiprocessing.Queue,
+    ubicacion: str,
+    fecha_ref: datetime,
+    cache_dir: str | None = None,
+    solo_s5: bool = False,
+    generar_cache: bool = False,
+) -> None:
     """Proceso hijo aislado. Crea su propio orquestador y devuelve resultado via queue."""
     try:
         orquestador = OrquestadorAvalancha()
         resultado = orquestador.generar_boletin(
             nombre_ubicacion=ubicacion,
             fecha_referencia=fecha_ref,
+            cache_dir=cache_dir,
+            solo_s5=solo_s5,
+            generar_cache=generar_cache,
         )
         nivel = resultado.get("nivel_eaws_24h", "?")
         guardado = guardar_boletin(resultado)
@@ -127,13 +145,13 @@ def _worker(queue: multiprocessing.Queue, ubicacion: str, fecha_ref: datetime) -
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v17 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v18 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v17')
+          AND STARTS_WITH(version_prompts, 'v19')
     """
     job = cliente.query(
         q,
@@ -167,16 +185,30 @@ def construir_lista_runs(solo_suiza: bool, solo_snowlab: bool) -> list[tuple[str
     return runs
 
 
-def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None:
+def ejecutar_replay(
+    dry_run: bool,
+    solo_suiza: bool,
+    solo_snowlab: bool,
+    cache_dir: str | None = None,
+    solo_s5: bool = False,
+    generar_cache: bool = False,
+) -> None:
+    from agentes.validacion.cache_subagentes import existe_cache
+
     cliente = bigquery.Client(project=GCP_PROJECT)
 
     runs = construir_lista_runs(solo_suiza, solo_snowlab)
     total = len(runs)
 
+    modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
+    est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v17.0 — {total} ejecuciones")
-    print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
+    print(f"REPROCESAMIENTO RETROACTIVO v19.0 — {total} ejecuciones")
+    print(f"Modo: {modo}")
+    print(f"Estimado: ~{round(total * est_seg / 60)} min ({round(total * est_seg / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
+    if cache_dir:
+        print(f"Cache dir: {cache_dir}")
     print(f"{'='*65}\n")
 
     ok = 0
@@ -187,10 +219,19 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     for i, (ubicacion, fecha_str) in enumerate(runs, start=1):
         prefijo = f"[{i:3d}/{total}]"
 
-        if ya_procesado_v6(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v17) — {ubicacion} {fecha_str}")
-            skip += 1
-            continue
+        if solo_s5:
+            # En modo solo-S5 saltamos si no hay cache (no podemos ejecutar)
+            if cache_dir and not existe_cache(cache_dir, ubicacion, fecha_str):
+                logger.warning(
+                    f"{prefijo} SKIP (sin cache) — {ubicacion} {fecha_str}"
+                )
+                skip += 1
+                continue
+        else:
+            if ya_procesado_v6(cliente, ubicacion, fecha_str):
+                logger.info(f"{prefijo} SKIP (ya v19) — {ubicacion} {fecha_str}")
+                skip += 1
+                continue
 
         if dry_run:
             logger.info(f"{prefijo} DRY-RUN — {ubicacion} {fecha_str}")
@@ -203,7 +244,9 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         t0 = time.time()
         queue: multiprocessing.Queue = multiprocessing.Queue()
         proc = multiprocessing.Process(
-            target=_worker, args=(queue, ubicacion, fecha_ref)
+            target=_worker,
+            args=(queue, ubicacion, fecha_ref),
+            kwargs={"cache_dir": cache_dir, "solo_s5": solo_s5, "generar_cache": generar_cache},
         )
         proc.start()
         proc.join(timeout=TIMEOUT_POR_RUN_SEGUNDOS)
@@ -260,7 +303,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v17)")
+    print(f"  Skip: {skip} (ya v19)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -268,30 +311,49 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 12 validación v17.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v17 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v17")
-        print("\nObjetivos v17.0 (FIX-CR17A):")
-        print("  H4 QWK:  ≥ +0.028 (recuperar v8.0)")
-        print("  H4 MAE:  ≤ 0.828 (recuperar v8.0)")
-        print("  H4 Sesgo: ≤ +0.45")
-        print("  H3 QWK:  mantener ≥ +0.049 (sin regresión Suiza)")
+        print("\nPróximo paso — Ronda 14 validación v19.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v19 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v19")
+        print("\nObjetivos v19.0 (FIX-CR18-CH-1/2/3):")
+        print("  H3 QWK:  ≥ +0.100 (mejora sobre v17.0 +0.048)")
+        print("  H3 F1:   ≥ +0.250 (mejora sobre v17.0 0.198)")
+        print("  H3 Sesgo: reducir underestimation (v17.0 sesgo=-0.37)")
+        print("  H4 QWK:  mantener (FIX-CR18 no afecta Andes Chile)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v17.0")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v19.0")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
                         help="Solo H1/H3 (30 runs Swiss)")
     parser.add_argument("--solo-snowlab", action="store_true",
                         help="Solo H4 (90 runs La Parva)")
+    # FIX-VAL-FRAMEWORK (v20.0): flags para cache S1-S4
+    parser.add_argument("--cache-dir", type=str, default=None,
+                        help="Directorio local para cache outputs S1-S4. "
+                             "Requerido con --solo-s5 y --generar-cache.")
+    parser.add_argument("--solo-s5", action="store_true",
+                        help="Cargar S1-S4 de --cache-dir y ejecutar solo S5. "
+                             "Reduce ~3.5h → ~4 min. Requiere --cache-dir.")
+    parser.add_argument("--generar-cache", action="store_true",
+                        help="Ejecutar pipeline completo y guardar S1-S4 en --cache-dir "
+                             "para uso posterior con --solo-s5. Requiere --cache-dir.")
     args = parser.parse_args()
+
+    if (args.solo_s5 or args.generar_cache) and not args.cache_dir:
+        parser.error("--solo-s5 y --generar-cache requieren --cache-dir")
+
+    if args.solo_s5 and args.generar_cache:
+        parser.error("--solo-s5 y --generar-cache son mutuamente excluyentes")
 
     ejecutar_replay(
         dry_run=args.dry_run,
         solo_suiza=args.solo_suiza,
         solo_snowlab=args.solo_snowlab,
+        cache_dir=args.cache_dir,
+        solo_s5=args.solo_s5,
+        generar_cache=args.generar_cache,
     )
 
 
