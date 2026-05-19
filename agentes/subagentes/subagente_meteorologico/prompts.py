@@ -29,7 +29,14 @@ Cuándo llamarla:
 - Cuando necesites granularidad 6h para timing de evento de precipitación o viento.
 
 Si retorna `disponible=false`, ignorar completamente y continuar con el flujo estándar.
-Si retorna `disponible=true`, integrar `probable_avalanche_problem` y las 4 alertas en tu análisis final, mencionándolos en la sección **FACTOR METEOROLÓGICO EAWS** con prefijo `[WN2]`.
+Si retorna `disponible=true`:
+- Integrar `probable_avalanche_problem` y las 4 alertas en tu análisis final con prefijo `[WN2]`.
+- Al llamar `detectar_ventanas_criticas` (paso 4), incluir los siguientes parámetros WN2:
+  - `wn2_heavy_snow`: valor booleano de `resultado.diario.alerts_dia.heavy_snow`
+  - `wn2_storm_slab`: valor booleano de `resultado.diario.alerts_dia.storm_slab`
+  - `wn2_wind_strong`: valor booleano de `resultado.diario.alerts_dia.wind_strong`
+  - `wn2_probable_avalanche_problem`: valor de `resultado.diario.problema_dominante`
+  Esto permite que las señales del ensemble activen ventanas críticas de forma determinista.
 
 ## Factores meteorológicos para EAWS
 

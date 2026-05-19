@@ -79,6 +79,22 @@ TOOL_VENTANAS_CRITICAS = {
             "nieve_nueva_cm_imis": {
                 "type": "number",
                 "description": "FIX-CR19: nieve nueva en cm medida por IMIS (HN24). Cuando está disponible en condiciones actuales, pasar este valor — sobrescribe la señal de precipitacion_actual_mm para la evaluación de carga nival. Solo disponible en estaciones suizas con backfill IMIS."
+            },
+            "wn2_heavy_snow": {
+                "type": "boolean",
+                "description": "FIX-WN2-TRIGGERS: WeatherNext 2 ensemble (64 miembros) indica precipitación nívea intensa. Pasar solo cuando obtener_pronostico_wn2_ventanas retorna disponible=true. Activa ventana NEVADA_WN2_CONFIRMADA cuando ERA5 no detectó nevada."
+            },
+            "wn2_storm_slab": {
+                "type": "boolean",
+                "description": "FIX-WN2-TRIGGERS: WeatherNext 2 ensemble indica problema de placa de viento (viento + nieve). Pasar solo cuando WN2 disponible. Activa PLACA_VIENTO_WN2."
+            },
+            "wn2_wind_strong": {
+                "type": "boolean",
+                "description": "FIX-WN2-TRIGGERS: WeatherNext 2 ensemble indica viento fuerte no captado por ERA5. Pasar solo cuando WN2 disponible. Activa VIENTO_WN2_FUERTE."
+            },
+            "wn2_probable_avalanche_problem": {
+                "type": "string",
+                "description": "FIX-WN2-TRIGGERS: problema avalancha dominante del ensemble WN2 ('new_snow', 'wind_slab', 'wet_snow', 'persistent_weak_layer' u otro). Informativo para el log."
             }
         },
         "required": [
@@ -102,6 +118,10 @@ def ejecutar_detectar_ventanas_criticas(
     precipitacion_72h_mm: float = 0,
     nombre_ubicacion: str = None,
     nieve_nueva_cm_imis: float = None,
+    wn2_heavy_snow: bool = False,
+    wn2_storm_slab: bool = False,
+    wn2_wind_strong: bool = False,
+    wn2_probable_avalanche_problem: str = None,
 ) -> dict:
     """
     Detecta ventanas críticas de riesgo meteorológico.
@@ -286,6 +306,59 @@ def ejecutar_detectar_ventanas_criticas(
             "tiempo": "próximas_72h"
         })
 
+    # ─── Ventana FIX-WN2-TRIGGERS (v20.0): señales WN2 ensemble ─────────────
+    # WeatherNext 2 (64 miembros DeepMind) detecta tormentas con mayor resolución
+    # que ERA5@9km. Cuando S3 obtuvo WN2 disponible=true, pasa alertas como params.
+    # Guard implícito: solo se activan cuando los bools son True — S3 solo los pasa
+    # cuando wn2.disponible=true. Sin parámetros (default False) → sin efecto.
+    # No se añaden ventanas duplicadas si ERA5 ya detectó el mismo evento.
+    _tipos_actuales = {v["tipo"] for v in ventanas}
+
+    if wn2_heavy_snow and "NEVADA_MAS_VIENTO" not in _tipos_actuales and "CARGA_NIEVE_PROFUNDA" not in _tipos_actuales:
+        logger.info(
+            f"[VentanasCriticas] FIX-WN2-TRIGGERS: nevada confirmada por WN2 ensemble "
+            f"(heavy_snow=True, prob_problem={wn2_probable_avalanche_problem})"
+        )
+        ventanas.append({
+            "tipo": "NEVADA_WN2_CONFIRMADA",
+            "severidad": "muy_alta",
+            "descripcion": (
+                "WeatherNext 2 ensemble (64 miembros) confirma precipitación nívea intensa "
+                "no captada por ERA5 — probable acumulación de nieve nueva y formación de placas."
+            ),
+            "tiempo": "próximo"
+        })
+
+    if wn2_storm_slab and "NEVADA_MAS_VIENTO" not in _tipos_actuales and "PLACA_VIENTO_WN2" not in _tipos_actuales:
+        logger.info(
+            f"[VentanasCriticas] FIX-WN2-TRIGGERS: placa de viento confirmada por WN2 ensemble "
+            f"(storm_slab=True)"
+        )
+        ventanas.append({
+            "tipo": "PLACA_VIENTO_WN2",
+            "severidad": "muy_alta",
+            "descripcion": (
+                "WeatherNext 2 ensemble confirma problema de placa de viento — "
+                "viento + nieve activos o inminentes subestimados por ERA5."
+            ),
+            "tiempo": "próximo"
+        })
+
+    if wn2_wind_strong and "VIENTO_FUERTE_REDISTRIBUCION" not in _tipos_actuales and not viento_fuerte:
+        logger.info(
+            f"[VentanasCriticas] FIX-WN2-TRIGGERS: viento fuerte confirmado por WN2 ensemble "
+            f"(wind_strong=True)"
+        )
+        ventanas.append({
+            "tipo": "VIENTO_WN2_FUERTE",
+            "severidad": "alta",
+            "descripcion": (
+                "WeatherNext 2 ensemble confirma viento fuerte subestimado por ERA5 — "
+                "transporte eólico activo o inminente con riesgo de formación de placas."
+            ),
+            "tiempo": "próximo"
+        })
+
     # ─── Período de mayor riesgo ──────────────────────────────────────────────
     periodo_mayor_riesgo = _determinar_periodo_mayor_riesgo(
         ventanas=ventanas,
@@ -420,5 +493,13 @@ def _clasificar_factor_meteorologico(
 
     if "LLUVIA_SOBRE_NIEVE" in tipos_ventanas:
         factores.append("LLUVIA_SOBRE_NIEVE")
+
+    # FIX-WN2-TRIGGERS: tipos WN2 promovidos a factores EAWS cuando ERA5 no los detectó
+    if "NEVADA_WN2_CONFIRMADA" in tipos_ventanas:
+        if "NEVADA_RECIENTE" not in factores and "PRECIPITACION_CRITICA" not in factores:
+            factores.append("NEVADA_RECIENTE")
+    if "PLACA_VIENTO_WN2" in tipos_ventanas:
+        if "VIENTO_FUERTE" not in factores:
+            factores.append("VIENTO_FUERTE")
 
     return "+".join(factores) if factores else "ESTABLE"
