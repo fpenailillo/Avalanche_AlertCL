@@ -1,13 +1,20 @@
 """
-Reprocesamiento retroactivo v19.0 — AndesAI
+Reprocesamiento retroactivo v20.0 — AndesAI
+
+v20.0 cambios respecto a v19.0 (baseline FIX-CR19):
+  - v20.0 Fase G: FIX-VAL-FRAMEWORK — cache S1-S4 + --solo-s5 (3.5h → ~4 min).
+  - v20.0 Fase C: FIX-LLM-DETER — temperature=0.0, seed=42 en todos los LLM clients.
+  - v20.0 Fase A: FIX-HN24-PROMO — HN24 → precip_efectiva en Alpes cuando supera ERA5.
+  - v20.0 Fase F: FIX-IMIS-EXT — HS_cm, TA_C, VW_ms, VW_max_ms extraídos de IMIS JSON.
+  - v20.0 Fase B: FIX-HN24-SIZE — graduación tamaño D3/D4/D5 por HN24 en Alpes.
+  - v20.0 Fase E: FIX-CR7A-REFACTOR — compuerta condicional Andes reemplaza bloqueo
+           absoluto CR-7A. Habilita EAWS Paso 1 cuando calma sostenida confirmada.
+  - v20.0 Fase H: FIX-WN2-TRIGGERS — alertas WN2 ensemble → ventanas_criticas
+           deterministas (NEVADA_WN2_CONFIRMADA, PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE).
+           Para fechas históricas WN2 retorna disponible=False (sin efecto).
 
 v19.0 cambios respecto a v18.0 (baseline FIX-CR18):
   - v19.0: FIX-CR19 — nieve_nueva_cm = HN24_cm en condiciones_actuales.
-           consultor_bigquery incluye datos_json_crudo en SELECT.
-           tool_condiciones_actuales expone nieve_nueva_cm al LLM.
-           tool_ventanas_criticas: ventana CARGA_NIEVE_PROFUNDA cuando
-           HN24>=25cm en Alpes → segunda ventana crítica → activa CH-2/CH-3.
-           Guard _es_alpes: no afecta Andes Chile.
 
 v17.0 cambios respecto a v15.5 (baseline post-revert):
   - v17.0: FIX-CR17A — cap estabilidad base en 'fair' en Andes Chile cuando
@@ -16,14 +23,7 @@ v17.0 cambios respecto a v15.5 (baseline post-revert):
            (terreno potencial), pero sin trigger activo la estabilidad efectiva
            debe ser 'fair' → matriz EAWS ≤ nivel 2. No aplica a Alpes.
 
-v15.0 cambios acumulados respecto a v14.3 (última ronda validada con reproceso):
-  - v15.0: integración WeatherNext 2 (WN2) como enriquecimiento opcional S3.
-           Para fechas históricas WN2 retorna disponible=False (sin datos BQ).
-  - v13.0: FIX-CA-WINDOW — ventana temporal condiciones_actuales ±12h (afecta Suiza).
-  - v10.1: CR-10A+CR-10B — calibración ERA5 regional Alpes (precip 72h, viento 7m/s).
-  - v7.5:  S1 eliminados triggers meteo; S5 determina EAWS Paso 1.
-
-La Parva (H4): sin IMIS ni WN2 histórico → mejora proviene de FIX-CR16A.
+La Parva (H4): sin IMIS ni WN2 histórico → mejoras provienen de FIX-CR17A y FIX-CR7A-REFACTOR.
 
 Prerequisito (solo Suiza): ejecutar antes de este script:
     python agentes/datos/backfill/cargar_imis_condiciones_actuales.py
@@ -145,13 +145,13 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v18 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v20 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v19')
+          AND STARTS_WITH(version_prompts, 'v20')
     """
     job = cliente.query(
         q,
@@ -203,7 +203,7 @@ def ejecutar_replay(
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v19.0 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v20.0 — {total} ejecuciones")
     print(f"Modo: {modo}")
     print(f"Estimado: ~{round(total * est_seg / 60)} min ({round(total * est_seg / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
@@ -303,7 +303,7 @@ def ejecutar_replay(
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v19)")
+    print(f"  Skip: {skip} (ya v20)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -311,18 +311,19 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 14 validación v19.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v19 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v19")
-        print("\nObjetivos v19.0 (FIX-CR18-CH-1/2/3):")
-        print("  H3 QWK:  ≥ +0.100 (mejora sobre v17.0 +0.048)")
-        print("  H3 F1:   ≥ +0.250 (mejora sobre v17.0 0.198)")
-        print("  H3 Sesgo: reducir underestimation (v17.0 sesgo=-0.37)")
-        print("  H4 QWK:  mantener (FIX-CR18 no afecta Andes Chile)")
+        print("\nPróximo paso — Validación v20.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v20 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v20")
+        print("\nObjetivos v20.0 (fases A+B+C+E+F+G+H):")
+        print("  H3 QWK Suiza:   ≥ 0.350 (baseline v19: 0.236)")
+        print("  H4 QWK La Parva: ≥ 0.150 (baseline v19: -0.067)")
+        print("  H4 sesgo:        ≤ +0.400 (baseline v19: +0.793)")
+        print("  Distrib. Suiza nivel 1: 25-35% (baseline v19: 50%)")
+        print("  Distrib. La Parva nivel 1: 35-50% (baseline v19: 11%)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v19.0")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v20.0")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
