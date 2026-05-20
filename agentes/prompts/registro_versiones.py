@@ -60,9 +60,9 @@ REGISTRO_PROMPTS = {
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
         "variable": "SYSTEM_PROMPT_METEOROLOGICO",
-        "version": "5.2.0",
-        "descripcion": "v5.2: WN2 — nueva tool obtener_pronostico_wn2_ventanas (ensemble 64 miembros, ventanas 6h, probable_avalanche_problem)",
-        "hash_sha256": "da9c32af6aa0e78e",
+        "version": "5.3.0",
+        "descripcion": "v5.3: FIX-WN2-TRIGGERS (H) — S3 pasa wn2_heavy_snow/storm_slab/wind_strong a detectar_ventanas_criticas",
+        "hash_sha256": "8dd59182aae4b033",
     },
     "nlp": {
         "modulo": "agentes.subagentes.subagente_nlp.prompts",
@@ -109,12 +109,14 @@ REGISTRO_PROMPTS = {
 #   tool_ventanas_criticas: param nieve_nueva_cm_imis; ventana CARGA_NIEVE_PROFUNDA
 #   cuando HN24>=25cm en Alpes (2a ventana -> activa CH-2/CH-3). Guard _es_alpes.
 # v20.0: FIX-VAL-FRAMEWORK (G): cache S1-S4 + --solo-s5 (3.5h → ~4 min por validación).
-#   FIX-LLM-DETER (C): temperature=0.0 + seed=42 en todos los LLM clients.
+#   FIX-LLM-DETER (C): temperature=0.0 en todos los LLM clients (seed eliminado — Databricks rechaza).
 #   FIX-HN24-PROMO (A): HN24 → precip_efectiva en Alpes cuando supera ERA5.
 #   FIX-IMIS-EXT (F): extracción extendida HS/TA/VW/VW_max desde JSON IMIS.
 #   FIX-HN24-SIZE (B): graduación tamaño D3/D4/D5 por HN24 en Alpes (reemplaza CH-3 binario).
 #   FIX-CR7A-REFACTOR (E): compuerta condicional Andes — reemplaza bloqueo absoluto CR-7A
 #     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
+#   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
+#     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
 VERSION_GLOBAL = "20.0"
 
 
