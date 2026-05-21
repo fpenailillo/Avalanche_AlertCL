@@ -212,6 +212,15 @@ class ConsultorBigQuery:
             resultado = filas[0]
             resultado["disponible"] = True
 
+            # FIX-WIND-UNITS (bug_021): condiciones_actuales.velocidad_viento se almacena
+            # en km/h por todas las rutas de ingesta. Normalizar a m/s aquí para que los
+            # consumers (_clasificar_viento, detectar_ventanas_criticas, fuente_open_meteo,
+            # tool_clima_reciente) usen sus umbrales Beaufort correctamente, y almacenador
+            # vuelva a km/h con el ×3.6 ya existente.
+            _vw = resultado.get("velocidad_viento")
+            if _vw is not None:
+                resultado["velocidad_viento"] = round(_vw / 3.6, 2)
+
             # FIX-CR19 + FIX-IMIS-EXT (v20.0): extraer señales IMIS de datos_json_crudo.
             crudo_str = resultado.pop("datos_json_crudo", None)
             if crudo_str:

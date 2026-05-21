@@ -161,7 +161,7 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
     res_clasificar = _extraer_resultado_tool(tools_llamadas, "clasificar_riesgo_eaws_integrado")
     res_wn2 = _extraer_resultado_tool(tools_llamadas, "obtener_pronostico_wn2_ventanas")
 
-    # Extraer viento_kmh desde condiciones (viene en m/s → convertir)
+    # velocidad_viento_ms viene en m/s (normalizado en ConsultorBigQuery) → convertir a km/h
     viento_ms = (res_condiciones.get("condiciones") or {}).get("velocidad_viento_ms")
     viento_kmh = round(viento_ms * 3.6, 1) if viento_ms is not None else None
 
