@@ -387,6 +387,8 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
             "nombre_ubicacion": nombre_ubicacion,
             "fecha_emision": fecha_emision.isoformat(),
             "nivel_eaws_24h": nivel_24h,
+            # FIX-CALIB-REG (v21.0): nivel antes de calibración estadística post-LLM
+            "nivel_eaws_24h_raw": res_clasificar_tool.get("nivel_eaws_24h_raw"),
             "nivel_eaws_48h": nivel_48h,
             "nivel_eaws_72h": nivel_72h,
             "nombre_nivel_24h": nombre_nivel_24h,

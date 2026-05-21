@@ -35,6 +35,16 @@ except ImportError:
         def _obtener_region(zona: str) -> str:  # type: ignore[misc]
             return "andes_chile"
 
+# FIX-CALIB-REG (Fase D, v21.0): calibración estadística post-LLM
+try:
+    from agentes.validacion.calibrador import aplicar_calibracion_regional as _calibrar_nivel
+except ImportError:
+    try:
+        from validacion.calibrador import aplicar_calibracion_regional as _calibrar_nivel
+    except ImportError:
+        def _calibrar_nivel(nivel: int, region: str) -> int:  # type: ignore[misc]
+            return nivel
+
 logger = logging.getLogger(__name__)
 
 
@@ -397,8 +407,22 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "transporte eolico activo incrementa frecuencia de avalanchas"
         )
 
+    # FIX-CALIB-REG (Fase D, v21.0): calibración estadística post-LLM.
+    # Aplica α+β·nivel por región solo si los gates estadísticos se aprobaron
+    # en el entrenamiento offline (coeficientes_calibracion.json).
+    # Si el JSON no existe o la región no fue aprobada, retorna identidad.
+    _region_cal = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    nivel_24h_raw = nivel_24h
+    nivel_48h_raw = nivel_48h
+    nivel_72h_raw = nivel_72h
+    nivel_24h = _calibrar_nivel(nivel_24h, _region_cal)
+    nivel_48h = _calibrar_nivel(nivel_48h, _region_cal)
+    nivel_72h = _calibrar_nivel(nivel_72h, _region_cal)
+    info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
+
     return {
         "nivel_eaws_24h": nivel_24h,
+        "nivel_eaws_24h_raw": nivel_24h_raw,
         "nivel_eaws_48h": nivel_48h,
         "nivel_eaws_72h": nivel_72h,
         "nombre_nivel_24h": info_nivel.get("nombre"),

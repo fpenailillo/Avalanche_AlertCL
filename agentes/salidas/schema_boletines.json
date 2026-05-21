@@ -15,7 +15,13 @@
     "name": "nivel_eaws_24h",
     "type": "INT64",
     "mode": "NULLABLE",
-    "description": "Nivel de peligro EAWS para las próximas 24 horas (1-5)"
+    "description": "Nivel de peligro EAWS para las próximas 24 horas (1-5, calibrado)"
+  },
+  {
+    "name": "nivel_eaws_24h_raw",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Nivel predicho por LLM antes de calibración estadística (Fase D v21.0)"
   },
   {
     "name": "nivel_eaws_48h",

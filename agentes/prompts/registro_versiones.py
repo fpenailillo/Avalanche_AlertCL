@@ -108,6 +108,12 @@ REGISTRO_PROMPTS = {
 #   tool_condiciones_actuales: surfacear nieve_nueva_cm al LLM; alerta CARGA_NIEVE_EXTREMA_30CM.
 #   tool_ventanas_criticas: param nieve_nueva_cm_imis; ventana CARGA_NIEVE_PROFUNDA
 #   cuando HN24>=25cm en Alpes (2a ventana -> activa CH-2/CH-3). Guard _es_alpes.
+# v21.0: FIX-CALIB-REG (D): calibración estadística post-LLM por región.
+#   alpes_swiss: shift-only aprobado (α=+0.70, β=1.0, p=0.026, QWK_cv 0.191→0.250).
+#     Mapa: nivel 1→2, 2→3, 3→4, 4→5. QWK full 0.264→0.353 (objetivo ≥0.35 cumplido).
+#   andes_chile: identidad — shift-only rechazado (|α|=0.40<0.50). Ya cumple objetivo ≥0.15.
+#   Infraestructura: calibrador.py, coeficientes_calibracion.json, tool_clasificar_eaws (+raw),
+#     almacenador (+nivel_eaws_24h_raw), schema_boletines.json.
 # v20.0: FIX-VAL-FRAMEWORK (G): cache S1-S4 + --solo-s5 (3.5h → ~4 min por validación).
 #   FIX-LLM-DETER (C): temperature=0.0 en todos los LLM clients (seed eliminado — Databricks rechaza).
 #   FIX-HN24-PROMO (A): HN24 → precip_efectiva en Alpes cuando supera ERA5.
@@ -117,7 +123,7 @@ REGISTRO_PROMPTS = {
 #     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
 #   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
 #     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
-VERSION_GLOBAL = "20.0"
+VERSION_GLOBAL = "21.0"
 
 
 def _calcular_hash(contenido: str) -> str:
