@@ -185,11 +185,13 @@ def ejecutar_detectar_ventanas_criticas(
     _umbral_lluvia     = 1.5  if _es_alpes else 3.0
     _umbral_carga_72h  = 5.0  if _es_alpes else 10.0
 
-    # CR-10B: umbral viento reducido en Alpes (ERA5 subestima vientos de cresta)
-    _umbral_viento_fuerte         = 7.0  if _es_alpes else 10.0
-    # Redistribución: en Alpes coincide con el umbral base (cualquier viento fuerte
-    # redistribuye nieve en terreno alpino complejo). En Andes requiere umbral mayor.
-    _umbral_viento_redistribucion = 7.0  if _es_alpes else 15.0
+    # CR-10B recalibrado (FIX-WIND-UNITS): ERA5 velocidad_viento ahora en m/s reales.
+    # Análisis de 30 pares validación Suiza 2018-2020: estaciones de valle (Interlaken
+    # 1200m, St Moritz 1900m, Matterhorn 2600m), ratio IMIS/ERA5 ≈ 1.0 (no 1.4 de cresta).
+    # Max ERA5 en dataset = 5.22 m/s → umbral 7 m/s apagaba toda señal de viento.
+    # Umbral 3 m/s: activa 4/30 días, todos GT≥3 (100% precisión). Señal limpia.
+    _umbral_viento_fuerte         = 3.0  if _es_alpes else 10.0
+    _umbral_viento_redistribucion = 3.0  if _es_alpes else 15.0
 
     # ─── Ventana 1: Nevada + Viento simultáneos ──────────────────────────────
     nevada_activa = (

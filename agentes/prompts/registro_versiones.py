@@ -81,6 +81,17 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
+# v22.0: FIX-WIND-UNITS (bug_021) + FIX-CR10B-RECAL:
+#   FIX-WIND-UNITS: normalizar velocidad_viento km/h→m/s en ConsultorBigQuery.obtener_condiciones_actuales.
+#     Causa raíz: todas las rutas de ingesta guardan km/h, pero consumers asumían m/s.
+#     Fix: /3.6 al leer BQ; los ×3.6 downstream (fuente_open_meteo, tool_clima_reciente,
+#     almacenador) ya producen km/h correctos.
+#   FIX-CR10B-RECAL: recalibrar umbral viento Alpes tras corrección de unidades.
+#     Análisis 30 pares DEAPSnow 2018-2020: ratio IMIS/ERA5 ≈ 1.0 (estaciones valle,
+#     no cresta); max ERA5 = 5.22 m/s → umbral 7 m/s apagaba toda señal.
+#     Nuevo umbral: 3.0 m/s (activa 4/30 días, 100% GT≥3, sin falsos positivos).
+#     No afecta Andes Chile (_umbral_viento_fuerte = 10.0 m/s sin cambio).
+# v21.0: FIX-CALIB-REG (D): calibración estadística post-LLM por región.
 # v18.0: FIX-CR18-CH-1/2/3 — fixes H3 Suiza:
 #   CH-1 (prompt): S5 no intenta llamar obtener_condiciones_actuales_meteo (no registrada en S5);
 #         añadir instrucción de pasar siempre viento_kmh.
@@ -123,7 +134,7 @@ REGISTRO_PROMPTS = {
 #     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
 #   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
 #     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
-VERSION_GLOBAL = "21.0"
+VERSION_GLOBAL = "22.0"
 
 
 def _calcular_hash(contenido: str) -> str:
