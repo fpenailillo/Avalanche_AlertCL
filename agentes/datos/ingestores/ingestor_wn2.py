@@ -95,13 +95,22 @@ def _borrar_particion(bq: bigquery.Client, ingestion_date: str) -> None:
         DELETE FROM `{GCP_PROJECT}.{DATASET}.{TABLA}`
         WHERE DATE(ingestion_timestamp) = @fecha
     """
-    bq.query(
-        sql,
-        job_config=bigquery.QueryJobConfig(query_parameters=[
-            bigquery.ScalarQueryParameter("fecha", "DATE", ingestion_date),
-        ]),
-    ).result()
-    logger.info(f"Partición {ingestion_date} limpiada.")
+    try:
+        bq.query(
+            sql,
+            job_config=bigquery.QueryJobConfig(query_parameters=[
+                bigquery.ScalarQueryParameter("fecha", "DATE", ingestion_date),
+            ]),
+        ).result()
+        logger.info(f"Partición {ingestion_date} limpiada.")
+    except Exception as exc:
+        if "streaming buffer" in str(exc).lower():
+            logger.warning(
+                f"Partición {ingestion_date} con filas en streaming buffer — "
+                "se omite DELETE; reinserción tolerada (QUALIFY ROW_NUMBER downstream)"
+            )
+        else:
+            raise
 
 
 # ── SQL v6 con horizonte completo (beyond_72h incluido) ───────────────────────

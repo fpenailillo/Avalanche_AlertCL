@@ -196,11 +196,13 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     # satisfacen simultáneamente, evitando falsos negativos en días de tormenta.
     _region_meteo = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
     if _region_meteo == "andes_chile" and condiciones_meteo_disponibles is True:
+        _precip_ok = precipitacion_72h_corregida_mm is not None and precipitacion_72h_corregida_mm < 5
+        _viento_ok = viento_kmh is not None and viento_kmh < 30
         senales_calma_confirmada = (
             factor_meteorologico in _FACTORES_NEUTROS
             and ventanas_criticas_detectadas == 0
-            and (precipitacion_72h_corregida_mm or 0) < 5
-            and (viento_kmh or 0) < 30
+            and _precip_ok
+            and _viento_ok
             and dias_consecutivos_nivel_bajo >= 2
         )
         if not senales_calma_confirmada:
