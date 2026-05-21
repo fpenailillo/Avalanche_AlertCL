@@ -179,13 +179,33 @@ inicio, un sesgo estructural de ~+0.5 a +1.0 es esperable y no indica falla del 
 
 ---
 
+## Estado H1/H3 Suiza (R13/v17.0)
+
+Reproceso completado 2026-05-18. Primera validación con DEAPSnow IMIS 2018-2020.
+
+| Métrica | v17.0 R13 | Objetivo | Estado |
+|---------|-----------|---------|--------|
+| QWK H3 | +0.048 | ≥ +0.049 (sin regresión) | ✅ prácticamente igual |
+| QWK H3 | +0.048 | ≥ +0.59 (Techel 2022) | ❌ brecha 0.54 |
+| F1-macro H1 | 0.198 | ≥ 0.75 | ❌ brecha 0.55 |
+| Sesgo (AndesAI − SLF) | −0.37 | — | Mejor que v9.0 (−0.71) |
+| Accuracy ±1 | 0.833 | — | — |
+| n pares | 30 | — | — |
+
+Patrón dominante: sistema **subestima** en Suiza (opuesto a La Parva). Nivel 3 GT = 36.7%, predicho = 20%.
+Ver análisis completo en `ronda13_v17_suiza_resultados.md`.
+
+---
+
 ## Archivos de referencia
 
 | Archivo | Contenido |
 |---------|-----------|
-| `docs/validacion/ronda12_v17_resultados.md` | Análisis detallado R12 |
+| `docs/validacion/ronda13_v17_suiza_resultados.md` | **H1/H3 R13 v17.0 (DEAPSnow 2018-2020)** |
+| `docs/validacion/ronda12_v17_resultados.md` | Análisis detallado R12 H4 |
 | `docs/validacion/ronda11_v16_resultados.md` | Análisis R11 + diagnóstico FIX-CR16A |
 | `docs/validacion/ronda10_v15_resultados.md` | Análisis R10 + diagnóstico regresión |
-| `docs/validacion/ronda8_v80_resultados.md` | Mejor línea base histórica (v8.0) |
+| `docs/validacion/ronda8_v80_resultados.md` | Mejor línea base histórica H4 (v8.0) |
+| `docs/validacion/ronda9_v90_resultados.md` | Último reproceso H3 Suiza previo (2023-2024) |
 | `agentes/tests/test_fix_s1_semantica.py` | Tests unitarios S1 semántica EAWS |
 | `agentes/tests/test_req05_st_regionstats.py` | Tests REQ-05 stats regionales |

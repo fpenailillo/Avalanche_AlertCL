@@ -140,6 +140,14 @@ METADATA_ZONAS: dict[str, dict] = {
 
 # ─── Helpers ───────────────────────────────────────────────────────────────────
 
+def obtener_elevacion_referencia(zona: str) -> int:
+    """Retorna elevación media de la zona en metros (promedio entre min y max)."""
+    meta = METADATA_ZONAS.get(zona, {})
+    emin = meta.get("elevacion_min_m", 2500)
+    emax = meta.get("elevacion_max_m", 3500)
+    return (emin + emax) // 2
+
+
 def obtener_region(zona: str) -> str:
     """Retorna 'andes_chile' (default) o 'alpes_swiss' según la zona.
 

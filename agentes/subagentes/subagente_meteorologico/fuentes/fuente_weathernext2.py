@@ -143,22 +143,26 @@ class FuenteWeatherNext2(FuenteMeteorologica):
         lat: float,
         lon: float,
         fecha_objetivo: Optional[str] = None,
+        elevacion_m: Optional[int] = None,
     ) -> dict:
         """
         Obtiene pronóstico WeatherNext 2 en 4 ventanas de 6h + resumen diario.
 
-        Usa la SQL v6 con todos los CTEs de enriquecimiento EAWS:
-        - ventana_6h: percentiles temp/precip, vientos 10m/100m, probs miembro
-        - ventana_eaws: nieve estimada, wind_class_es, probable_avalanche_problem,
-                        4 alertas booleanas, confianza_pronostico
-        - diario: agregaciones 24h, problema dominante
+        Usa SQL v7 con mejoras sobre v6:
+        - NEW-1: config CTE con @elevacion_m para cálculo cota 0°C
+        - FIX-1: mejor_corrida sin filtro eaws_horizon (incluye beyond_72h)
+        - FIX-2: media circular sin/cos para dirección de viento (evita sesgo 0°/360°)
+        - FIX-3: LAG con tiebreaker forecast_time (estabilidad numérica)
+        - FIX-6: snow_type_member mutuamente exclusivo (dry/wet/storm_slab/melt_freeze/rain)
+        - NEW-2: lapse_rate variable por MSLP; cota_0c_m dinámica
 
         Args:
-            zona: Nombre exacto de la ubicación (para logs)
-            lat:  Latitud del punto de interés
-            lon:  Longitud del punto de interés
-            fecha_objetivo: Fecha ISO (YYYY-MM-DD) del init_time a consultar.
-                            Default: hoy UTC.
+            zona:         Nombre exacto de la ubicación (para logs)
+            lat:          Latitud del punto de interés
+            lon:          Longitud del punto de interés
+            fecha_objetivo: Fecha ISO (YYYY-MM-DD). Default: hoy UTC.
+            elevacion_m:  Elevación de referencia en metros para cota 0°C.
+                          Si None, se usa promedio min/max de METADATA_ZONAS.
 
         Returns:
             dict con claves:
@@ -175,11 +179,18 @@ class FuenteWeatherNext2(FuenteMeteorologica):
         if fecha_objetivo is None:
             fecha_objetivo = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
+        if elevacion_m is None:
+            from agentes.datos.constantes_zonas import METADATA_ZONAS
+            meta = METADATA_ZONAS.get(zona, {})
+            emin = meta.get("elevacion_min_m", 2500)
+            emax = meta.get("elevacion_max_m", 3500)
+            elevacion_m = (emin + emax) // 2
+
         try:
             from google.cloud import bigquery
 
             client = bigquery.Client(project="climas-chileno")
-            rows = self._query_ventanas_6h(client, lat, lon, fecha_objetivo)
+            rows = self._query_ventanas_6h(client, lat, lon, fecha_objetivo, elevacion_m)
             return self._formatear_ventanas(rows, zona, fecha_objetivo)
 
         except Exception as exc:
@@ -194,18 +205,29 @@ class FuenteWeatherNext2(FuenteMeteorologica):
         lat: float,
         lon: float,
         fecha_objetivo: str,
+        elevacion_m: int,
     ) -> list:
         """
-        Ejecuta la SQL v6 (CTEs completos) parametrizada por lat/lon/fecha.
+        Ejecuta SQL v7 parametrizada por lat/lon/fecha/elevacion.
 
-        La SQL original del usuario usaba literales -70.2831,-33.3325 y
-        '2026-05-15'. Aquí se reemplaza por @lon, @lat, @init_date_start / end.
+        Mejoras sobre v6:
+        - NEW-1: config CTE con @elevacion_m para cálculo cota 0°C
+        - FIX-1: mejor_corrida sin filtro eaws_horizon (incluye beyond_72h)
+        - FIX-2: media circular sin/cos para dirección de viento
+        - FIX-3: LAG con tiebreaker forecast_time
+        - FIX-6: snow_type_member mutuamente exclusivo
+        - NEW-2: lapse_rate variable por MSLP; cota_0c_m_member dinámica
         """
         from google.cloud import bigquery
 
         sql = f"""
--- WeatherNext 2 → AndesAI S3 — SQL v6 parametrizado
+-- WeatherNext 2 → AndesAI S3 — SQL v7 parametrizado
 WITH
+
+-- NEW-1: elevación de referencia para cota 0°C dinámica
+config AS (
+  SELECT @elevacion_m AS elevacion_m
+),
 
 ensemble_raw AS (
   SELECT
@@ -231,72 +253,100 @@ ensemble_raw AS (
 
 ensemble_members AS (
   SELECT
-    *,
-    ROUND(SQRT(POW(u10,2)  + POW(v10,2)),  2)                 AS wind_10m_ms,
-    ROUND(SQRT(POW(u100,2) + POW(v100,2)), 2)                 AS wind_100m_ms,
-    ROUND(
-      (ATAN2(-u10, -v10) * 180.0 / ACOS(-1.0) + 360.0)
-      - FLOOR((ATAN2(-u10, -v10) * 180.0 / ACOS(-1.0) + 360.0) / 360.0) * 360.0
-    , 1)                                                        AS wdir_10m_deg,
-    ROUND(
-      (ATAN2(-u100, -v100) * 180.0 / ACOS(-1.0) + 360.0)
-      - FLOOR((ATAN2(-u100, -v100) * 180.0 / ACOS(-1.0) + 360.0) / 360.0) * 360.0
-    , 1)                                                        AS wdir_100m_deg,
+    r.init_time,
+    r.forecast_time,
+    r.forecast_lead_hours,
+    r.member_id,
+    r.temp_2m_c,
+    r.precip_6hr_mm,
+    r.mslp_hpa,
+    ROUND(SQRT(POW(r.u10,  2) + POW(r.v10,  2)), 2)           AS wind_10m_ms,
+    ROUND(SQRT(POW(r.u100, 2) + POW(r.v100, 2)), 2)           AS wind_100m_ms,
+    -- FIX-2: componentes sin/cos para media circular de dirección de viento
+    SIN(ATAN2(-r.u10,  -r.v10))                                AS wdir_10m_sin,
+    COS(ATAN2(-r.u10,  -r.v10))                                AS wdir_10m_cos,
+    SIN(ATAN2(-r.u100, -r.v100))                               AS wdir_100m_sin,
+    COS(ATAN2(-r.u100, -r.v100))                               AS wdir_100m_cos,
+    -- Dirección cardinal por miembro (para moda del ensemble)
     CASE
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 22.5
-        OR (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 >= 337.5
-        THEN 'N'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 67.5
-        THEN 'NE'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 112.5
-        THEN 'E'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 157.5
-        THEN 'SE'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 202.5
-        THEN 'S'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 247.5
-        THEN 'SW'
-      WHEN (ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)
-           - FLOOR((ATAN2(-u100,-v100) * 180.0/ACOS(-1.0) + 360.0)/360.0)*360.0 < 292.5
-        THEN 'W'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 22.5
+        OR ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) >= 337.5 THEN 'N'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 67.5 THEN 'NE'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 112.5 THEN 'E'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 157.5 THEN 'SE'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 202.5 THEN 'S'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 247.5 THEN 'SW'
+      WHEN ROUND(
+            (ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)
+            - FLOOR((ATAN2(-r.u100,-r.v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0
+           , 0) < 292.5 THEN 'W'
       ELSE 'NW'
     END                                                         AS wdir_100m_cardinal_member,
-    temp_2m_c <= 2.0 AND precip_6hr_mm > 0                    AS is_snow_member,
-    temp_2m_c > 2.0  AND precip_6hr_mm > 0                    AS is_rain_member,
-    temp_2m_c BETWEEN 0.0 AND 2.0 AND precip_6hr_mm > 0       AS is_wet_snow_member,
-    temp_2m_c < -2.0 AND precip_6hr_mm > 0                    AS is_dry_snow_member,
-    precip_6hr_mm > 5.0                                         AS is_heavy_precip_member,
-    SQRT(POW(u100,2) + POW(v100,2)) > 8.0
-      AND precip_6hr_mm > 0                                    AS is_wind_slab_member,
-    SQRT(POW(u100,2) + POW(v100,2)) > 12.0
-      AND precip_6hr_mm = 0                                    AS is_wind_erosion_member,
-    CASE EXTRACT(HOUR FROM forecast_time)
+    -- FIX-6: tipo de precipitación mutuamente exclusivo
+    CASE
+      WHEN r.precip_6hr_mm = 0 AND ABS(r.temp_2m_c) <= 2.0    THEN 'melt_freeze'
+      WHEN r.precip_6hr_mm = 0                                   THEN 'no_precip'
+      WHEN r.temp_2m_c > 2.0                                     THEN 'rain'
+      WHEN r.temp_2m_c > 0.0                                     THEN 'wet_snow'
+      WHEN SQRT(POW(r.u100,2)+POW(r.v100,2)) > 8.0              THEN 'storm_slab'
+      ELSE                                                         'dry_snow'
+    END                                                         AS snow_type_member,
+    -- NEW-2: tasa de lapso variable por MSLP; cota isoterma 0°C dinámica
+    ROUND(
+      c.elevacion_m + r.temp_2m_c * (1000.0 / CASE
+        WHEN r.mslp_hpa < 990  THEN 7.5   -- tormenta fuerte: gradiente empinado
+        WHEN r.mslp_hpa < 1005 THEN 6.5   -- atmosfera moderada
+        ELSE 5.5                           -- atmosfera estable: gradiente suave
+      END)
+    , 0)                                                        AS cota_0c_m_member,
+    -- Flags para alertas (complementarios a snow_type_member)
+    r.precip_6hr_mm > 5.0                                       AS is_heavy_precip_member,
+    SQRT(POW(r.u100,2)+POW(r.v100,2)) > 12.0
+      AND r.precip_6hr_mm = 0                                  AS is_wind_erosion_member,
+    -- FIX-3: LAG con tiebreaker forecast_time para estabilidad numérica
+    ABS(
+      r.temp_2m_c - LAG(r.temp_2m_c) OVER (
+        PARTITION BY r.init_time, r.member_id
+        ORDER BY r.forecast_lead_hours, r.forecast_time
+      )
+    )                                                           AS temp_delta_abs,
+    -- Slot de ventana horaria
+    CASE EXTRACT(HOUR FROM r.forecast_time)
       WHEN 6  THEN 'manana'
       WHEN 12 THEN 'tarde'
       WHEN 18 THEN 'noche'
       WHEN 0  THEN 'madrugada'
     END                                                         AS ventana,
-    CASE EXTRACT(HOUR FROM forecast_time)
+    CASE EXTRACT(HOUR FROM r.forecast_time)
       WHEN 6  THEN 1
       WHEN 12 THEN 2
       WHEN 18 THEN 3
       WHEN 0  THEN 4
     END                                                         AS ventana_orden,
-    DATE(TIMESTAMP_SUB(forecast_time, INTERVAL 3 HOUR))        AS fecha_local,
-    ABS(
-      temp_2m_c - LAG(temp_2m_c) OVER (
-        PARTITION BY init_time, member_id
-        ORDER BY forecast_lead_hours
-      )
-    )                                                           AS temp_delta_abs
-  FROM ensemble_raw
+    DATE(TIMESTAMP_SUB(r.forecast_time, INTERVAL 3 HOUR))      AS fecha_local
+  FROM ensemble_raw r
+  CROSS JOIN config c
 ),
 
 ventana_6h AS (
@@ -323,19 +373,40 @@ ventana_6h AS (
     ROUND(AVG(wind_10m_ms), 2)                                 AS wind_10m_mean_ms,
     ROUND(MAX(wind_10m_ms), 2)                                 AS wind_10m_max_ms,
     ROUND(APPROX_QUANTILES(wind_10m_ms, 20)[OFFSET(19)], 2)   AS wind_10m_p95_ms,
-    ROUND(AVG(wdir_10m_deg), 0)                                AS wdir_10m_mean_deg,
+    -- FIX-2: media circular para dirección viento 10m (evita sesgo 0°/360°)
+    ROUND(
+      (ATAN2(AVG(wdir_10m_sin), AVG(wdir_10m_cos)) * 180.0 / ACOS(-1.0) + 360.0)
+      - FLOOR((ATAN2(AVG(wdir_10m_sin), AVG(wdir_10m_cos)) * 180.0 / ACOS(-1.0) + 360.0) / 360.0) * 360.0
+    , 0)                                                        AS wdir_10m_mean_deg,
     ROUND(AVG(wind_100m_ms), 2)                                AS wind_100m_mean_ms,
     ROUND(MAX(wind_100m_ms), 2)                                AS wind_100m_max_ms,
     ROUND(APPROX_QUANTILES(wind_100m_ms, 20)[OFFSET(19)], 2)  AS wind_100m_p95_ms,
-    ROUND(AVG(wdir_100m_deg), 0)                               AS wdir_100m_mean_deg,
+    -- FIX-2: media circular para dirección viento 100m
+    ROUND(
+      (ATAN2(AVG(wdir_100m_sin), AVG(wdir_100m_cos)) * 180.0 / ACOS(-1.0) + 360.0)
+      - FLOOR((ATAN2(AVG(wdir_100m_sin), AVG(wdir_100m_cos)) * 180.0 / ACOS(-1.0) + 360.0) / 360.0) * 360.0
+    , 0)                                                        AS wdir_100m_mean_deg,
     APPROX_TOP_COUNT(wdir_100m_cardinal_member, 1)[OFFSET(0)].value AS wdir_100m_cardinal,
-    ROUND(COUNTIF(is_snow_member)         / COUNT(member_id) * 100, 1) AS prob_snow_pct,
-    ROUND(COUNTIF(is_rain_member)         / COUNT(member_id) * 100, 1) AS prob_rain_pct,
-    ROUND(COUNTIF(is_wet_snow_member)     / COUNT(member_id) * 100, 1) AS prob_wet_snow_pct,
-    ROUND(COUNTIF(is_dry_snow_member)     / COUNT(member_id) * 100, 1) AS prob_dry_snow_pct,
+    -- FIX-6: probabilidades por tipo de nieve (mutuamente excluyentes)
+    ROUND(COUNTIF(snow_type_member = 'dry_snow')    / COUNT(member_id) * 100, 1) AS prob_dry_snow_pct,
+    ROUND(COUNTIF(snow_type_member = 'wet_snow')    / COUNT(member_id) * 100, 1) AS prob_wet_snow_pct,
+    ROUND(COUNTIF(snow_type_member = 'storm_slab')  / COUNT(member_id) * 100, 1) AS prob_storm_slab_pct,
+    ROUND(COUNTIF(snow_type_member = 'melt_freeze') / COUNT(member_id) * 100, 1) AS prob_melt_freeze_pct,
+    ROUND(COUNTIF(snow_type_member = 'rain')        / COUNT(member_id) * 100, 1) AS prob_rain_pct,
+    -- prob_snow_pct: suma de todos los tipos de nieve (compatibilidad)
+    ROUND(
+      COUNTIF(snow_type_member IN ('dry_snow','wet_snow','storm_slab'))
+      / COUNT(member_id) * 100
+    , 1)                                                        AS prob_snow_pct,
     ROUND(COUNTIF(is_heavy_precip_member) / COUNT(member_id) * 100, 1) AS prob_heavy_precip_pct,
-    ROUND(COUNTIF(is_wind_slab_member)    / COUNT(member_id) * 100, 1) AS prob_wind_slab_pct,
-    ROUND(COUNTIF(is_wind_erosion_member) / COUNT(member_id) * 100, 1) AS prob_wind_erosion_pct
+    ROUND(COUNTIF(is_wind_erosion_member) / COUNT(member_id) * 100, 1) AS prob_wind_erosion_pct,
+    -- Tipo de nieve dominante
+    APPROX_TOP_COUNT(snow_type_member, 1)[OFFSET(0)].value     AS snow_type_dominant,
+    -- NEW-2: cota isoterma 0°C con incertidumbre ensemble
+    ROUND(APPROX_QUANTILES(cota_0c_m_member, 20)[OFFSET(1)],  0) AS cota_0c_p05_m,
+    ROUND(APPROX_QUANTILES(cota_0c_m_member, 20)[OFFSET(10)], 0) AS cota_0c_p50_m,
+    ROUND(APPROX_QUANTILES(cota_0c_m_member, 20)[OFFSET(19)], 0) AS cota_0c_p95_m,
+    ROUND(STDDEV(cota_0c_m_member), 0)                           AS cota_0c_std_m
   FROM ensemble_members
   GROUP BY
     init_time, fecha_local, ventana, ventana_orden,
@@ -382,26 +453,25 @@ ventana_eaws AS (
       WHEN v.wind_100m_mean_ms >= 5  THEN 'leve'
       ELSE                                'calma'
     END                                                         AS wind_class_es,
+    -- FIX-6: problema EAWS usando tipos mutuamente excluyentes
     CASE
-      WHEN v.prob_dry_snow_pct >= 50
-        AND v.precip_p50_mm > 3
-        AND v.wind_100m_mean_ms >= 8  THEN 'storm_slab'
-      WHEN v.prob_dry_snow_pct >= 30
-        AND v.wind_100m_mean_ms >= 8
-        AND v.precip_p50_mm < 3       THEN 'wind_slab'
-      WHEN v.prob_dry_snow_pct >= 50
-        AND v.precip_p50_mm > 3       THEN 'new_snow'
-      WHEN v.prob_wet_snow_pct >= 40  THEN 'wet_snow'
-      WHEN v.prob_snow_pct >= 30
-        AND v.precip_p50_mm BETWEEN 0.5 AND 3 THEN 'new_snow'
+      WHEN v.prob_storm_slab_pct >= 50
+        AND v.precip_p50_mm > 2                                THEN 'storm_slab'
+      WHEN v.prob_storm_slab_pct >= 30
+        AND v.precip_p50_mm < 2                                THEN 'wind_slab'
+      WHEN (v.prob_dry_snow_pct + v.prob_storm_slab_pct) >= 50
+        AND v.precip_p50_mm > 3                                THEN 'new_snow'
+      WHEN v.prob_wet_snow_pct >= 40                           THEN 'wet_snow'
+      WHEN (v.prob_dry_snow_pct + v.prob_storm_slab_pct) >= 30
+        AND v.precip_p50_mm BETWEEN 0.5 AND 3                 THEN 'new_snow'
       WHEN v.temp_delta_mean_c > 3.0
-        AND v.prob_snow_pct < 20      THEN 'persistent_weak_layer'
+        AND v.prob_melt_freeze_pct >= 20                       THEN 'persistent_weak_layer'
       ELSE 'low_load'
     END                                                         AS probable_avalanche_problem,
-    (v.prob_snow_pct >= 80 AND v.precip_p95_mm >= 5.0)        AS alert_heavy_snow,
-    (v.prob_dry_snow_pct >= 89
-      AND v.precip_p50_mm >= 2.0
-      AND v.wind_100m_mean_ms >= 8)                            AS alert_storm_slab,
+    ((v.prob_dry_snow_pct + v.prob_wet_snow_pct + v.prob_storm_slab_pct) >= 80
+      AND v.precip_p95_mm >= 5.0)                              AS alert_heavy_snow,
+    -- FIX-6: alert_storm_slab usa prob_storm_slab_pct (tipo exclusivo)
+    (v.prob_storm_slab_pct >= 60)                              AS alert_storm_slab,
     (v.prob_wet_snow_pct >= 40 AND v.temp_mean_c > -1)        AS alert_wet_snow,
     (v.wind_100m_p95_ms >= 15)                                 AS alert_wind_strong,
     CASE
@@ -413,6 +483,7 @@ ventana_eaws AS (
   FROM ventana_6h v
 ),
 
+-- FIX-1: sin filtro eaws_horizon — incluye ventanas beyond_72h
 mejor_corrida AS (
   SELECT
     *,
@@ -421,7 +492,6 @@ mejor_corrida AS (
       ORDER BY init_time DESC
     ) AS rn
   FROM ventana_eaws
-  WHERE eaws_horizon IN ('H24','H48','H72')
 ),
 
 diario AS (
@@ -434,6 +504,12 @@ diario AS (
     ROUND(MIN(temp_p05_c), 1)                                  AS temp_min_dia_c,
     ROUND(MAX(temp_p95_c), 1)                                  AS temp_max_dia_c,
     APPROX_TOP_COUNT(probable_avalanche_problem, 1)[OFFSET(0)].value AS problema_dominante,
+    -- NEW-2: cota 0°C diaria
+    ROUND(MIN(cota_0c_p05_m), 0)                               AS cota_0c_min_dia_m,
+    ROUND(AVG(cota_0c_p50_m), 0)                               AS cota_0c_media_dia_m,
+    ROUND(MAX(cota_0c_p95_m), 0)                               AS cota_0c_max_dia_m,
+    -- Tipo de nieve dominante del día
+    APPROX_TOP_COUNT(snow_type_dominant, 1)[OFFSET(0)].value   AS snow_type_dia,
     MAX(CASE WHEN alert_heavy_snow  THEN 1 ELSE 0 END)         AS dia_alert_heavy_snow,
     MAX(CASE WHEN alert_storm_slab  THEN 1 ELSE 0 END)         AS dia_alert_storm_slab,
     MAX(CASE WHEN alert_wet_snow    THEN 1 ELSE 0 END)         AS dia_alert_wet_snow,
@@ -453,6 +529,7 @@ diario AS (
   GROUP BY fecha_local
 )
 
+-- OUTPUT A: ventanas 6h
 SELECT
   'ventana'                          AS nivel,
   fecha_local,
@@ -484,7 +561,14 @@ SELECT
   prob_snow_pct,
   prob_wet_snow_pct,
   prob_dry_snow_pct,
-  prob_wind_slab_pct,
+  prob_storm_slab_pct,
+  prob_melt_freeze_pct,
+  prob_rain_pct,
+  snow_type_dominant,
+  cota_0c_p05_m,
+  cota_0c_p50_m,
+  cota_0c_p95_m,
+  cota_0c_std_m,
   probable_avalanche_problem,
   alert_heavy_snow,
   alert_storm_slab,
@@ -494,6 +578,10 @@ SELECT
   CAST(NULL AS FLOAT64)              AS nieve_24h_cm_p50_corr,
   CAST(NULL AS FLOAT64)              AS nieve_24h_cm_p95_corr,
   CAST(NULL AS STRING)               AS problema_dominante,
+  CAST(NULL AS FLOAT64)              AS cota_0c_min_dia_m,
+  CAST(NULL AS FLOAT64)              AS cota_0c_media_dia_m,
+  CAST(NULL AS FLOAT64)              AS cota_0c_max_dia_m,
+  CAST(NULL AS STRING)               AS snow_type_dia,
   CAST(NULL AS STRING)               AS confianza_dia
 
 FROM mejor_corrida
@@ -501,6 +589,7 @@ WHERE rn = 1
 
 UNION ALL
 
+-- OUTPUT B: resumen diario
 SELECT
   'diario'                           AS nivel,
   fecha_local,
@@ -532,7 +621,14 @@ SELECT
   CAST(NULL AS FLOAT64)              AS prob_snow_pct,
   CAST(NULL AS FLOAT64)              AS prob_wet_snow_pct,
   CAST(NULL AS FLOAT64)              AS prob_dry_snow_pct,
-  CAST(NULL AS FLOAT64)              AS prob_wind_slab_pct,
+  CAST(NULL AS FLOAT64)              AS prob_storm_slab_pct,
+  CAST(NULL AS FLOAT64)              AS prob_melt_freeze_pct,
+  CAST(NULL AS FLOAT64)              AS prob_rain_pct,
+  CAST(NULL AS STRING)               AS snow_type_dominant,
+  CAST(NULL AS FLOAT64)              AS cota_0c_p05_m,
+  CAST(NULL AS FLOAT64)              AS cota_0c_p50_m,
+  CAST(NULL AS FLOAT64)              AS cota_0c_p95_m,
+  CAST(NULL AS FLOAT64)              AS cota_0c_std_m,
   problema_dominante                 AS probable_avalanche_problem,
   CAST(dia_alert_heavy_snow AS BOOL) AS alert_heavy_snow,
   CAST(dia_alert_storm_slab AS BOOL) AS alert_storm_slab,
@@ -542,6 +638,10 @@ SELECT
   nieve_24h_cm_p50_corr,
   nieve_24h_cm_p95_corr,
   problema_dominante,
+  cota_0c_min_dia_m,
+  cota_0c_media_dia_m,
+  cota_0c_max_dia_m,
+  snow_type_dia,
   confianza_dia
 
 FROM diario
@@ -553,10 +653,11 @@ ORDER BY fecha_local, ventana_orden
         init_date_end = f"{fecha_objetivo} 23:59:59 UTC"
 
         params = [
-            bigquery.ScalarQueryParameter("lon", "FLOAT64", lon),
-            bigquery.ScalarQueryParameter("lat", "FLOAT64", lat),
+            bigquery.ScalarQueryParameter("lon",             "FLOAT64",   lon),
+            bigquery.ScalarQueryParameter("lat",             "FLOAT64",   lat),
+            bigquery.ScalarQueryParameter("elevacion_m",     "INT64",     elevacion_m),
             bigquery.ScalarQueryParameter("init_date_start", "TIMESTAMP", init_date_start),
-            bigquery.ScalarQueryParameter("init_date_end", "TIMESTAMP", init_date_end),
+            bigquery.ScalarQueryParameter("init_date_end",   "TIMESTAMP", init_date_end),
         ]
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         return list(client.query(sql, job_config=job_config).result())
@@ -567,7 +668,7 @@ ORDER BY fecha_local, ventana_orden
         zona: str,
         fecha_objetivo: str,
     ) -> dict:
-        """Convierte las filas BQ en el dict estructurado que expone la tool."""
+        """Convierte las filas BQ (SQL v7) en el dict estructurado que expone la tool."""
         ventanas = []
         diario = {}
 
@@ -578,22 +679,35 @@ ORDER BY fecha_local, ventana_orden
                     "ventana": r["ventana"],
                     "fecha_local": str(r["fecha_local"]),
                     "eaws_horizon": r["eaws_horizon"],
+                    # Temperatura
                     "temp_p05_c": r["temp_p05_c"],
                     "temp_p50_c": r["temp_p50_c"],
                     "temp_p95_c": r["temp_p95_c"],
                     "temp_std_c": r["temp_std_c"],
+                    # Precipitación
                     "precip_p50_mm": r["precip_p50_mm"],
                     "precip_p95_mm": r["precip_p95_mm"],
                     "est_nieve_6h_cm_p50_corr": r["est_nieve_6h_cm_p50_corr"],
                     "est_nieve_6h_cm_p95_corr": r["est_nieve_6h_cm_p95_corr"],
+                    # Viento
                     "wind_100m_mean_ms": r["wind_100m_mean_ms"],
                     "wind_100m_p95_ms": r["wind_100m_p95_ms"],
                     "wdir_100m_cardinal": r["wdir_100m_cardinal"],
                     "wind_class_es": r["wind_class_es"],
-                    "prob_snow_pct": r["prob_snow_pct"],
-                    "prob_wet_snow_pct": r["prob_wet_snow_pct"],
+                    # FIX-6: probabilidades de tipo de nieve (mutuamente excluyentes)
+                    "prob_snow_pct": r["prob_snow_pct"],       # suma todos los tipos de nieve
                     "prob_dry_snow_pct": r["prob_dry_snow_pct"],
-                    "prob_wind_slab_pct": r["prob_wind_slab_pct"],
+                    "prob_wet_snow_pct": r["prob_wet_snow_pct"],
+                    "prob_storm_slab_pct": r["prob_storm_slab_pct"],
+                    "prob_melt_freeze_pct": r["prob_melt_freeze_pct"],
+                    "prob_rain_pct": r["prob_rain_pct"],
+                    "snow_type_dominant": r["snow_type_dominant"],
+                    # NEW-2: cota isoterma 0°C con incertidumbre ensemble
+                    "cota_0c_p05_m": r["cota_0c_p05_m"],
+                    "cota_0c_p50_m": r["cota_0c_p50_m"],
+                    "cota_0c_p95_m": r["cota_0c_p95_m"],
+                    "cota_0c_std_m": r["cota_0c_std_m"],
+                    # Problema EAWS y alertas
                     "probable_avalanche_problem": r["probable_avalanche_problem"],
                     "alerts": {
                         "heavy_snow": bool(r["alert_heavy_snow"]),
@@ -606,12 +720,20 @@ ORDER BY fecha_local, ventana_orden
             elif r["nivel"] == "diario":
                 diario = {
                     "fecha_local": str(r["fecha_local"]),
+                    # Precipitación y nieve diaria
                     "precip_24h_p50_mm": r["precip_p50_mm"],
                     "precip_24h_p95_mm": r["precip_p95_mm"],
                     "nieve_24h_cm_p50_corr": r["nieve_24h_cm_p50_corr"],
                     "nieve_24h_cm_p95_corr": r["nieve_24h_cm_p95_corr"],
+                    # Temperatura diaria
                     "temp_min_dia_c": r["temp_p05_c"],
                     "temp_max_dia_c": r["temp_p95_c"],
+                    # NEW-2: cota 0°C diaria
+                    "cota_0c_min_dia_m": r["cota_0c_min_dia_m"],
+                    "cota_0c_media_dia_m": r["cota_0c_media_dia_m"],
+                    "cota_0c_max_dia_m": r["cota_0c_max_dia_m"],
+                    # Tipo de nieve y problema dominante
+                    "snow_type_dia": r["snow_type_dia"],
                     "problema_dominante": r["problema_dominante"],
                     "confianza_dia": r["confianza_dia"],
                     "alerts_dia": {

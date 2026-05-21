@@ -227,6 +227,8 @@ def _construir_fila(
             "sector_id":       imis.get("sector_id_meta"),  # None, no está en query
             "station_code":    imis.get("station_code"),
             "datum":           fecha,
+            # FIX-CR19: nieve nueva en cm (HN24 directo, sin conversión SWE)
+            "nieve_nueva_cm":  hn24,
             # Campos meteorológicos IMIS originales (unidades originales)
             "TA_c":            ta,
             "VW_ms":           vw_ms,

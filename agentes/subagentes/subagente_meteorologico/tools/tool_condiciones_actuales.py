@@ -65,13 +65,16 @@ def ejecutar_obtener_condiciones_actuales_meteo(nombre_ubicacion: str) -> dict:
     humedad = condiciones.get("humedad_relativa", 0) or 0
     condicion_clima = condiciones.get("condicion_clima", "")
     sensacion_termica = condiciones.get("sensacion_termica")
+    # FIX-CR19: nieve nueva en cm desde IMIS HN24 (datos_json_crudo)
+    nieve_nueva_cm = condiciones.get("nieve_nueva_cm")
 
     # Evaluar factores de riesgo meteorológico inmediato
     alertas_meteo = _evaluar_alertas_meteo(
         velocidad_viento=velocidad_viento,
         precipitacion=precipitacion,
         temperatura=temperatura,
-        prob_precip=prob_precip
+        prob_precip=prob_precip,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
 
     # Clasificación de viento para transporte de nieve
@@ -81,10 +84,11 @@ def ejecutar_obtener_condiciones_actuales_meteo(nombre_ubicacion: str) -> dict:
     riesgo_precipitacion = _evaluar_riesgo_precipitacion(
         precipitacion=precipitacion,
         prob_precip=prob_precip,
-        temperatura=temperatura
+        temperatura=temperatura,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
 
-    return {
+    resultado = {
         "disponible": True,
         "ubicacion": nombre_ubicacion,
         "condiciones": {
@@ -105,13 +109,18 @@ def ejecutar_obtener_condiciones_actuales_meteo(nombre_ubicacion: str) -> dict:
         "riesgo_precipitacion": riesgo_precipitacion,
         "hora_registro": condiciones.get("hora_actual")
     }
+    # FIX-CR19: exponer nieve_nueva_cm explícitamente cuando disponible (IMIS HN24)
+    if nieve_nueva_cm is not None:
+        resultado["nieve_nueva_cm"] = nieve_nueva_cm
+    return resultado
 
 
 def _evaluar_alertas_meteo(
     velocidad_viento: float,
     precipitacion: float,
     temperatura,
-    prob_precip: float
+    prob_precip: float,
+    nieve_nueva_cm: float = None,
 ) -> list:
     """Evalúa alertas meteorológicas para riesgo de avalancha."""
     alertas = []
@@ -125,6 +134,13 @@ def _evaluar_alertas_meteo(
         alertas.append("PRECIPITACION_CRITICA_30MM")
     elif precipitacion > 10:
         alertas.append("PRECIPITACION_SIGNIFICATIVA")
+
+    # FIX-CR19: alerta por carga de nieve nueva (IMIS HN24)
+    if nieve_nueva_cm is not None:
+        if nieve_nueva_cm >= 30:
+            alertas.append("CARGA_NIEVE_EXTREMA_30CM")
+        elif nieve_nueva_cm >= 15:
+            alertas.append("NEVADA_SIGNIFICATIVA_15CM")
 
     if temperatura is not None:
         if temperatura > 5:
@@ -174,7 +190,8 @@ def _clasificar_viento(velocidad_ms: float) -> dict:
 def _evaluar_riesgo_precipitacion(
     precipitacion: float,
     prob_precip: float,
-    temperatura
+    temperatura,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """Evalúa el riesgo de precipitación nival para avalanchas."""
     # Determinar si precipita como nieve o lluvia
@@ -189,8 +206,17 @@ def _evaluar_riesgo_precipitacion(
     else:
         tipo_precipitacion = "lluvia"
 
-    # Nivel de riesgo
-    if precipitacion > 30 and tipo_precipitacion in ("nieve", "nieve_o_aguanieve"):
+    # FIX-CR19: nivel de riesgo usa nieve_nueva_cm (IMIS) cuando disponible
+    if nieve_nueva_cm is not None and "nieve" in tipo_precipitacion:
+        if nieve_nueva_cm >= 30:
+            nivel = "muy_alto"
+        elif nieve_nueva_cm >= 15:
+            nivel = "alto"
+        elif nieve_nueva_cm >= 5:
+            nivel = "moderado"
+        else:
+            nivel = "bajo"
+    elif precipitacion > 30 and tipo_precipitacion in ("nieve", "nieve_o_aguanieve"):
         nivel = "muy_alto"
     elif precipitacion > 15 and "nieve" in tipo_precipitacion:
         nivel = "alto"
@@ -201,9 +227,12 @@ def _evaluar_riesgo_precipitacion(
     else:
         nivel = "bajo"
 
-    return {
+    resultado = {
         "precipitacion_mm": precipitacion,
         "tipo": tipo_precipitacion,
         "nivel_riesgo": nivel,
-        "probabilidad_pct": prob_precip
+        "probabilidad_pct": prob_precip,
     }
+    if nieve_nueva_cm is not None:
+        resultado["nieve_nueva_cm"] = nieve_nueva_cm
+    return resultado

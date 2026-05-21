@@ -145,13 +145,13 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v20 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v21 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v20')
+          AND STARTS_WITH(version_prompts, 'v21')
     """
     job = cliente.query(
         q,
@@ -229,7 +229,7 @@ def ejecutar_replay(
                 continue
         else:
             if ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v19) — {ubicacion} {fecha_str}")
+                logger.info(f"{prefijo} SKIP (ya v21) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -258,7 +258,7 @@ def ejecutar_replay(
             proc.join(timeout=15)   # 15s para SIGTERM
             if proc.is_alive():
                 proc.kill()         # SIGKILL — no se puede ignorar
-                proc.join()
+                proc.join(timeout=10)  # macOS: proc.join() sin timeout puede colgar
             logger.error(
                 f"{prefijo} TIMEOUT ({TIMEOUT_POR_RUN_SEGUNDOS}s) — {ubicacion} {fecha_str} "
                 f"(proceso terminado, continuando con siguiente run)"
@@ -303,7 +303,7 @@ def ejecutar_replay(
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v20)")
+    print(f"  Skip: {skip} (ya v21)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -311,10 +311,10 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v20.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v20 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v20")
-        print("\nObjetivos v20.0 (fases A+B+C+E+F+G+H):")
+        print("\nPróximo paso — Validación v21.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v21 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v21")
+        print("\nObjetivos v21.0 (fases A+B+C+D+E+F+G+H):")
         print("  H3 QWK Suiza:   ≥ 0.350 (baseline v19: 0.236)")
         print("  H4 QWK La Parva: ≥ 0.150 (baseline v19: -0.067)")
         print("  H4 sesgo:        ≤ +0.400 (baseline v19: +0.793)")

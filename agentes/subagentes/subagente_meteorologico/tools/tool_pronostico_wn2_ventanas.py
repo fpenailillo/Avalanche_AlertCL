@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from agentes.datos.constantes_zonas import COORDENADAS_ZONAS
+from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,7 @@ def ejecutar_obtener_pronostico_wn2_ventanas(
         }
 
     lat, lon = coords
+    elevacion_m = obtener_elevacion_referencia(nombre_ubicacion)
 
     if fecha_objetivo is None:
         fecha_objetivo = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -105,6 +106,7 @@ def ejecutar_obtener_pronostico_wn2_ventanas(
             lat=lat,
             lon=lon,
             fecha_objetivo=fecha_objetivo,
+            elevacion_m=elevacion_m,
         )
 
         if not resultado.get("disponible"):
