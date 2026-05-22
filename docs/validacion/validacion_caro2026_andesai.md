@@ -157,15 +157,24 @@ ERA5 subestima:
 | 5–30 cm | 2–3 | 1–2 |
 | < 5 cm | 1 | 1 ✅ |
 
-**Fix propuesto para v23**: integrar el incremento SD de las últimas 72h desde
-`snow_depth_caro_2026` (o API DGA en tiempo real) como señal adicional en
-`detectar_ventanas_criticas`. Si HN3d_La_Parva > umbral_hn3d (ej. 15 cm/72h),
-activar un trigger de tormenta independiente de ERA5.
+**Rol del dataset Caro 2026 en AndesAI: exclusivamente validación offline.**
 
-Esto requeriría:
-- `ConsultorBigQuery.obtener_snow_depth_caro(apply_qc=False)` ya existe.
-- Agregar parámetro `calcular_hn72=True` que retorne el delta de los últimos 3 días.
-- Usar el HN72 como señal adicional en `tool_detectar_ventanas_criticas.py`.
+Los datos de SD observado no están disponibles en tiempo real operacional (el dataset
+Caro 2026 cubre hasta dic-2024 y no existe feed DGA en tiempo real en el sistema).
+Por lo tanto, `snow_depth_caro_2026` se usa únicamente para:
+
+1. **Validación offline** (como en este análisis): comparar predicciones contra SD observado.
+2. **Referencia de PCI** (Physical Consistency Index): la metodología QC de Caro et al. 2026
+   se adapta para validar si los pronósticos de acumulación de WeatherNext 2 son
+   físicamente consistentes (Pr > umbral, AT < umbral lluvia) — función
+   `calcular_pci_pronostico()` en `datos/qc/snow_depth_qc.py`.
+
+**Fuentes primarias para el modelo predictivo operacional:**
+- **WeatherNext 2** (S3): precipitación ensemble, temperatura, viento — señal de tormenta.
+- **Observaciones satelitales** (S2): cambios en NDSI, cobertura nieve, SAR — estado del manto.
+
+El fix al MAE-tormentas debe venir de mejorar el uso de WN2 y satélite,
+no de incorporar observaciones de estaciones que no estarán disponibles en producción.
 
 ---
 
