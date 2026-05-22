@@ -1758,3 +1758,28 @@ tormenta 2024-06-15 (ERA5=0.4mm, T=-3.2°C, Snowlab=5).
 **Brecha residual**: 2 niveles (de 3). Para cerrarla:
 1. S1 PINN debe recibir `nieve_24h_cm_p50` de WN2 como forzante de carga → very_poor
 2. S2 ViT debe detectar cambios rápidos (carga nival) → very_poor bajo tormenta activa
+
+### FIX-WN2-PINN (v24.0) — 2026-05-22
+
+**Problema**: FIX-SAT-STORM (v23.0) mejoró EAWS 1→2 durante tormentas.
+Brecha residual de 2 niveles vs Snowlab porque S1 PINN devuelve `estabilidad_topografica=poor`
+(no `very_poor`) al no conocer la carga de nieve nueva.
+
+**Física implementada** (Schweizer et al. 2003):
+- Nieve nueva = sobrecarga (surcharge) sobre capa débil existente
+- En pendientes >28°: Δτ_cizalle > Δτ_resistencia → FS decrece
+- ρ_nueva = 100 kg/m³ (nieve de tormenta seca, Sturm et al. 1995)
+
+**Cambios**:
+- `tool_calcular_pinn.py`: parámetro `nieve_nueva_cm` en Mohr-Coulomb paso 3
+- Alertas: `SURCHARGE_NIEVE_CRITICA_Xcm_24h` (≥20 cm), `SURCHARGE_NIEVE_EXTREMA` (≥40 cm)
+- UQ Taylor: 4ª fuente de incertidumbre σ_nieve = 30% relativo (spread ensemble WN2)
+- Función auxiliar `_fs_con_surcharge()` para diferenciación numérica UQ
+- `prompts.py` S1: instrucción para consultar WN2 → pasar `nieve_24h_cm_p50_corr`
+- 9 tests nuevos en `TestToolsPINN`
+
+**Efecto sobre tormenta 2024-06-15** (nieve_nueva_cm≈62):
+- FS: ~1.35 → ~1.0 → MANTO_MARGINAL → MANTO_INESTABLE → very_poor
+- Con FIX-SAT-STORM+FIX-WN2-PINN: EAWS alcanza 3-4 (vs Snowlab 5)
+
+**Commit**: 6282642 — Suite: 489 passed, 8 skipped
