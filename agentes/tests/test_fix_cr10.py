@@ -104,17 +104,17 @@ class TestCR10A:
 # ─── CR-10B: umbral viento reducido en Alpes ─────────────────────────────────
 
 class TestCR10B:
-    def test_viento_8ms_activa_alpes(self):
-        """CR-10B: 8 m/s en Alpes (>7 m/s umbral) → VIENTO_FUERTE activa."""
+    def test_viento_9ms_activa_redistribucion_alpes(self):
+        """CR-10B/FIX-BUG009: 9 m/s en Alpes (>8 m/s umbral redistribución) → VIENTO_FUERTE_REDISTRIBUCION activa."""
         r = ejecutar_detectar_ventanas_criticas(
             temperatura_actual_C=-5.0,
-            velocidad_viento_actual_ms=8.0,
+            velocidad_viento_actual_ms=9.0,
             precipitacion_actual_mm=0.0,
             nombre_ubicacion=_INTERLAKEN,
         )
         tipos = [v["tipo"] for v in r["ventanas_criticas"]]
         assert any("VIENTO" in t for t in tipos), (
-            "8 m/s en Alpes debe activar ventana de viento (umbral 7 m/s)"
+            "9 m/s en Alpes debe activar VIENTO_FUERTE_REDISTRIBUCION (umbral BUG009: 8 m/s)"
         )
 
     def test_viento_8ms_no_activa_andes(self):

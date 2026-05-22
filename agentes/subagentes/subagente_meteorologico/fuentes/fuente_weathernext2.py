@@ -190,7 +190,7 @@ class FuenteWeatherNext2(FuenteMeteorologica):
             from google.cloud import bigquery
 
             client = bigquery.Client(project="climas-chileno")
-            rows = self._query_ventanas_6h(client, lat, lon, fecha_objetivo, elevacion_m)
+            rows = self._query_ventanas_6h(client, lat, lon, fecha_objetivo, elevacion_m, zona=zona)
             return self._formatear_ventanas(rows, zona, fecha_objetivo)
 
         except Exception as exc:
@@ -206,6 +206,7 @@ class FuenteWeatherNext2(FuenteMeteorologica):
         lon: float,
         fecha_objetivo: str,
         elevacion_m: int,
+        zona: str = "",
     ) -> list:
         """
         Ejecuta SQL v7 parametrizada por lat/lon/fecha/elevacion.
@@ -219,6 +220,10 @@ class FuenteWeatherNext2(FuenteMeteorologica):
         - NEW-2: lapse_rate variable por MSLP; cota_0c_m_member dinámica
         """
         from google.cloud import bigquery
+
+        # FIX-BUG017: timezone local según hemisferio.
+        # Suiza: lon>0 → Europe/Zurich (UTC+1/+2). Chile: → America/Santiago (UTC-3/-4).
+        _tz = "Europe/Zurich" if lon > 0 else "America/Santiago"
 
         sql = f"""
 -- WeatherNext 2 → AndesAI S3 — SQL v7 parametrizado
@@ -344,7 +349,7 @@ ensemble_members AS (
       WHEN 18 THEN 3
       WHEN 0  THEN 4
     END                                                         AS ventana_orden,
-    DATE(TIMESTAMP_SUB(r.forecast_time, INTERVAL 3 HOUR))      AS fecha_local
+    DATE(r.forecast_time, '{_tz}')                              AS fecha_local
   FROM ensemble_raw r
   CROSS JOIN config c
 ),

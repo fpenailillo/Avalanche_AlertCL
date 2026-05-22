@@ -197,7 +197,12 @@ def ejecutar_detectar_ventanas_criticas(
     # Max ERA5 en dataset = 5.22 m/s → umbral 7 m/s apagaba toda señal de viento.
     # Umbral 3 m/s: activa 4/30 días, todos GT≥3 (100% precisión). Señal limpia.
     _umbral_viento_fuerte         = 3.0  if _es_alpes else 10.0
-    _umbral_viento_redistribucion = 3.0  if _es_alpes else 15.0
+    # FIX-BUG009: umbral de transporte diferenciado del umbral de detección.
+    # 3.0 m/s (Beaufort 3) no es suficiente para saltación de nieve seca
+    # (Schmidt 1980; Schweizer et al. 2003: umbral ≥ 7-10 m/s en cresta).
+    # Se mantiene viento_fuerte=3.0 para detección ERA5, pero redistribución
+    # requiere 8.0 m/s para evitar VIENTO_FUERTE_REDISTRIBUCION en brisas normales.
+    _umbral_viento_redistribucion = 8.0  if _es_alpes else 15.0
 
     # ─── Ventana 1: Nevada + Viento simultáneos ──────────────────────────────
     nevada_activa = (

@@ -48,7 +48,7 @@ REGISTRO_PROMPTS = {
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
         "version": "7.5.0",
         "descripcion": "v7.5: eliminados triggers meteo de S1 (S1 no tiene datos meteo); S5 determina EAWS Paso 1",
-        "hash_sha256": "4ec8d80b0da9fd97",
+        "hash_sha256": "537ff36ba4602bcc",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
@@ -62,7 +62,7 @@ REGISTRO_PROMPTS = {
         "variable": "SYSTEM_PROMPT_METEOROLOGICO",
         "version": "5.3.0",
         "descripcion": "v5.3: FIX-WN2-TRIGGERS (H) — S3 pasa wn2_heavy_snow/storm_slab/wind_strong a detectar_ventanas_criticas",
-        "hash_sha256": "8dd59182aae4b033",
+        "hash_sha256": "971c1fcb276cdcb7",
     },
     "nlp": {
         "modulo": "agentes.subagentes.subagente_nlp.prompts",
@@ -76,7 +76,7 @@ REGISTRO_PROMPTS = {
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
         "version": "10.2.0",
         "descripcion": "v10.2: FIX-CR18-CH-1 — eliminar ref a obtener_condiciones_actuales_meteo (no tool de S5); añadir instrucción viento_kmh",
-        "hash_sha256": "a81bcf7f72639d7f",
+        "hash_sha256": "98dacfa68aa412cc",
     },
 }
 

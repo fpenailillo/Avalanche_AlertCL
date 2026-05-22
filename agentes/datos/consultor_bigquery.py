@@ -234,11 +234,13 @@ class ConsultorBigQuery:
                     # FIX-IMIS-EXT: variables adicionales con filtro de outliers.
                     # Prioridad sobre ERA5 cuando disponibles (ver subagente S3).
                     imis: dict = {}
+                    # FIX-BUG001: claves alineadas con el productor (cargar_imis_condiciones_actuales.py).
+                    # El backfill escribe HS_meas_cm (no HS_cm) y TA_c (no TA_C, case-sensitive).
+                    # VW_max_ms no es escrito por el backfill; se elimina para evitar silencio.
                     for key, k_imis, lo, hi in [
-                        ("hs_cm",      "HS_cm",       0,   600),
-                        ("ta_imis_c",  "TA_C",      -40,    30),
+                        ("hs_cm",      "HS_meas_cm",  0,   600),
+                        ("ta_imis_c",  "TA_c",      -40,    30),
                         ("vw_imis_ms", "VW_ms",       0,    60),
-                        ("vw_max_ms",  "VW_max_ms",   0,    80),
                     ]:
                         v = crudo.get(k_imis)
                         if v is not None:

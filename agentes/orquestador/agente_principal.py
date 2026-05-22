@@ -173,6 +173,13 @@ class OrquestadorAvalancha:
                 resultados_subagentes["satelital"]    = resultado_sat
                 resultados_subagentes["meteorologico"] = resultado_meteo
                 resultados_subagentes["nlp"]          = resultado_nlp
+                # FIX-BUG002: propagar tools_llamadas del cache a tools_llamadas_total.
+                # Sin esto, almacenador._construir_campos_subagentes no encuentra
+                # calcular_pinn/analizar_vit/etc. y persiste ~15 columnas en NULL.
+                tools_llamadas_total.extend(resultado_topo.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_sat.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_meteo.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_nlp.get("tools_llamadas", []))
                 logger.info(
                     f"[solo_s5] S1-S4 cargados del cache — "
                     f"{nombre_ubicacion} {_fecha_str_cache}"

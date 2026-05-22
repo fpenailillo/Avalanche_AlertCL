@@ -389,7 +389,7 @@ def _cargar_pares_suiza(version_prefix: str = "v20") -> Tuple[List[str], List[fl
     SELECT
       nombre_ubicacion,
       CAST(DATE(fecha_emision) AS STRING) AS fecha_str,
-      CAST(nivel_eaws_24h AS FLOAT64) AS nivel_pred
+      CAST(COALESCE(nivel_eaws_24h_raw, nivel_eaws_24h) AS FLOAT64) AS nivel_pred
     FROM `{GCP_PROJECT}.clima.boletines_riesgo`
     WHERE STARTS_WITH(version_prompts, '{version_prefix}')
       AND nombre_ubicacion IN ('Interlaken', 'Matterhorn Zermatt', 'St Moritz')
@@ -458,7 +458,7 @@ def _cargar_pares_andes(version_prefix: str = "v20") -> Tuple[List[str], List[fl
     SELECT
       nombre_ubicacion,
       CAST(DATE(fecha_emision) AS STRING) AS fecha_str,
-      CAST(nivel_eaws_24h AS FLOAT64) AS nivel_pred
+      CAST(COALESCE(nivel_eaws_24h_raw, nivel_eaws_24h) AS FLOAT64) AS nivel_pred
     FROM `{GCP_PROJECT}.clima.boletines_riesgo`
     WHERE STARTS_WITH(version_prompts, '{version_prefix}')
       AND nombre_ubicacion IN (
