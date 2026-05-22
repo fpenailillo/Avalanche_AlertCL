@@ -1783,3 +1783,25 @@ Brecha residual de 2 niveles vs Snowlab porque S1 PINN devuelve `estabilidad_top
 - Con FIX-SAT-STORM+FIX-WN2-PINN: EAWS alcanza 3-4 (vs Snowlab 5)
 
 **Commit**: 6282642 — Suite: 489 passed, 8 skipped
+
+### Demo v24 — Medición del ajuste (2026-05-22)
+
+Script: `agentes/scripts/demo_v24_ajuste_tormenta.py`
+6 eventos: 3 tormentas + 3 calmas (La Parva, validación Caro 2026)
+
+| Fecha | Snowlab | v22 | v23 | v24 | Δ v22 | Δ v24 |
+|---|---|---|---|---|---|---|
+| 2024-06-15 (tormenta extraordinaria) | 5 | 1 | 2 | 3 | −4 | −2 |
+| 2024-06-21 (post-tormenta alta)      | 4 | 1 | 2 | 2 | −3 | −2 |
+| 2024-08-02 (tormenta moderada)       | 3 | 1 | 2 | 3 | −2 | ±0 |
+| Calmas (3 días)                      | 1 | 1 | 1 | 1 | ✅ | ✅ |
+
+**Métricas tormentas:**
+- v22: MAE=3.00, Sesgo=−3.00
+- v23: MAE=2.00, Sesgo=−2.00 (FIX-SAT-STORM)
+- v24: MAE=1.33, Sesgo=−1.33 (FIX-SAT-STORM + FIX-WN2-PINN)
+
+**Sin regresión en calmas** (todos EAWS 1 = correcto).
+
+**Brecha residual**: Jun-15 Δ=−2 (EAWS 3 vs Snowlab 5). Para cerrarla:
+estab_sat=very_poor requeriría ViT calibrado bajo tormenta activa.
