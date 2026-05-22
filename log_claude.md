@@ -1686,3 +1686,75 @@ a BigQuery y módulo Python de QC adaptado de la metodología del paper.
 - [x] docs/datasets/caro_2026.md completa
 - [x] >50k observaciones limpias (106,360 ✓)
 - [x] Sin duplicados (idempotencia vía DELETE + reload)
+
+---
+
+## Sesión 2026-05-22 — REQ-2026-09 Continuación + Validación vs Caro
+
+### Commits de esta sesión
+- `1c66357` — notebook 10_sd_elevation_analysis.ipynb (Tarea 2 REQ-2026-09, Fase B)
+- `ba092f5` — docs/validacion/validacion_caro2026_andesai.md (validación triple AndesAI×Snowlab×Caro)
+- `54ff51f` — clarificar arquitectura: Caro solo offline, WN2+satélite son fuentes operacionales
+
+### Resultados de validación triple (v22.0 × Snowlab × Caro 2026)
+- **n = 14 pares** (jun–sep 2024, cuenca Maipo)
+- **MAE = 0.86**, Sesgo = −0.57 (subestima), QWK Alto = +0.112, QWK Medio = +0.221
+- **Calma (nivel 1)**: 9/9 correctos (100%)
+- **Tormentas (nivel ≥ 3)**: 0/3 correctos (0%) — subestimación sistemática ≥ 2 niveles
+- **Causa raíz**: ERA5 subestima precipitación convectiva en valles andinos → ventanas_criticas no activa
+
+### Decisión arquitectónica crítica
+- **Caro 2026 / DGA in-situ**: solo validación offline y referencia PCI. NO como input operacional.
+- **Fuentes primarias operacionales**: WeatherNext 2 (S3) + observaciones satelitales (S2)
+- El fix al MAE-tormentas debe venir de mejor uso de WN2 y satélite, no de estaciones in-situ
+- `calcular_pci_pronostico()` en `datos/qc/snow_depth_qc.py` ya implementado — aplica sobre pronósticos WN2
+
+### Memoria guardada
+- `memory/feedback_fuentes_modelo.md` — restricción arquitectónica sobre fuentes del modelo
+
+### Próximos pasos
+- Mejorar detección de tormentas usando ensemble WN2 (P10/P50/P90 precipitación) + satélite
+- Revisar `detectar_ventanas_criticas` en subagente meteorológico para aprovechar mejor WN2
+
+### FIX-SAT-STORM (v23.0) — 2026-05-22
+
+**Problema resuelto**: ERA5 subestima precipitación convectiva andina → 0% detección de tormentas en validación Caro 2026 (n=3 eventos Snowlab≥3).
+
+**Causa raíz del circuito de fallo**:
+1. ERA5 precip≈0 mm → `ventanas_criticas=0`
+2. Gate FIX-CR7A: `precipitacion_72h<5 AND ventanas=0 AND factor=ESTABLE AND dias_bajo≥2` → `senales_calma_confirmada=True`
+3. EAWS Paso 1 → nivel 1 aunque Snowlab mida 4-5
+
+**Fix implementado**:
+- Nuevo parámetro `alertas_satelitales: list` en `ejecutar_detectar_ventanas_criticas()`
+- `NEVADA_RECIENTE_INTENSA` (S2 delta>20%) → `NEVADA_SATELITAL_CONFIRMADA` (muy_alta)
+- `NEVADA_RECIENTE_MODERADA` (S2 delta>10%) → `NEVADA_SATELITAL_MODERADA` (alta)
+- Guard: no duplicar si ERA5 o WN2 ya detectaron nevada
+- `_clasificar_factor_meteorologico()` incluye `NEVADA_RECIENTE` cuando S2 confirma
+- Prompt actualizado: instrucción explícita de pasar `alertas_satelitales` de S2 a S3
+
+**Archivos modificados**:
+- `agentes/subagentes/subagente_meteorologico/tools/tool_ventanas_criticas.py`
+- `agentes/subagentes/subagente_meteorologico/prompts.py`
+- `agentes/tests/test_fix_wn2.py` (+7 tests TestVentanasCriticasSatelital)
+
+**Commit**: 52a61d0 — Suite: 480 passed, 8 skipped
+
+### Demo FIX-SAT-STORM — análisis comparativo 2026-05-22
+
+Razón: datos satelitales retroactivos solo disponibles desde 2026-03-03 (no hay datos 
+para jun-ago 2024). Se construyó script de demo con condiciones simuladas de la 
+tormenta 2024-06-15 (ERA5=0.4mm, T=-3.2°C, Snowlab=5).
+
+**Resultados del comparativo** (`agentes/scripts/demo_fix_sat_storm.py`):
+
+| Escenario | Factor | Ventanas | EAWS | Ground Truth |
+|---|---|---|---|---|
+| v22.0 sin fix (ERA5 solo) | ESTABLE | 0 | 1 — Débil | 5 — Muy Alto |
+| v23.0 FIX-SAT-STORM | NEVADA_RECIENTE | 1 | 2 — Moderado | 5 — Muy Alto |
+| Calma v23.0 (sin regresión) | ESTABLE | 0 | 1 — Débil | 1 — Baja ✅ |
+| Techo teórico (very_poor+many+tam=4) | NEVADA_RECIENTE | 2 | 5 — Muy Fuerte | 5 ✅ |
+
+**Brecha residual**: 2 niveles (de 3). Para cerrarla:
+1. S1 PINN debe recibir `nieve_24h_cm_p50` de WN2 como forzante de carga → very_poor
+2. S2 ViT debe detectar cambios rápidos (carga nival) → very_poor bajo tormenta activa
