@@ -25,57 +25,65 @@ cuenca del Maipo (La Parva, 33°S):
 
 ## 2. Tabla de resultados
 
-| Fecha | Snowlab Alto | AI v22 Alto | Snowlab Med | AI v22 Med | SD La Parva | HN3d | Δ Alto | Observación |
-|---|---|---|---|---|---|---|---|---|
-| 2024-06-15 | **5** | 2 | 4 | 3 | 96 cm | +62 cm | −3 | Tormenta extraordinaria |
-| 2024-06-21 | **4** | 1 | 4 | 1 | 92 cm | +3 cm | −3 | Post-tormenta alta |
-| 2024-06-28 | 2 | 1 | 2 | 1 | 105 cm | −8 cm | −1 | Descenso post-tormenta |
-| 2024-07-05 | 1 | 1 | 1 | 2 | 94 cm | −4 cm | 0 | ✅ Calma |
-| 2024-07-12 | 1 | 1 | 1 | 2 | 89 cm | −2 cm | 0 | ✅ Calma |
-| 2024-07-19 | 1 | 1 | 1 | 1 | 83 cm | −4 cm | 0 | ✅ Calma |
-| 2024-07-26 | 1 | 2 | 1 | 1 | 80 cm | −1 cm | +1 | Leve sobreestimación |
-| 2024-08-02 | **3** | 1 | 3 | 2 | 88 cm | +9 cm | −2 | Tormenta moderada |
-| 2024-08-09 | 2 | 1 | 1 | 2 | 98 cm | −8 cm | −1 | — |
-| 2024-08-16 | 1 | 1 | 1 | 2 | 84 cm | −3 cm | 0 | ✅ Calma |
-| 2024-08-23 | 1 | 1 | 1 | 1 | 84 cm | 0 cm | 0 | ✅ Calma |
-| 2024-08-30 | 1 | 2 | — | 1 | 80 cm | −2 cm | +1 | Leve sobreestimación |
-| 2024-09-06 | 1 | 1 | — | 1 | 69 cm | −5 cm | 0 | ✅ Calma |
-| 2024-09-13 | 1 | 1 | — | 2 | 55 cm | −7 cm | 0 | ✅ Calma |
+Las columnas AI v22 y AI v25 corresponden a AndesAI Sector Alto. v25 difiere de v22 únicamente
+en los 3 eventos de tormenta donde FIX-SAT-STORM + FIX-WN2-PINN + FIX-STORM-EXTREME son
+activados por señal NDSI de S2 y pronóstico WN2; el resto de eventos son invariantes.
+
+| Fecha | Snowlab Alto | AI v22 | AI v25 | Snowlab Med | SD La Parva | HN3d | Δ v22 | Δ v25 | Observación |
+|---|---|---|---|---|---|---|---|---|---|
+| 2024-06-15 | **5** | 2 | **5** | 4 | 96 cm | +62 cm | −3 | **±0** | Tormenta extraordinaria ✅ |
+| 2024-06-21 | **4** | 1 | 2 | 4 | 92 cm | +3 cm | −3 | −2 | Post-tormenta alta |
+| 2024-06-28 | 2 | 1 | 1 | 2 | 105 cm | −8 cm | −1 | −1 | Descenso post-tormenta |
+| 2024-07-05 | 1 | 1 | 1 | 1 | 94 cm | −4 cm | 0 | 0 | ✅ Calma |
+| 2024-07-12 | 1 | 1 | 1 | 1 | 89 cm | −2 cm | 0 | 0 | ✅ Calma |
+| 2024-07-19 | 1 | 1 | 1 | 1 | 83 cm | −4 cm | 0 | 0 | ✅ Calma |
+| 2024-07-26 | 1 | 2 | 2 | 1 | 80 cm | −1 cm | +1 | +1 | Leve sobreestimación |
+| 2024-08-02 | **3** | 1 | **3** | 3 | 88 cm | +9 cm | −2 | **±0** | Tormenta moderada ✅ |
+| 2024-08-09 | 2 | 1 | 1 | 1 | 98 cm | −8 cm | −1 | −1 | Post-tormenta |
+| 2024-08-16 | 1 | 1 | 1 | 1 | 84 cm | −3 cm | 0 | 0 | ✅ Calma |
+| 2024-08-23 | 1 | 1 | 1 | 1 | 84 cm | 0 cm | 0 | 0 | ✅ Calma |
+| 2024-08-30 | 1 | 2 | 2 | — | 80 cm | −2 cm | +1 | +1 | Leve sobreestimación |
+| 2024-09-06 | 1 | 1 | 1 | — | 69 cm | −5 cm | 0 | 0 | ✅ Calma |
+| 2024-09-13 | 1 | 1 | 1 | — | 55 cm | −7 cm | 0 | 0 | ✅ Calma |
 
 ---
 
 ## 3. Métricas de desempeño
 
-### AndesAI v22.0 vs Snowlab (Sector Alto, n=14)
+### Comparación global v22.0 vs v25.0 (Sector Alto, n=14)
 
-| Métrica | Valor |
-|---|---|
-| MAE | **0.86** niveles |
-| RMSE | — |
-| Sesgo | **−0.57** (subestima) |
-| QWK Sector Alto | **+0.112** |
-| QWK Sector Medio | **+0.221** (n=11) |
+| Métrica | v22.0 | v25.0 | Mejora |
+|---|---|---|---|
+| MAE | 0.86 | **0.43** | −50 % |
+| Sesgo | −0.57 | **−0.14** | −75 % |
+| QWK Sector Alto | +0.112 | **+0.799** | +0.687 |
+| QWK Sector Medio v22 | +0.221 (n=11) | — | — |
 
-### Desglose por tipo de día
+*Nota: QWK con n=14 tiene alta varianza; interpretar como indicador de dirección,
+no como estimación puntual robusta. Validación con temporada 2025 necesaria.*
 
-| Tipo | n | Tasa de acierto |
-|---|---|---|
-| Nivel 1 (calma, SD estable) | 9 | **100%** correctos |
-| Nivel ≥ 3 (tormenta activa) | 3 | **0%** correctos (todos subestimados ≥ 2 niveles) |
-| Nivel 2 (transición) | 2 | Parcial (1 acierto dentro de ±1) |
+### Desglose por tipo de día — v22.0 vs v25.0
+
+| Tipo | n | v22 exactos (±0) | v25 exactos (±0) | v25 dentro ±1 |
+|---|---|---|---|---|
+| Nivel 1 (calma) | 9 | 7/9 (78 %) | 7/9 (78 %) | **9/9 (100 %)** |
+| Nivel ≥ 3 (tormenta) | 3 | 0/3 (0 %) | **2/3 (67 %)** | **2/3 (67 %)** |
+| Nivel 2 (transición) | 2 | 0/2 (0 %) | 0/2 (0 %) | 2/2 (100 %) |
 
 ---
 
-## 4. Hallazgo principal: subestimación sistemática de tormentas
+## 4. Hallazgo principal: subestimación sistemática de tormentas en v22 — corregida en v25
 
-**El sistema AndesAI v22.0 predice correctamente el 100% de los días de calma
-(nivel 1) pero falla en todos los eventos de tormenta (Snowlab ≥ 3).**
+**El sistema AndesAI v22.0 predice correctamente el 78 % de los días de calma
+(nivel 1) pero falla en todos los eventos de tormenta (Snowlab ≥ 3). v25.0 corrige
+2 de los 3 eventos de tormenta (67 % exacto) manteniendo sin regresión los días de calma.**
 
 ### Caso crítico: tormenta del 15 de junio 2024
 
 - **SD La Parva**: +62 cm acumulados en 3 días (de 34 cm a 96 cm).
 - **Snowlab CAA**: nivel 5 (Muy Alto) en Sector Alto — evento extraordinario.
 - **AndesAI v22.0**: nivel 2 (Limitado) — subestimación de 3 niveles.
+- **AndesAI v25.0**: nivel 5 (Muy Alto) — acierto exacto ✅.
 - **Causa documentada**: ERA5 retroactivo asignó precipitación insuficiente a este evento
   convectivo intenso → `ventanas_criticas = 2` → nivel conservador.
 
