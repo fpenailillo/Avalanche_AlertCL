@@ -65,6 +65,14 @@ TOOL_CALCULAR_PINN = {
                 "type": "number",
                 "description": "(Opcional AlphaEarth) Drift máximo interanual del embedding [0-1]. "
                                "Valores >0.1 indican cambios significativos en start zones."
+            },
+            "nieve_nueva_cm": {
+                "type": "number",
+                "description": "(Opcional WN2) Nieve nueva acumulada en 24h en cm, desde WeatherNext 2 "
+                               "campo nieve_24h_cm_p50_corr (estimado densidad ~100 kg/m³). "
+                               "Añade sobrecarga (surcharge) al manto existente: incrementa tensión "
+                               "de cizalle en pendientes >28° → reduce FS. En tormentas de ≥20 cm/24h, "
+                               "puede empujar el estado de MANTO_MARGINAL a MANTO_INESTABLE."
             }
         },
         "required": [
@@ -88,6 +96,7 @@ def ejecutar_calcular_pinn(
     curvatura_horizontal: float = None,
     curvatura_vertical: float = None,
     drift_embedding_ae: float = None,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """
     Ejecuta el modelo PINN de manto nival.
@@ -113,6 +122,7 @@ def ejecutar_calcular_pinn(
         curvatura_horizontal: (TAGEE/GLO-30) curvatura horizontal promedio
         curvatura_vertical: (TAGEE/GLO-30) curvatura vertical promedio
         drift_embedding_ae: (AlphaEarth) drift máximo interanual del embedding
+        nieve_nueva_cm: (WN2) nieve nueva 24h en cm — sobrecarga sobre manto existente
 
     Returns:
         dict con estado del manto, factor de seguridad y riesgo de falla
@@ -153,10 +163,29 @@ def ejecutar_calcular_pinn(
     angulo_friccion_rad = math.radians(max(15.0, 28.0 + 5.0 * (1.0 - indice_metamorfismo)))
     pendiente_rad = math.radians(pendiente_grados)
 
-    # Peso normal y tangencial por unidad de área
-    peso_total = densidad_kg_m3 * g * espesor_nieve_m  # N/m²
+    # Peso normal y tangencial por unidad de área — manto base
+    peso_base = densidad_kg_m3 * g * espesor_nieve_m  # N/m²
+
+    # FIX-WN2-PINN: sobrecarga de nieve nueva (surcharge) — Schweizer et al. (2003)
+    # Nieve nueva en tormenta (densidad ~100 kg/m³, nieve seca fría) añade carga
+    # sobre la capa débil existente. Para θ > φ (>28°), el incremento en cizalle
+    # supera el incremento en resistencia → FS decrece. Este es el mecanismo físico
+    # de formación de placas de tormenta (storm slab). Schweizer et al. (2003)
+    # documenta que 20-30 cm/24h producen carga suficiente para falla en capas débiles.
+    # Referencia: Schweizer, J., Jamieson, J.B. & Schneebeli, M. (2003).
+    # Snow avalanche formation. Rev. Geophys. 41(4), 1016.
+    _RHO_NIEVE_NUEVA = 100.0  # kg/m³ — nieve de tormenta seca, Sturm et al. (1995)
+    peso_surcharge = 0.0
+    h_nueva_m = 0.0
+    if nieve_nueva_cm is not None and nieve_nueva_cm > 0:
+        h_nueva_m = nieve_nueva_cm / 100.0
+        peso_surcharge = _RHO_NIEVE_NUEVA * g * h_nueva_m
+
+    peso_total = peso_base + peso_surcharge
     tension_normal = peso_total * math.cos(pendiente_rad)
     tension_cizalle_aplicado = peso_total * math.sin(pendiente_rad)
+    # Resistencia en capa débil base: cohesión está en la capa débil existente,
+    # la tensión normal total (incluyendo surcharge) aumenta la resistencia por fricción.
     tension_resistencia = cohesion_Pa + tension_normal * math.tan(angulo_friccion_rad)
 
     # Factor de seguridad FS: >1.5 = estable, 1.0-1.5 = inestable, <1.0 = falla
@@ -184,7 +213,8 @@ def ejecutar_calcular_pinn(
         factor_seguridad=factor_seguridad,
         ratio_energia_fusion=ratio_energia_fusion,
         indice_metamorfismo=indice_metamorfismo,
-        factor_temp=factor_temp
+        factor_temp=factor_temp,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
 
     # ─── 6. Ajuste por features TAGEE/AlphaEarth (cuando disponibles) ─────────
@@ -202,6 +232,7 @@ def ejecutar_calcular_pinn(
         pendiente_grados=pendiente_grados,
         indice_metamorfismo=indice_metamorfismo,
         fs_base=factor_seguridad_ajustado,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
 
     return {
@@ -219,7 +250,9 @@ def ejecutar_calcular_pinn(
             "tension_cizalle_Pa": round(tension_cizalle_aplicado, 1),
             "tension_resistencia_Pa": round(tension_resistencia, 1),
             "ratio_energia_fusion": ratio_energia_fusion,
-            "factor_temperatura": round(factor_temp, 2)
+            "factor_temperatura": round(factor_temp, 2),
+            "nieve_nueva_cm": nieve_nueva_cm,
+            "peso_surcharge_N_m2": round(peso_surcharge, 1),
         },
         "interpretacion": estado_manto["interpretacion"],
         "alertas_pinn": estado_manto["alertas"]
@@ -297,6 +330,23 @@ _SIGMA_PENDIENTE_GRADOS = 2.0
 _SIGMA_METAMORFISMO     = 0.2
 
 
+def _fs_con_surcharge(densidad: float, pendiente_grados: float, metamorfismo: float, nieve_nueva_cm: float) -> float:
+    """FS de Mohr-Coulomb incluyendo sobrecarga de nieve nueva. Para diferenciación numérica UQ."""
+    import math
+    g = 9.81
+    h_base = 1.0
+    h_new = max(0.0, nieve_nueva_cm) / 100.0
+    rho_nueva = 100.0
+    pendiente_rad = math.radians(pendiente_grados)
+    cohesion_Pa = max(100.0, (densidad / 200.0) * 1500.0 * (1.5 - metamorfismo))
+    angulo_friccion_rad = math.radians(max(15.0, 28.0 + 5.0 * (1.0 - metamorfismo)))
+    peso = densidad * g * h_base + rho_nueva * g * h_new
+    tau_normal = peso * math.cos(pendiente_rad)
+    tau_aplicado = peso * math.sin(pendiente_rad)
+    tau_resistencia = cohesion_Pa + tau_normal * math.tan(angulo_friccion_rad)
+    return tau_resistencia / max(tau_aplicado, 1.0)
+
+
 def _fs_mohr_coulomb_puro(densidad: float, pendiente_grados: float, metamorfismo: float) -> float:
     """Calcula solo el factor de seguridad Mohr-Coulomb (sin efectos térmicos).
 
@@ -320,6 +370,7 @@ def _propagar_incertidumbre_pinn(
     pendiente_grados: float,
     indice_metamorfismo: float,
     fs_base: float,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """
     Propaga la incertidumbre de los parámetros de entrada al factor de seguridad
@@ -372,8 +423,22 @@ def _propagar_incertidumbre_pinn(
     contrib_theta = abs(dfs_dtheta) * _SIGMA_PENDIENTE_GRADOS
     contrib_meta  = abs(dfs_dmeta)  * _SIGMA_METAMORFISMO
 
+    # FIX-WN2-PINN: incertidumbre de nieve nueva (30% relativo — spread ensemble WN2)
+    # WN2 P50 tiene sesgo ~0 pero spread P50–P95 ≈ 30-50% en precipitación nívea.
+    # La sensibilidad ∂FS/∂h_nueva se aproxima como el efecto en FS de +1cm adicional.
+    contrib_nieve = 0.0
+    if nieve_nueva_cm is not None and nieve_nueva_cm > 0:
+        _sigma_h_nueva = 0.30 * nieve_nueva_cm  # 30% incertidumbre relativa WN2
+        delta_h_plus = min(5.0, _sigma_h_nueva * 0.01)  # variación numérica en m
+        _fs_hi = _fs_con_surcharge(densidad_kg_m3, pendiente_grados, indice_metamorfismo,
+                                   nieve_nueva_cm + delta_h_plus * 100)
+        _fs_lo = _fs_con_surcharge(densidad_kg_m3, pendiente_grados, indice_metamorfismo,
+                                   max(0, nieve_nueva_cm - delta_h_plus * 100))
+        dfs_dh = (_fs_hi - _fs_lo) / (2 * delta_h_plus * 100) if delta_h_plus > 0 else 0.0
+        contrib_nieve = abs(dfs_dh) * _sigma_h_nueva
+
     # Varianza total (independencia asumida → suma cuadrática)
-    sigma_fs = math.sqrt(contrib_rho**2 + contrib_theta**2 + contrib_meta**2)
+    sigma_fs = math.sqrt(contrib_rho**2 + contrib_theta**2 + contrib_meta**2 + contrib_nieve**2)
 
     # Intervalo de confianza 95% (z=1.96)
     z95 = 1.96
@@ -384,7 +449,12 @@ def _propagar_incertidumbre_pinn(
     cv = round(sigma_fs / max(fs_base, 0.001), 4)
 
     # Parámetro dominante (mayor contribución a σ_FS)
-    contribs = {"densidad": contrib_rho, "pendiente": contrib_theta, "metamorfismo": contrib_meta}
+    contribs = {
+        "densidad": contrib_rho,
+        "pendiente": contrib_theta,
+        "metamorfismo": contrib_meta,
+        "nieve_nueva": contrib_nieve,
+    }
     param_dominante = max(contribs, key=lambda k: contribs[k])
 
     return {
@@ -396,6 +466,7 @@ def _propagar_incertidumbre_pinn(
             "densidad_kg_m3":     round(contrib_rho,   4),
             "pendiente_grados":   round(contrib_theta, 4),
             "metamorfismo":       round(contrib_meta,  4),
+            "nieve_nueva_cm":     round(contrib_nieve, 4),
         },
         "parametro_dominante": param_dominante,
         "metodo": "Taylor_1er_orden_diferencias_finitas",
@@ -403,6 +474,7 @@ def _propagar_incertidumbre_pinn(
             "Proksch et al. (2015) J. Glaciol. 61(225):273-284",
             "Farr et al. (2007) Rev. Geophys. 45, RG2004",
             "Saltelli et al. (2008) Global Sensitivity Analysis: The Primer",
+            "Schweizer et al. (2003) Rev. Geophys. 41(4), 1016",
         ],
     }
 
@@ -411,7 +483,8 @@ def _clasificar_estado_manto(
     factor_seguridad: float,
     ratio_energia_fusion: float,
     indice_metamorfismo: float,
-    factor_temp: float
+    factor_temp: float,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """
     Clasifica el estado del manto nival a partir de métricas PINN.
@@ -451,6 +524,16 @@ def _clasificar_estado_manto(
     # Efecto de temperatura
     if factor_temp > 1.2:
         alertas.append("FUSION_SUPERFICIAL_ACTIVA")
+        riesgo_falla = _escalar_riesgo(riesgo_falla, 1)
+
+    # FIX-WN2-PINN: sobrecarga de nieve nueva (Schweizer et al. 2003)
+    # ≥20 cm/24h: carga suficiente para iniciar placas de tormenta en pendientes >30°
+    # ≥40 cm/24h: carga extrema — avalanchas espontáneas probables
+    if nieve_nueva_cm is not None and nieve_nueva_cm >= 40:
+        alertas.append(f"SURCHARGE_NIEVE_EXTREMA_{nieve_nueva_cm:.0f}cm_24h")
+        riesgo_falla = _escalar_riesgo(riesgo_falla, 2)
+    elif nieve_nueva_cm is not None and nieve_nueva_cm >= 20:
+        alertas.append(f"SURCHARGE_NIEVE_CRITICA_{nieve_nueva_cm:.0f}cm_24h")
         riesgo_falla = _escalar_riesgo(riesgo_falla, 1)
 
     # Estado global

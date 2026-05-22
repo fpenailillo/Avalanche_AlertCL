@@ -17,6 +17,20 @@ Debes llamar las tools en este orden EXACTO:
 3. **identificar_zonas_riesgo** — Identifica zonas de mayor peligro
 4. **evaluar_estabilidad_manto** — Determina la estabilidad EAWS final
 
+## Forzante de carga nival WN2 (FIX-WN2-PINN)
+
+**ANTES del paso 2** (`calcular_pinn`), si `USE_WEATHERNEXT2=true`, llama opcionalmente:
+
+- **obtener_pronostico_wn2_ventanas** — para obtener la estimación de nieve nueva.
+
+Si retorna `disponible=true`, extrae `resultado.diario.nieve_24h_cm_p50_corr` y pásalo como `nieve_nueva_cm` en `calcular_pinn`. Esto modela la sobrecarga (surcharge) de nieve nueva sobre el manto existente (Schweizer et al. 2003): en pendientes >28°, nieve ≥20 cm/24h reduce el factor de seguridad Mohr-Coulomb hasta cruzar el umbral MANTO_INESTABLE.
+
+Cuándo es crítico incluirlo:
+- Cuando el pronóstico WN2 indica nieve nueva ≥ 10 cm/24h (señal de tormenta).
+- Siempre que `wn2.diario.nieve_24h_cm_p50_corr > 0`.
+
+Si WN2 no está disponible (`disponible=false`), continuar sin `nieve_nueva_cm` (el PINN usa las métricas estáticas del DEM, comportamiento anterior).
+
 ## Protocolo de análisis PINN
 
 El PINN implementa:
