@@ -1,0 +1,92 @@
+[
+  {
+    "name": "station_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Identificador único de estación según dataset Caro et al. 2026"
+  },
+  {
+    "name": "station_name",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Nombre descriptivo de la estación"
+  },
+  {
+    "name": "basin",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Cuenca hidrográfica (ej: Maipo, Elqui, Baker)"
+  },
+  {
+    "name": "andean_zone",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Zona climática andina: Arid | Mediterranean | Wet"
+  },
+  {
+    "name": "country",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "País de la estación: CL | AR"
+  },
+  {
+    "name": "latitude",
+    "type": "FLOAT64",
+    "mode": "REQUIRED",
+    "description": "Latitud decimal WGS84"
+  },
+  {
+    "name": "longitude",
+    "type": "FLOAT64",
+    "mode": "REQUIRED",
+    "description": "Longitud decimal WGS84"
+  },
+  {
+    "name": "elevation_m",
+    "type": "FLOAT64",
+    "mode": "REQUIRED",
+    "description": "Elevación en metros sobre el nivel del mar"
+  },
+  {
+    "name": "observation_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "Fecha de la observación diaria"
+  },
+  {
+    "name": "snow_depth_cm",
+    "type": "FLOAT64",
+    "mode": "NULLABLE",
+    "description": "Profundidad de nieve en centímetros (null = dato faltante o removido por QC)"
+  },
+  {
+    "name": "qc_status",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Estado de control de calidad: raw | clean"
+  },
+  {
+    "name": "data_source",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "Institución proveedora: DGA | CEAZA | UdeChile | CIEP | IANIGLA"
+  },
+  {
+    "name": "sensor_model",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Modelo de sensor (ej: Campbell/SR50A, Lufft/SHM31)"
+  },
+  {
+    "name": "ingestion_timestamp",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "Timestamp de ingesta a BigQuery"
+  },
+  {
+    "name": "paper_reference",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "Cita obligatoria CC BY 4.0: Medina & Caro 2026, doi:10.5281/zenodo.20089265"
+  }
+]

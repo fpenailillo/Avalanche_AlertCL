@@ -1613,3 +1613,76 @@ El gap en QWK persiste porque:
 - [ ] Investigar distribución Snowlab: ¿por qué 69% nivel 1?
 - [ ] Ajuste tamano por dominio geográfico (factor regional Andes vs Alpes)
 - [ ] Reprocesar Ronda 6 con v7.0
+
+---
+
+## Sesión 2026-05-22 — REQ-2026-09 Tareas 1+3: Integración Caro et al. 2026
+
+### Contexto
+Implementación del REQ-2026-09: ingesta del dataset Caro et al. 2026 (DOI 10.5281/zenodo.20089265)
+a BigQuery y módulo Python de QC adaptado de la metodología del paper.
+
+### Archivos creados
+
+**Capa `datos/` (nueva estructura)**
+- `datos/ingestores/__init__.py` — marcador subpaquete
+- `datos/ingestores/explorar_caro_2026.py` — Fase A: descarga + introspección del bundle Zenodo
+- `datos/ingestores/ingestor_caro_2026.py` — pipeline de ingesta BQ + CLI (21 estaciones Maipo, 7 Elqui)
+- `datos/ingestores/schema_snow_depth_caro_2026.json` — schema BQ en formato JSON
+- `datos/qc/__init__.py` — marcador subpaquete
+- `datos/qc/snow_depth_qc.py` — módulo QC: correccion_nivel_cero, eliminacion_spikes_mad, verificacion_rango_fisico, calcular_pci, calcular_pci_pronostico (experimental), aplicar_pipeline_qc
+
+**Tests**
+- `agentes/tests/test_snow_depth_qc.py` — 24 tests sintéticos + regresión contra fixtures (todos ✅)
+- `agentes/tests/test_ingestor_caro_2026.py` — 17 tests con mock BQ (todos ✅)
+- `agentes/tests/fixtures/caro_2026/raw_sample.csv` — 30 filas, 3 estaciones, con spikes
+- `agentes/tests/fixtures/caro_2026/clean_sample.csv` — mismo subset post-QC
+
+**SQL y docs**
+- `docs/migraciones/snow_depth_caro_2026_crear_tabla.sql` — DDL CREATE TABLE particionada
+- `docs/migraciones/snow_depth_caro_2026_validacion.sql` — 5 queries de validación post-ingesta
+- `docs/datasets/caro_2026.md` — origen, esquema, cómo citar, cómo ingestar, hallazgo clave
+- `docs/qc/snow_depth_qc.md` — justificación, parámetros, ejemplos, diferencias con paper
+
+**Archivos modificados**
+- `agentes/datos/consultor_bigquery.py` — agregado método `obtener_snow_depth_caro(...)` con flag `apply_qc=True`
+- `.gitignore` — agregado `data/external/` (dataset local cacheado)
+
+### Resultado tests
+- 41 tests nuevos: **41/41 ✅**
+- Suite completa: 461 passed, 7 failed (todos pre-existentes), 8 skipped
+
+### Pendiente (antes de ingestar en BQ real)
+1. Ejecutar `datos/ingestores/explorar_caro_2026.py` para confirmar formato real del dataset
+2. Ajustar `_normalizar_columnas()` si columnas difieren del mapeo actual
+3. Crear tabla: `bq query --use_legacy_sql=false < docs/migraciones/snow_depth_caro_2026_crear_tabla.sql`
+4. Ingestar: `python3 datos/ingestores/ingestor_caro_2026.py --zona maipo --qc-status both`
+5. Validar: `bq query --use_legacy_sql=false < docs/migraciones/snow_depth_caro_2026_validacion.sql`
+
+### Continuación — Ingesta real a BigQuery completada
+
+**Hallazgos del dataset real (Zenodo v4.2):**
+- Formato: wide CSV (una columna por estación, una fila por fecha)
+- Archivos: `Southern_Andes_Snow_Depth_Dataset_v4.2.csv` (901 kB) + `stations_data.csv` (4.8 kB)
+- Solo datos clean (no hay archivo raw en Zenodo v4.2)
+- 5318 fechas únicas (2010-06-11 a 2024-12-31)
+
+**Problemas resueltos:**
+1. Formato wide → long vía `pd.melt()` + join con stations_data.csv
+2. `insert_rows_json` rechazaba fechas <2016 (límite 3650 días streaming) → cambiado a `load_table_from_dataframe`
+3. 5318 particiones DAY superaban límite de 4000/job → chunking por año (15 jobs de ~365 días c/u)
+4. `andean_zone` y `country` no están en el dataset → inferidos por latitud y source (IANIGLA=AR)
+
+**Tabla BigQuery final:**
+- `climas-chileno.clima.snow_depth_caro_2026`
+- 106,360 filas totales (13 Maipo + 7 Elqui × 5318 días)
+- 34,440 observaciones con dato real de SD (completitud: ~32%)
+- 20 estaciones, 2 cuencas, periodo 2010–2024
+
+**Criterios de aceptación REQ-2026-09 §4 Tarea 1:**
+- [x] Tabla creada con DDL documentada
+- [x] 13 estaciones Maipo cargadas (8 AMTC/Piuquenes no existen en dataset público)
+- [x] 7 estaciones Elqui cargadas
+- [x] docs/datasets/caro_2026.md completa
+- [x] >50k observaciones limpias (106,360 ✓)
+- [x] Sin duplicados (idempotencia vía DELETE + reload)

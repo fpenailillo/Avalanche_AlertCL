@@ -1723,3 +1723,127 @@ class ConsultorBigQuery:
                 "indice_riesgo_calculado": 0.0,
                 "razon": tabla_msg,
             }
+
+    def obtener_snow_depth_caro(
+        self,
+        estacion: str,
+        fecha_inicio: str,
+        fecha_fin: str,
+        qc_status: str = "clean",
+        apply_qc: bool = False,
+    ) -> dict:
+        """
+        Consulta observaciones de profundidad de nieve del dataset Caro et al. 2026.
+
+        Referencia: Medina & Caro (2026), doi:10.5281/zenodo.20089265
+
+        Args:
+            estacion: station_name o station_id de la estación.
+            fecha_inicio: fecha inicio ISO 'YYYY-MM-DD'.
+            fecha_fin: fecha fin ISO 'YYYY-MM-DD'.
+            qc_status: 'raw' | 'clean' (default: 'clean').
+            apply_qc: si True, aplica pipeline QC de datos/qc/snow_depth_qc.py
+                      sobre la serie retornada (solo útil para qc_status='raw').
+
+        Returns:
+            dict con: disponible, estacion, n_observaciones, observaciones (lista),
+                      metadata_estacion, pci (si apply_qc=True).
+        """
+        logger.info(
+            f"[ConsultorBigQuery] snow_depth_caro → {estacion} "
+            f"({fecha_inicio}–{fecha_fin}, qc_status={qc_status})"
+        )
+        try:
+            sql = """
+                SELECT
+                  station_id, station_name, basin, andean_zone, elevation_m,
+                  observation_date, snow_depth_cm, data_source, sensor_model
+                FROM `climas-chileno.clima.snow_depth_caro_2026`
+                WHERE (station_name = @estacion OR station_id = @estacion)
+                  AND qc_status = @qc_status
+                  AND observation_date BETWEEN @fecha_inicio AND @fecha_fin
+                ORDER BY observation_date
+            """
+            parametros = [
+                bigquery.ScalarQueryParameter("estacion", "STRING", estacion),
+                bigquery.ScalarQueryParameter("qc_status", "STRING", qc_status),
+                bigquery.ScalarQueryParameter("fecha_inicio", "DATE", fecha_inicio),
+                bigquery.ScalarQueryParameter("fecha_fin", "DATE", fecha_fin),
+            ]
+            filas = self._ejecutar_query(sql, parametros)
+
+            if not filas:
+                return {
+                    "disponible": False,
+                    "sin_datos": True,
+                    "razon": f"Sin observaciones para '{estacion}' en rango {fecha_inicio}–{fecha_fin}",
+                }
+
+            meta = {
+                k: filas[0].get(k)
+                for k in ["station_id", "station_name", "basin", "andean_zone", "elevation_m", "data_source"]
+            }
+            observaciones = [
+                {"fecha": str(f["observation_date"]), "snow_depth_cm": f["snow_depth_cm"]}
+                for f in filas
+            ]
+
+            resultado: dict = {
+                "disponible": True,
+                "estacion": meta["station_name"],
+                "n_observaciones": len(observaciones),
+                "metadata_estacion": meta,
+                "observaciones": observaciones,
+                "qc_status": qc_status,
+            }
+
+            if apply_qc:
+                # Importación lazy: no afecta a módulos que no usan pandas
+                import pandas as pd
+                from datos.qc.snow_depth_qc import PARAMETROS_POR_ZONA, aplicar_pipeline_qc
+
+                zona_map = {
+                    "Mediterranean": "mediterranea",
+                    "Arid": "arida",
+                    "Wet": "humeda",
+                }
+                zona_clave = zona_map.get(meta.get("andean_zone", ""), "mediterranea")
+                params_qc = PARAMETROS_POR_ZONA[zona_clave]
+
+                indice = pd.to_datetime([obs["fecha"] for obs in observaciones])
+                serie = pd.Series(
+                    [obs["snow_depth_cm"] for obs in observaciones],
+                    index=indice,
+                    dtype=float,
+                )
+                serie_qc = aplicar_pipeline_qc(serie, params_qc)
+
+                n_original = serie.notna().sum()
+                n_qc = serie_qc.notna().sum()
+                n_spikes = int(n_original - n_qc)
+                pct_removido = round(n_spikes / max(n_original, 1) * 100, 2)
+
+                logger.info(
+                    f"[ConsultorBigQuery] QC aplicado → spikes={n_spikes} pct_removido={pct_removido}%"
+                )
+
+                # Actualizar observaciones con valores post-QC
+                resultado["observaciones"] = [
+                    {"fecha": str(d.date()), "snow_depth_cm": (None if pd.isna(v) else v)}
+                    for d, v in zip(serie_qc.index, serie_qc.values)
+                ]
+                resultado["qc_aplicado"] = True
+                resultado["qc_metricas"] = {
+                    "n_spikes_detectados": n_spikes,
+                    "pct_removido": pct_removido,
+                    "zona_parametros": zona_clave,
+                }
+
+            return resultado
+
+        except Exception as e:
+            logger.warning(f"[ConsultorBigQuery] Error obteniendo snow_depth_caro: {e}")
+            return {
+                "disponible": False,
+                "razon": str(e),
+            }
