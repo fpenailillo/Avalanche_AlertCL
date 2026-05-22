@@ -1,5 +1,37 @@
 # Log de Progreso — snow_alert
 
+## Sesión 2026-05-22 — FIX-SAT-STORM v23 + FIX-WN2-PINN v24 + FIX-STORM-EXTREME v25 + Validación Caro 2026
+
+### FIX-SAT-STORM (v23.0) ✅ — commit `52a61d0`
+
+Señal satelital S2 propagada a S3 (`detectar_ventanas_criticas`). Nuevo parámetro `alertas_satelitales`. `NEVADA_RECIENTE_INTENSA` activa `NEVADA_SATELITAL_CONFIRMADA` aunque ERA5=0mm → rompe compuerta de calma → EAWS Paso 1 desactivado. 7 tests nuevos.
+
+### FIX-WN2-PINN (v24.0) ✅ — commit `6282642`
+
+Forzante de carga nival en PINN S1: parámetro `nieve_nueva_cm` modela sobrecarga (surcharge) Mohr-Coulomb. Con ≥20cm → `SURCHARGE_NIEVE_CRITICA`; ≥40cm → `SURCHARGE_NIEVE_EXTREMA`. Empuja estabilidad de `poor` a `very_poor`. UQ extendido con 4ª fuente (σ_nieve=30%). 9 tests. Prompt S1 actualizado (FIX-WN2-PINN en flujo WN2).
+
+### FIX-STORM-EXTREME (v25.0) ✅ — commit `6ddcd94`
+
+Dos fixes en S5 para alcanzar nivel 4–5 en tormentas extremas:
+- **FIX-STORM-FREQ-WN2**: `very_poor + NEVADA_RECIENTE + ventanas≥1 → frecuencia=many`
+- **FIX-WN2-SIZE-ANDES**: `nieve_nueva_cm_wn2` en S5; umbrales Techel 2022: 25→D3, 40→D4, 60→D5
+
+Resultado comparativo (3 tormentas, La Parva Sector Alto):
+```
+v22.0 MAE=3.00  v23.0 MAE=2.00  v24.0 MAE=1.33  v25.0 MAE=0.67 (−78% vs baseline)
+```
+Evento 2024-06-15 (Snowlab=5): v22=1 → v25=5 ✅. Sin regresión en calmas.
+13 tests nuevos. Suite completa: 503 passed, 7 skipped.
+
+### Validación Caro 2026 ✅ — docs/validacion/validacion_caro2026_andesai.md
+
+Documento actualizado a v22–v25. Sección 7 completa: 7.1 correcciones, 7.2 tabla
+cuantitativa con v25, 7.3 brecha residual (post-tormenta Δ=−2 por ausencia de
+persistence factor), 7.4 rol operacional de fuentes (WN2+S2 son las fuentes
+primarias; Caro 2026 solo validación offline).
+
+---
+
 ## Sesión 2026-05-02 (tarde) — REQ-06+REQ-03+REQ-07+REQ-01 integración v5.0
 
 ### REQ-06: Refactor S3 ciclo diurno — fix causa raíz H4 piso nivel 3 ✅ — commit `8c97d85`
