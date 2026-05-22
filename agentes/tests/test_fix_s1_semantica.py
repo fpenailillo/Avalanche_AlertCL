@@ -29,6 +29,8 @@ class TestEAWSPaso1V75:
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
             dias_consecutivos_nivel_bajo=3,
+            precipitacion_72h_corregida_mm=2.0,
+            viento_kmh=15.0,
         )
         assert r["nivel_eaws_24h"] == 1
         assert r["nivel_eaws_48h"] == 1
@@ -45,6 +47,8 @@ class TestEAWSPaso1V75:
             ventanas_criticas_detectadas=0,
             condiciones_meteo_disponibles=True,
             dias_consecutivos_nivel_bajo=3,
+            precipitacion_72h_corregida_mm=1.5,
+            viento_kmh=20.0,
         )
         assert r["nivel_eaws_24h"] == 1
         assert r["problema_avalancha_presente"] is False

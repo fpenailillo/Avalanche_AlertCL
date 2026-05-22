@@ -98,7 +98,7 @@ class TestConsultorBigQueryStRegionStats:
     def test_retorna_disponible_false_si_zona_no_existe(self):
         from agentes.datos.consultor_bigquery import ConsultorBigQuery
         consultor = ConsultorBigQuery.__new__(ConsultorBigQuery)
-        consultor._ejecutar_query = MagicMock(return_value=iter([]))
+        consultor._ejecutar_query = MagicMock(return_value=[])
         resultado = consultor.obtener_stats_terreno_st("Zona No Existe")
         assert resultado["disponible"] is False
         assert "no encontrada" in resultado["razon"]
@@ -119,13 +119,8 @@ class TestConsultorBigQueryStRegionStats:
             "srtm_elevacion_media_m": 2619.6,
         }
         # BQ Row soporta dict() via __iter__ sobre keys y __getitem__
-        fila = MagicMock()
-        fila.keys.return_value = fila_mock.keys()
-        fila.__iter__ = lambda s: iter(fila_mock.keys())
-        fila.__getitem__ = lambda s, k: fila_mock[k]
-        fila.items = lambda: fila_mock.items()
         consultor = ConsultorBigQuery.__new__(ConsultorBigQuery)
-        consultor._ejecutar_query = MagicMock(return_value=iter([fila]))
+        consultor._ejecutar_query = MagicMock(return_value=[fila_mock])
         resultado = consultor.obtener_stats_terreno_st("La Parva")
         assert resultado["disponible"] is True
         assert resultado["nasadem_elevacion_media_m"] == pytest.approx(2611.9)
@@ -154,13 +149,8 @@ class TestConsultorBigQueryStRegionStats:
             "exposicion_predominante": "NO",
             "region_eaws": "Andes Central Norte",
         }
-        fila = MagicMock()
-        fila.keys.return_value = fila_mock.keys()
-        fila.__iter__ = lambda s: iter(fila_mock.keys())
-        fila.__getitem__ = lambda s, k: fila_mock[k]
-        fila.items = lambda: fila_mock.items()
         consultor = ConsultorBigQuery.__new__(ConsultorBigQuery)
-        consultor._ejecutar_query = MagicMock(return_value=iter([fila]))
+        consultor._ejecutar_query = MagicMock(return_value=[fila_mock])
         resultado = consultor.obtener_zona_geografica("Valle Nevado")
         assert resultado["disponible"] is True
         assert resultado["nombre_zona"] == "Valle Nevado"
@@ -169,7 +159,7 @@ class TestConsultorBigQueryStRegionStats:
     def test_obtener_zona_geografica_fallback(self):
         from agentes.datos.consultor_bigquery import ConsultorBigQuery
         consultor = ConsultorBigQuery.__new__(ConsultorBigQuery)
-        consultor._ejecutar_query = MagicMock(return_value=iter([]))
+        consultor._ejecutar_query = MagicMock(return_value=[])
         resultado = consultor.obtener_zona_geografica("Zona Inexistente")
         assert resultado["disponible"] is False
 
