@@ -81,6 +81,16 @@ REGISTRO_PROMPTS = {
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
+# v25.0: FIX-STORM-EXTREME + FIX-SAT-STORM + FIX-WN2-PINN + fixes ultrareview 001/002/004/009/015/017:
+#   FIX-STORM-FREQ-WN2: very_poor + NEVADA_RECIENTE + ventanas≥1 en Andes Chile → frecuencia=many (Schweizer 2003).
+#   FIX-WN2-SIZE-ANDES: nieve_nueva_cm_wn2 parametriza tamano avalancha (Techel 2022: 25→D3, 40→D4, 60→D5).
+#   FIX-SAT-STORM: NDSI delta>20% → NEVADA_SATELITAL_CONFIRMADA propaga a ventanas_criticas (rompe gate calma).
+#   FIX-WN2-PINN: surcharge Mohr-Coulomb cuando nieve_nueva_cm_wn2≥20 → estabilidad very_poor en tormenta extrema.
+#   bug_001: claves IMIS alineadas (HS_meas_cm, TA_c; eliminar VW_max_ms silencioso).
+#   bug_002: propagar tools_llamadas de cache en modo solo_s5 (~15 columnas BQ que quedaban NULL).
+#   bug_009: umbral redistribución nieve Alpes 3→8 m/s (Schmidt 1980; diferenciado del umbral detección ERA5).
+#   bug_015: COALESCE(nivel_eaws_24h_raw, nivel_eaws_24h) en calibrador evita doble calibración desde v21.
+#   bug_017: timezone-aware fecha_local en WN2 (Europe/Zurich vs America/Santiago según longitud).
 # v22.0: FIX-WIND-UNITS (bug_021) + FIX-CR10B-RECAL:
 #   FIX-WIND-UNITS: normalizar velocidad_viento km/h→m/s en ConsultorBigQuery.obtener_condiciones_actuales.
 #     Causa raíz: todas las rutas de ingesta guardan km/h, pero consumers asumían m/s.
@@ -134,7 +144,7 @@ REGISTRO_PROMPTS = {
 #     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
 #   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
 #     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
-VERSION_GLOBAL = "22.0"
+VERSION_GLOBAL = "25.0"
 
 
 def _calcular_hash(contenido: str) -> str:

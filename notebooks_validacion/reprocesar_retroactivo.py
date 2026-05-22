@@ -145,13 +145,13 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v22 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v22')
+          AND STARTS_WITH(version_prompts, 'v25')
     """
     job = cliente.query(
         q,
@@ -229,7 +229,7 @@ def ejecutar_replay(
                 continue
         else:
             if ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v22) — {ubicacion} {fecha_str}")
+                logger.info(f"{prefijo} SKIP (ya v25) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -311,13 +311,13 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v22.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v22 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v22")
-        print("\nObjetivos v22.0 (FIX-WIND-UNITS + FIX-CR10B-RECAL):")
-        print("  H3 QWK Suiza:   ≥ 0.350 (v21: 0.353)")
-        print("  H4 QWK La Parva: ≥ 0.150 (v21: 0.220)")
-        print("  H4 sesgo:        ≤ +0.400 (v21: +0.345)")
+        print("\nPróximo paso — Validación v25.0:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25")
+        print("\nObjetivos v25.0 (FIX-STORM-EXTREME + FIX-SAT-STORM + FIX-WN2-PINN + ultrareview fixes):")
+        print("  H3 QWK Suiza:    ≥ 0.350 (v22: ronda 17)")
+        print("  H4 QWK La Parva: ≥ 0.500 (v22 local demo: +0.687 QWK sobre v22)")
+        print("  H4 sesgo:        ≤ +0.200 (demo: −0.14 sesgo)")
 
 
 def main():
