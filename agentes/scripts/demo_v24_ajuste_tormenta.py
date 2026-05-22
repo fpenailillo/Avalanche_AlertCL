@@ -1,9 +1,15 @@
 """
-Demo v24.0 — Medición del ajuste FIX-SAT-STORM + FIX-WN2-PINN.
+Demo v25.0 — Medición del ajuste FIX-SAT-STORM + FIX-WN2-PINN + FIX-STORM-EXTREME.
 
 Prueba los tres eventos de tormenta documentados en la validación Caro 2026
 (Snowlab CAA, jun-ago 2024, La Parva) más tres días de calma para verificar
 que no hay regresión.
+
+Versiones comparadas:
+  v22: baseline ERA5 solo
+  v23: + FIX-SAT-STORM (señal satelital S2 → S3)
+  v24: + FIX-WN2-PINN (sobrecarga nívea en S1 PINN)
+  v25: + FIX-STORM-FREQ-WN2 + FIX-WN2-SIZE-ANDES (frecuencia y tamaño en S5)
 
 Ejecutar:
     python agentes/scripts/demo_v24_ajuste_tormenta.py
@@ -121,13 +127,15 @@ EVENTOS = [
 
 def evaluar_version(evento: dict, version: str) -> dict:
     """
-    Evalúa un evento en tres versiones:
+    Evalúa un evento en cuatro versiones:
       v22 : sin fixes (ERA5 solo, PINN estático)
-      v23 : solo FIX-SAT-STORM (señal satelital)
-      v24 : FIX-SAT-STORM + FIX-WN2-PINN (señal satelital + forzante PINN)
+      v23 : FIX-SAT-STORM (señal satelital → S3)
+      v24 : FIX-SAT-STORM + FIX-WN2-PINN (señal satelital + forzante PINN S1)
+      v25 : v24 + FIX-STORM-FREQ-WN2 + FIX-WN2-SIZE-ANDES (frecuencia y tamaño en S5)
     """
-    usar_sat = version in ("v23", "v24")
-    usar_pinn_wn2 = version == "v24"
+    usar_sat = version in ("v23", "v24", "v25")
+    usar_pinn_wn2 = version in ("v24", "v25")
+    usar_s5_wn2 = version == "v25"
 
     # ── S1: PINN ──────────────────────────────────────────────────────────────
     nieve_pinn = evento["nieve_nueva_wn2_cm"] if usar_pinn_wn2 else None
@@ -145,8 +153,7 @@ def evaluar_version(evento: dict, version: str) -> dict:
     estab_topo = estab_manto["estabilidad_eaws"]
 
     # ── S2 satélite (simplificado) ────────────────────────────────────────────
-    # En v22 no hay señal satelital; en v23/v24 la señal viene de alertas_sat
-    # estab_sat = "poor" siempre como baseline (ViT sin evento activo)
+    # estab_sat = "poor" siempre (ViT sin calibración de tormenta activa)
     estab_sat = "poor"
 
     # ── S3: ventanas críticas ─────────────────────────────────────────────────
@@ -161,7 +168,9 @@ def evaluar_version(evento: dict, version: str) -> dict:
     )
 
     # ── S5: clasificación EAWS ────────────────────────────────────────────────
+    # v25: pasa nieve_nueva_cm_wn2 → activa FIX-WN2-SIZE-ANDES y FIX-STORM-FREQ-WN2
     dias_bajo = 0 if evento["tipo"] == "tormenta" else 5
+    nieve_s5 = evento["nieve_nueva_wn2_cm"] if usar_s5_wn2 else None
     eaws = ejecutar_clasificar_riesgo_eaws_integrado(
         estabilidad_topografica=estab_topo,
         factor_meteorologico=ventanas["factor_meteorologico_eaws"],
@@ -172,6 +181,7 @@ def evaluar_version(evento: dict, version: str) -> dict:
         viento_kmh=evento["viento_ms"] * 3.6,
         nombre_ubicacion="La Parva Sector Alto",
         estabilidad_satelital=estab_sat,
+        nieve_nueva_cm_wn2=nieve_s5,
     )
 
     return {
@@ -217,10 +227,10 @@ def main():
         fila = {"fecha": ev["fecha"], "nombre": ev["nombre"],
                 "tipo": ev["tipo"], "snowlab": ev["snowlab_alto"]}
 
-        for ver in ("v22", "v23", "v24"):
+        for ver in ("v22", "v23", "v24", "v25"):
             r = evaluar_version(ev, ver)
             marcador = ""
-            if ver == "v24" and ev["tipo"] == "tormenta":
+            if ver == "v25" and ev["tipo"] == "tormenta":
                 delta = r["nivel"] - ev["snowlab_alto"]
                 marcador = f"  Δ={delta:+d}"
             print(
@@ -238,26 +248,26 @@ def main():
     tormentas = [r for r in resultados if r["tipo"] == "tormenta"]
     calmas    = [r for r in resultados if r["tipo"] == "calma"]
 
-    print(f"\n  {'Fecha':<12} {'Evento':<25} {'GT':>3}  {'v22':>4} {'v23':>4} {'v24':>4}  {'Δ v22':>6} {'Δ v24':>6}")
-    print(f"  {'─'*75}")
+    print(f"\n  {'Fecha':<12} {'Evento':<25} {'GT':>3}  {'v22':>4} {'v23':>4} {'v24':>4} {'v25':>4}  {'Δ v22':>6} {'Δ v25':>6}")
+    print(f"  {'─'*82}")
     for r in tormentas:
         print(f"  {r['fecha']:<12} {r['nombre']:<25} {r['snowlab']:>3}"
-              f"  {r['v22']:>4} {r['v23']:>4} {r['v24']:>4}"
-              f"  {r['v22']-r['snowlab']:>+6} {r['v24']-r['snowlab']:>+6}")
-    print(f"  {'─'*75}")
+              f"  {r['v22']:>4} {r['v23']:>4} {r['v24']:>4} {r['v25']:>4}"
+              f"  {r['v22']-r['snowlab']:>+6} {r['v25']-r['snowlab']:>+6}")
+    print(f"  {'─'*82}")
     for r in calmas:
         ok22 = "✅" if r["v22"] == r["snowlab"] else "❌"
-        ok24 = "✅" if r["v24"] == r["snowlab"] else "❌"
+        ok25 = "✅" if r["v25"] == r["snowlab"] else "❌"
         print(f"  {r['fecha']:<12} {r['nombre']:<25} {r['snowlab']:>3}"
-              f"  {r['v22']:>4} {r['v23']:>4} {r['v24']:>4}"
-              f"  {ok22}        {ok24}")
+              f"  {r['v22']:>4} {r['v23']:>4} {r['v24']:>4} {r['v25']:>4}"
+              f"  {ok22}        {ok25}")
 
     # ── Métricas ───────────────────────────────────────────────────────────────
     _sep("MÉTRICAS DE AJUSTE (tormentas, Sector Alto)")
     import statistics
 
     for ver, lbl in [("v22", "v22.0 baseline"), ("v23", "v23.0 FIX-SAT-STORM"),
-                     ("v24", "v24.0 SAT+PINN")]:
+                     ("v24", "v24.0 SAT+PINN"), ("v25", "v25.0 SAT+PINN+FREQ+SIZE")]:
         deltas = [r[ver] - r["snowlab"] for r in tormentas]
         mae   = statistics.mean(abs(d) for d in deltas)
         sesgo = statistics.mean(deltas)
@@ -266,8 +276,8 @@ def main():
 
     print()
     print("  Ground truth: Snowlab CAA La Parva (Domingo Valdivieso Ducci)")
-    print("  Nota: v24 no alcanza Snowlab nivel 5 (techo = matriz poor/poor + frec.muy alta)")
-    print("        Para nivel 5 se necesita estab_sat=very_poor (ViT bajo tormenta activa)")
+    print("  Nota: v25 aplica FIX-STORM-FREQ-WN2 (freq→many cuando very_poor+NEVADA_RECIENTE)")
+    print("        y FIX-WN2-SIZE-ANDES (tamano por WN2 cm siguiendo Techel 2022 Tabla 7)")
 
 
 if __name__ == "__main__":

@@ -453,3 +453,116 @@ class TestVentanasCriticasSatelital:
         res = self._call(alertas_sat=[])
         assert res["factor_meteorologico_eaws"] == "ESTABLE"
         assert res["num_ventanas_criticas"] == 0
+
+
+# ── FIX-STORM-EXTREME (v25.0) — FIX-STORM-FREQ-WN2 + FIX-WN2-SIZE-ANDES ─────
+
+class TestStormExtreme:
+    """Tests para FIX-STORM-FREQ-WN2 y FIX-WN2-SIZE-ANDES en S5 (tool_clasificar_eaws)."""
+
+    def _eaws(self, **kwargs):
+        from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
+            ejecutar_clasificar_riesgo_eaws_integrado,
+        )
+        defaults = dict(
+            estabilidad_topografica="very_poor",
+            factor_meteorologico="NEVADA_RECIENTE",
+            ventanas_criticas_detectadas=1,
+            nombre_ubicacion="La Parva Sector Alto",
+            condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=0,
+            precipitacion_72h_corregida_mm=0.5,
+            viento_kmh=23.0,
+            estabilidad_satelital="poor",
+        )
+        defaults.update(kwargs)
+        return ejecutar_clasificar_riesgo_eaws_integrado(**defaults)
+
+    # ── FIX-STORM-FREQ-WN2 ───────────────────────────────────────────────────
+
+    def test_freq_wn2_very_poor_nevada_reciente_da_many(self):
+        """very_poor + NEVADA_RECIENTE + ventanas>=1 → frecuencia=many."""
+        res = self._eaws()
+        assert res["factores_eaws"]["frecuencia"] == "many"
+
+    def test_freq_wn2_no_aplica_si_poor(self):
+        """poor (no very_poor) + NEVADA_RECIENTE → frecuencia permanece 'some' o menor."""
+        res = self._eaws(estabilidad_topografica="poor", estabilidad_satelital="poor")
+        assert res["factores_eaws"]["frecuencia"] != "many"
+
+    def test_freq_wn2_no_aplica_si_factor_estable(self):
+        """very_poor + ESTABLE (sin tormenta) → frecuencia NO sube a many."""
+        res = self._eaws(
+            factor_meteorologico="ESTABLE",
+            ventanas_criticas_detectadas=0,
+        )
+        assert res["factores_eaws"]["frecuencia"] != "many"
+
+    def test_freq_wn2_no_aplica_sin_ventanas(self):
+        """very_poor + NEVADA_RECIENTE pero ventanas=0 → frecuencia NO sube a many."""
+        res = self._eaws(ventanas_criticas_detectadas=0)
+        assert res["factores_eaws"]["frecuencia"] != "many"
+
+    def test_freq_wn2_nivel_minimo_4_con_very_poor_many(self):
+        """very_poor + many + tamano>=2 → nivel EAWS >= 3."""
+        res = self._eaws()
+        assert res["nivel_eaws_24h"] >= 3
+
+    # ── FIX-WN2-SIZE-ANDES ───────────────────────────────────────────────────
+
+    def test_wn2_size_60cm_da_tamano_5(self):
+        """62cm WN2 + factor activo → tamano=5 (umbral ≥60cm)."""
+        res = self._eaws(nieve_nueva_cm_wn2=62.0)
+        assert res["factores_eaws"]["tamano"] == 5
+
+    def test_wn2_size_40cm_da_tamano_4(self):
+        """40cm WN2 → tamano=4."""
+        res = self._eaws(nieve_nueva_cm_wn2=40.0)
+        assert res["factores_eaws"]["tamano"] == 4
+
+    def test_wn2_size_25cm_da_tamano_3(self):
+        """25cm WN2 → tamano=3."""
+        res = self._eaws(nieve_nueva_cm_wn2=25.0)
+        assert res["factores_eaws"]["tamano"] == 3
+
+    def test_wn2_size_10cm_no_cambia_tamano(self):
+        """10cm WN2 (< 25cm umbral) → tamano sigue en default (2)."""
+        res = self._eaws(nieve_nueva_cm_wn2=10.0)
+        assert res["factores_eaws"]["tamano"] == 2
+
+    def test_wn2_size_no_aplica_si_factor_neutro(self):
+        """WN2 60cm con factor ESTABLE (sin tormenta) → tamano NO sube a 5."""
+        res = self._eaws(
+            factor_meteorologico="ESTABLE",
+            ventanas_criticas_detectadas=0,
+            nieve_nueva_cm_wn2=62.0,
+        )
+        assert res["factores_eaws"]["tamano"] < 5
+
+    def test_wn2_size_none_no_cambia_tamano(self):
+        """nieve_nueva_cm_wn2=None → tamano default sin cambio."""
+        res = self._eaws(nieve_nueva_cm_wn2=None)
+        assert res["factores_eaws"]["tamano"] == 2
+
+    def test_storm_extreme_62cm_nivel_5(self):
+        """Integración: very_poor + NEVADA_RECIENTE + 62cm WN2 → nivel EAWS 5."""
+        res = self._eaws(nieve_nueva_cm_wn2=62.0)
+        assert res["nivel_eaws_24h"] == 5
+
+    def test_calma_sin_wn2_no_regresion(self):
+        """Día de calma con ESTABLE y nieve=None → nivel sigue en 1 (EAWS Paso 1)."""
+        from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
+            ejecutar_clasificar_riesgo_eaws_integrado,
+        )
+        res = ejecutar_clasificar_riesgo_eaws_integrado(
+            estabilidad_topografica="poor",
+            factor_meteorologico="ESTABLE",
+            ventanas_criticas_detectadas=0,
+            nombre_ubicacion="La Parva Sector Alto",
+            condiciones_meteo_disponibles=True,
+            dias_consecutivos_nivel_bajo=5,
+            precipitacion_72h_corregida_mm=0.0,
+            viento_kmh=10.0,
+            nieve_nueva_cm_wn2=None,
+        )
+        assert res["nivel_eaws_24h"] == 1

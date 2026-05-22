@@ -123,6 +123,10 @@ TOOL_CLASIFICAR_EAWS_INTEGRADO = {
             "precipitacion_72h_corregida_mm": {
                 "type": "number",
                 "description": "v20.0 FIX-CR7A-REFACTOR: precipitación acumulada 72h con corrección orográfica aplicada (correccion_orografica.py). Usado para evaluar calma confirmada en Andes Chile (< 5mm es condición necesaria para habilitar EAWS Paso 1). Pasar si S3 lo reporta."
+            },
+            "nieve_nueva_cm_wn2": {
+                "type": "number",
+                "description": "v25.0 FIX-WN2-SIZE-ANDES: nieve nueva en 24h estimada por WeatherNext 2 (nieve_24h_cm_p50_corr). Análogo a nieve_nueva_cm_imis (IMIS/Alpes) pero para Andes Chile. Permite graduación de tamaño D3/D4/D5 (umbrales: 25→D3, 40→D4, 60→D5) cuando la tormenta está activa. Pasar cuando S1 usó nieve_nueva_cm en PINN."
             }
         },
         "required": [
@@ -169,6 +173,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     condiciones_meteo_disponibles: bool = None,
     nieve_nueva_cm_imis: float = None,
     precipitacion_72h_corregida_mm: float = None,
+    nieve_nueva_cm_wn2: float = None,
 ) -> dict:
     """
     Clasifica el riesgo EAWS integrando los análisis de todos los subagentes.
@@ -341,6 +346,28 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             )
             tamano_final = 3
             fuente_tamano = f"{fuente_tamano}→min3_cr18ch3_fallback"
+
+    # FIX-WN2-SIZE-ANDES (v25.0): graduación de tamaño por pronóstico ensemble WN2 (Andes Chile).
+    # Análogo a FIX-HN24-SIZE pero usando nieve_24h_cm_p50_corr de WeatherNext 2 en lugar de IMIS.
+    # Guard: solo cuando factor de tormenta activo (evita falsos positivos en calma).
+    # Umbrales Techel 2022 Tabla 7: 25cm→D3, 40cm→D4, 60cm→D5.
+    # Schweizer et al. (2003): carga nívea ≥ 25cm/24h sobre pendientes >28° → avalancha de placa.
+    _factor_activo_tamano_pre = bool(
+        factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
+    )
+    if _region == "andes_chile" and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
+        if _factor_activo_tamano_pre:
+            if   nieve_nueva_cm_wn2 >= 60: tamano_min_wn2 = 5
+            elif nieve_nueva_cm_wn2 >= 40: tamano_min_wn2 = 4
+            elif nieve_nueva_cm_wn2 >= 25: tamano_min_wn2 = 3
+            else:                           tamano_min_wn2 = 0
+            if tamano_min_wn2 > tamano_final:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-WN2-SIZE-ANDES: tamano "
+                    f"{tamano_final}→{tamano_min_wn2} (WN2_nieve={nieve_nueva_cm_wn2:.0f}cm)"
+                )
+                tamano_final = tamano_min_wn2
+                fuente_tamano = f"{fuente_tamano}→wn2_size_andes"
 
     # FIX-T+FIX-GEO (v7.0): cap tamano≤3 en condiciones calmas, solo en Andes Chile.
     # FIX-T (v6.2): en días sin factor activo ni ventanas críticas, el terreno andino
@@ -589,6 +616,22 @@ def _determinar_frecuencia(
     # Ajuste por estabilidad: si very_poor → frecuencia sube
     if estabilidad == "very_poor" and idx_base < 2:
         idx_base = 2  # Al menos "some"
+
+    # FIX-STORM-FREQ-WN2 (v25.0): tormenta extrema confirmada → frecuencia "many".
+    # Cuando manto CRITICO (very_poor) + señal NEVADA_RECIENTE activa + al menos 1 ventana,
+    # todos los terrenos >28° se movilizan simultáneamente (Schweizer et al. 2003, §4.2).
+    # Solo Andes Chile; en Alpes el mecanismo equivalente es FIX-CR18-CH-2 + IMIS.
+    if (
+        _region_freq == "andes_chile"
+        and estabilidad == "very_poor"
+        and "NEVADA_RECIENTE" in factor_meteorologico
+        and ventanas_criticas >= 1
+    ):
+        idx_base = 3  # many
+        logger.info(
+            f"[ClasificarEAWS] FIX-STORM-FREQ-WN2: tormenta extrema confirmada "
+            f"(very_poor + NEVADA_RECIENTE + ventanas={ventanas_criticas}) → frecuencia=many"
+        )
 
     # Ajuste por factor meteorológico de precipitación crítica
     if "PRECIPITACION_CRITICA" in factor_meteorologico:
