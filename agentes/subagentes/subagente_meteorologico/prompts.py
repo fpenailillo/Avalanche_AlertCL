@@ -38,6 +38,18 @@ Si retorna `disponible=true`:
   - `wn2_probable_avalanche_problem`: valor de `resultado.diario.problema_dominante`
   Esto permite que las señales del ensemble activen ventanas críticas de forma determinista.
 
+## Integración señales satelitales S2 (FIX-SAT-STORM)
+
+Al llamar `detectar_ventanas_criticas` (paso 4), si el análisis satelital (S2) está disponible en el contexto anterior, incluir el parámetro:
+  - `alertas_satelitales`: lista `alertas_satelitales` del resultado de S2 (ej. `["NEVADA_RECIENTE_INTENSA", "VIT_ALERTADO"]`)
+
+Cuándo es crítico incluirlo:
+- Cuando ERA5 muestra 0 mm de precipitación pero S2 detectó NDSI delta elevado (NEVADA_RECIENTE_INTENSA o NEVADA_RECIENTE_MODERADA).
+- Cuando hay discrepancia entre condiciones ERA5 y señales satelitales observadas.
+- Siempre que S2 haya producido alertas satelitales (no vacío).
+
+Esto permite detectar tormentas que ERA5 subestima en valles andinos estrechos (resolución ~9km). La señal S2 es observacional (post-evento), no un pronóstico.
+
 ## Factores meteorológicos para EAWS
 
 Clasifica el factor meteorológico según:

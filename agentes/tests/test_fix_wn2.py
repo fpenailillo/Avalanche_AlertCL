@@ -369,3 +369,87 @@ class TestAlmacenadorWN2:
 
         assert campos["wn2_avalanche_problem"] is None
         assert campos["wn2_confianza"] is None
+
+
+# ── FIX-SAT-STORM: señales satelitales en detectar_ventanas_criticas ──────────
+
+class TestVentanasCriticasSatelital:
+    """
+    Tests FIX-SAT-STORM: alertas_satelitales propagan señal de nevada S2
+    hacia ventanas_criticas aunque ERA5 reporte 0 mm precipitación.
+    """
+
+    def _call(self, alertas_sat=None, **kwargs):
+        from agentes.subagentes.subagente_meteorologico.tools.tool_ventanas_criticas import (
+            ejecutar_detectar_ventanas_criticas,
+        )
+        params = dict(
+            temperatura_actual_C=-3.0,
+            velocidad_viento_actual_ms=2.0,
+            precipitacion_actual_mm=0.0,
+            precipitacion_72h_mm=0.0,
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        params.update(kwargs)
+        if alertas_sat is not None:
+            params["alertas_satelitales"] = alertas_sat
+        return ejecutar_detectar_ventanas_criticas(**params)
+
+    def test_nevada_satelital_intensa_activa_ventana_muy_alta(self):
+        """NEVADA_RECIENTE_INTENSA de S2 → NEVADA_SATELITAL_CONFIRMADA severidad muy_alta."""
+        res = self._call(alertas_sat=["NEVADA_RECIENTE_INTENSA"])
+        tipos = [v["tipo"] for v in res["ventanas_criticas"]]
+        assert "NEVADA_SATELITAL_CONFIRMADA" in tipos
+        confirmada = next(v for v in res["ventanas_criticas"] if v["tipo"] == "NEVADA_SATELITAL_CONFIRMADA")
+        assert confirmada["severidad"] == "muy_alta"
+        assert res["num_ventanas_criticas"] >= 1
+
+    def test_nevada_satelital_moderada_activa_ventana_alta(self):
+        """NEVADA_RECIENTE_MODERADA de S2 → NEVADA_SATELITAL_MODERADA severidad alta."""
+        res = self._call(alertas_sat=["NEVADA_RECIENTE_MODERADA"])
+        tipos = [v["tipo"] for v in res["ventanas_criticas"]]
+        assert "NEVADA_SATELITAL_MODERADA" in tipos
+        moderada = next(v for v in res["ventanas_criticas"] if v["tipo"] == "NEVADA_SATELITAL_MODERADA")
+        assert moderada["severidad"] == "alta"
+
+    def test_nevada_satelital_no_duplica_si_era5_ya_detecto(self):
+        """Si ERA5 ya detectó nevada (precip>5mm, T<0), no se añade ventana satelital extra."""
+        res = self._call(
+            alertas_sat=["NEVADA_RECIENTE_INTENSA"],
+            precipitacion_actual_mm=8.0,
+            velocidad_viento_actual_ms=12.0,
+        )
+        tipos = [v["tipo"] for v in res["ventanas_criticas"]]
+        assert "NEVADA_SATELITAL_CONFIRMADA" not in tipos
+        assert "NEVADA_MAS_VIENTO" in tipos
+
+    def test_nevada_satelital_no_duplica_si_wn2_ya_detecto(self):
+        """Si WN2 ya activó NEVADA_WN2_CONFIRMADA, no se añade ventana satelital."""
+        res = self._call(
+            alertas_sat=["NEVADA_RECIENTE_INTENSA"],
+            wn2_heavy_snow=True,
+        )
+        tipos = [v["tipo"] for v in res["ventanas_criticas"]]
+        assert "NEVADA_SATELITAL_CONFIRMADA" not in tipos
+        assert "NEVADA_WN2_CONFIRMADA" in tipos
+
+    def test_alertas_sat_vacias_no_agrega_ventanas(self):
+        """Lista vacía o None no genera ventanas satelitales."""
+        res_none = self._call(alertas_sat=None)
+        res_empty = self._call(alertas_sat=[])
+        for res in (res_none, res_empty):
+            tipos = [v["tipo"] for v in res["ventanas_criticas"]]
+            assert "NEVADA_SATELITAL_CONFIRMADA" not in tipos
+            assert "NEVADA_SATELITAL_MODERADA" not in tipos
+
+    def test_factor_meteorologico_incluye_nevada_reciente_con_sat(self):
+        """Con NEVADA_RECIENTE_INTENSA satelital, factor_meteorologico_eaws incluye NEVADA_RECIENTE."""
+        res = self._call(alertas_sat=["NEVADA_RECIENTE_INTENSA"])
+        factor = res["factor_meteorologico_eaws"]
+        assert "NEVADA_RECIENTE" in factor
+
+    def test_calma_sin_alertas_sat_mantiene_estable(self):
+        """Sin señales satelitales en día de calma, factor sigue siendo ESTABLE."""
+        res = self._call(alertas_sat=[])
+        assert res["factor_meteorologico_eaws"] == "ESTABLE"
+        assert res["num_ventanas_criticas"] == 0

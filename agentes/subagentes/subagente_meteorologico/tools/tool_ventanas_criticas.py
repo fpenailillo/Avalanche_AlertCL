@@ -95,6 +95,11 @@ TOOL_VENTANAS_CRITICAS = {
             "wn2_probable_avalanche_problem": {
                 "type": "string",
                 "description": "FIX-WN2-TRIGGERS: problema avalancha dominante del ensemble WN2 ('new_snow', 'wind_slab', 'wet_snow', 'persistent_weak_layer' u otro). Informativo para el log."
+            },
+            "alertas_satelitales": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "FIX-SAT-STORM: alertas del subagente satelital S2 (procesar_ndsi + detectar_anomalias). Cuando contiene NEVADA_RECIENTE_INTENSA o NEVADA_RECIENTE_MODERADA, activa ventana NEVADA_SATELITAL_CONFIRMADA aunque ERA5 no detecte precipitación. Pasar la lista alertas_satelitales del resultado de S2."
             }
         },
         "required": [
@@ -122,6 +127,7 @@ def ejecutar_detectar_ventanas_criticas(
     wn2_storm_slab: bool = False,
     wn2_wind_strong: bool = False,
     wn2_probable_avalanche_problem: str = None,
+    alertas_satelitales: list = None,
 ) -> dict:
     """
     Detecta ventanas críticas de riesgo meteorológico.
@@ -361,6 +367,51 @@ def ejecutar_detectar_ventanas_criticas(
             "tiempo": "próximo"
         })
 
+    # ─── Ventana FIX-SAT-STORM: señales satelitales S2 de acumulación nival ───
+    # NDSI delta > 20% en 24h (NEVADA_RECIENTE_INTENSA) confirma nevada real aunque
+    # ERA5 muestre 0mm precipitación. Rompe el gate de calma FIX-CR7A-REFACTOR:
+    # ventanas_criticas_detectadas > 0 → senales_calma_confirmada = False → la
+    # matriz EAWS usa el estado topográfico y satelital real en lugar de nivel 1.
+    # Guard: no duplicar si WN2 o ERA5 ya detectaron la misma nevada.
+    _alertas_sat = set(alertas_satelitales or [])
+    _tipos_actuales_post_wn2 = {v["tipo"] for v in ventanas}
+    _nevada_ya_detectada = (
+        "NEVADA_MAS_VIENTO" in _tipos_actuales_post_wn2
+        or "NEVADA_WN2_CONFIRMADA" in _tipos_actuales_post_wn2
+        or "CARGA_NIEVE_PROFUNDA" in _tipos_actuales_post_wn2
+    )
+
+    if not _nevada_ya_detectada:
+        if "NEVADA_RECIENTE_INTENSA" in _alertas_sat:
+            logger.info(
+                "[VentanasCriticas] FIX-SAT-STORM: NEVADA_RECIENTE_INTENSA en S2 "
+                "(delta_pct_nieve_24h>20%) → NEVADA_SATELITAL_CONFIRMADA"
+            )
+            ventanas.append({
+                "tipo": "NEVADA_SATELITAL_CONFIRMADA",
+                "severidad": "muy_alta",
+                "descripcion": (
+                    "Satélite S2 confirma nevada intensa (NDSI delta >20% en 24h) "
+                    "no captada por ERA5 — acumulación de nieve nueva con riesgo de "
+                    "placas de tormenta en terreno ≥30°."
+                ),
+                "tiempo": "actual"
+            })
+        elif "NEVADA_RECIENTE_MODERADA" in _alertas_sat:
+            logger.info(
+                "[VentanasCriticas] FIX-SAT-STORM: NEVADA_RECIENTE_MODERADA en S2 "
+                "(delta_pct_nieve_24h>10%) → NEVADA_SATELITAL_MODERADA"
+            )
+            ventanas.append({
+                "tipo": "NEVADA_SATELITAL_MODERADA",
+                "severidad": "alta",
+                "descripcion": (
+                    "Satélite S2 detecta aumento moderado de cobertura nival (NDSI delta >10%) "
+                    "— posible nevada reciente subestimada por ERA5."
+                ),
+                "tiempo": "actual"
+            })
+
     # ─── Período de mayor riesgo ──────────────────────────────────────────────
     periodo_mayor_riesgo = _determinar_periodo_mayor_riesgo(
         ventanas=ventanas,
@@ -379,6 +430,7 @@ def ejecutar_detectar_ventanas_criticas(
         umbral_carga_72h=_umbral_carga_72h,
         umbral_nevada=_umbral_nevada,
         umbral_viento_fuerte=_umbral_viento_fuerte,
+        alertas_satelitales=_alertas_sat,
     )
 
     # FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO refleja ciclos térmicos normales del pronóstico
@@ -450,6 +502,7 @@ def _clasificar_factor_meteorologico(
     umbral_carga_72h: float = 10.0,
     umbral_nevada: float = 5.0,
     umbral_viento_fuerte: float = 10.0,
+    alertas_satelitales: set = None,
 ) -> str:
     """
     Clasifica el factor meteorológico para EAWS.
@@ -503,5 +556,14 @@ def _clasificar_factor_meteorologico(
     if "PLACA_VIENTO_WN2" in tipos_ventanas:
         if "VIENTO_FUERTE" not in factores:
             factores.append("VIENTO_FUERTE")
+
+    # FIX-SAT-STORM: señal satelital S2 promovida a factor EAWS
+    _alertas_sat = alertas_satelitales or set()
+    if (
+        ("NEVADA_SATELITAL_CONFIRMADA" in tipos_ventanas or "NEVADA_RECIENTE_INTENSA" in _alertas_sat)
+        and "NEVADA_RECIENTE" not in factores
+        and "PRECIPITACION_CRITICA" not in factores
+    ):
+        factores.append("NEVADA_RECIENTE")
 
     return "+".join(factores) if factores else "ESTABLE"
