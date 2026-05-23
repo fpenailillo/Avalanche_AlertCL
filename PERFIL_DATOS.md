@@ -294,19 +294,36 @@ Columnas: `snow_type`, `trigger_type`, `area_m2`, `aval_size_class`, `aspect_deg
 
 ## 6. Notas de ingeniería de datos críticas
 
-### Unidades de velocidad de viento
-- `condiciones_actuales.velocidad_viento` → **km/h** (Google Weather API METRIC)
-- `pronostico_horas.velocidad_viento` → **km/h** (misma fuente)
-- Conversión a m/s: dividir por 3.6 (aplicado en `consultor_bigquery.py:222` y `consultor_bigquery.py:474-483`)
-- `imagenes_satelitales.viento_altura_vel_ms` → **m/s** (GEE/ERA5, ya convertido)
-- `weathernext_2.ensemble.10m_u/v_wind` → **m/s** (nativo WN2)
+### Unidades de velocidad de viento — convención unificada
+
+Todas las tablas BQ almacenan `velocidad_viento` en **km/h**. El consultor convierte a **m/s** al leer. El patrón es consistente tras los siguientes fixes:
+
+| Tabla | Columna | Almacenado | Convertido en |
+|---|---|---|---|
+| `condiciones_actuales` | `velocidad_viento` | km/h | `consultor_bigquery.py:222` (÷3.6) |
+| `pronostico_horas` | `velocidad_viento` | km/h | `consultor_bigquery.py:477` (÷3.6) |
+| `pronostico_dias` | `diurno/nocturno_velocidad_viento` | km/h | `consultor_bigquery.py:662` (÷3.6 → `viento_max_ms`) |
+| `imagenes_satelitales` | `viento_altura_vel_ms` | m/s | ya en m/s (GEE/ERA5) |
+| `weathernext_2` | `10m_u/v_component_of_wind` | m/s | ya en m/s (nativo WN2) |
+
+**Fixes aplicados (todos en `feat/v7.0-fixes`):**
+- `FIX-WIND-UNITS` (v21): `condiciones_actuales` — línea 222
+- `FIX-WIND-PRONOSTICO` (2026-05-23): `pronostico_horas` — líneas 474-483
+- `FIX-WIND-PRONOSTICO-DIAS` (2026-05-23): `pronostico_dias` — línea 658-662 + `tool_pronostico_dias.py:73,105`
+
+**Bug corregido:** `tool_pronostico_dias.py` usaba `diurno_velocidad_viento` (km/h) directamente como m/s, disparando alertas `VIENTO_FUERTE_PRONOSTICADO` a partir de 20 km/h (~5 m/s). Ahora usa `viento_max_ms` (ya convertido en consultor).
+
+### FIX-TENDENCIA-REGISTROS (2026-05-23)
+`tool_clima_reciente.py` tenía código muerto en el bloque de tendencia 72h — buscaba `tendencia.get("registros")` y `tendencia.get("total_registros")` que `obtener_tendencia_meteorologica()` nunca retorna. Como resultado, los valores de temperatura min/max, viento y precipitación eran siempre el punto puntual de `condiciones_actuales` en lugar del resumen de 72h.
+
+**Fix:** el bloque ahora usa directamente las claves `temp_min_72h`, `temp_max_72h`, `viento_max_ms` y `precip_total_acumulada_mm` del dict de tendencia.
 
 ### QC del dataset Caro 2026
 - `qc_status = "clean"` en todas las filas es **intencional** — el QC fue aplicado previamente en Zenodo v4.2 (Caro et al. 2026, DOI: 10.5281/zenodo.20089265).
 
 ### VIEW `estado_manto_gee`
 - No existe como tabla física. Es una VIEW sobre `imagenes_satelitales`.
-- Creada 2026-05-23 para corregir que `obtener_estado_manto()` siempre retornara `disponible=False`.
+- Creada 2026-05-23 (`FIX-ESTADO-MANTO-VIEW`) — antes `obtener_estado_manto()` siempre retornaba `disponible=False`.
 
 ### Particionamiento y QUALIFY en boletines
 - `boletines_riesgo` usa `QUALIFY ROW_NUMBER() OVER (PARTITION BY nombre_ubicacion, DATE(fecha_emision) ORDER BY fecha_emision DESC) = 1` para deduplicar.

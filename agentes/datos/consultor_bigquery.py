@@ -651,15 +651,13 @@ class ConsultorBigQuery:
                 elif prob_noche is not None:
                     dia["prob_precipitacion_dia"] = prob_noche
 
-                # viento_max (máximo entre diurno y nocturno)
+                # FIX-WIND-PRONOSTICO-DIAS: diurno/nocturno_velocidad_viento en km/h → m/s
                 viento_dia = dia.get("diurno_velocidad_viento")
                 viento_noche = dia.get("nocturno_velocidad_viento")
-                if viento_dia is not None and viento_noche is not None:
-                    dia["viento_max"] = max(viento_dia, viento_noche)
-                elif viento_dia is not None:
-                    dia["viento_max"] = viento_dia
-                elif viento_noche is not None:
-                    dia["viento_max"] = viento_noche
+                _vmax_kmh = max(v for v in [viento_dia, viento_noche] if v is not None) if any(
+                    v is not None for v in [viento_dia, viento_noche]
+                ) else None
+                dia["viento_max_ms"] = round(_vmax_kmh / 3.6, 2) if _vmax_kmh is not None else None
 
                 # condicion_dia (priorizar diurna)
                 dia["condicion_dia"] = dia.get("diurno_condicion") or dia.get("nocturno_condicion")
