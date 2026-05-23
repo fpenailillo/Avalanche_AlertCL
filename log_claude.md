@@ -1837,3 +1837,45 @@ Script: `agentes/scripts/demo_v24_ajuste_tormenta.py`
 
 **Brecha residual**: Jun-15 Δ=−2 (EAWS 3 vs Snowlab 5). Para cerrarla:
 estab_sat=very_poor requeriría ViT calibrado bajo tormenta activa.
+
+---
+
+## Sesión 2026-05-23 — FEAT Earth AI + Revisión arquitectura modelos
+
+### FEAT-EARTH-AI (v25.1) ✅ — commits `ad02712`, `b8dcf5f`, `112be20`
+
+**Segunda vía satelital activada**: `tool_gemini_multispectral.py` ahora usa `ClienteGeminiNativo` (Gemini 3.1 Pro Preview) como tool auxiliar dentro del SubagenteSatelital.
+
+- `tool_gemini_multispectral.py`: reemplazado cliente Databricks roto por `ClienteGeminiNativo.generar(thinking_level="LOW")`
+- `subagente_satelital/prompts.py` v4.1: paso 6 obligatorio `analizar_via_earth_ai` + sección EARTH AI en output
+- `registro_versiones.py`: hash satelital corregido a `3bf6c40e5ad4f451` (con `.strip()`)
+- Activado en Cloud Run Job: `S2_VIA=ambas_consolidar_vit`
+
+**Validación (preset 7 ubicaciones):**
+- 7/7 OK, niveles EAWS idénticos entre Earth AI y base
+- Ubicaciones chilenas: `via_activa=True`, Gemini ~15-21s por llamada, `confianza_global=0.1` (temporada sin nieve)
+- Ubicaciones suizas: `disponible=False` (sin datos BQ satelitales para Alpes)
+- 502 tests pasando, 8 skipped, sin regresiones
+
+### Decisión arquitectónica: Qwen3-80B como modelo principal confirmado
+
+Revisión basada en 17+ rondas de validación. **No se cambia el modelo principal.**
+
+| Capa | Modelo | Razón |
+|---|---|---|
+| S1 Topográfico | Qwen3-80B (Databricks) | Validado, gratuito, 17+ rondas |
+| S2 Satelital (principal) | Qwen3-80B (Databricks) | Ídem |
+| S2 Satelital (Earth AI) | Gemini 3.1 Pro Preview | Razonamiento cualitativo cross-source, NO clasificación |
+| S3 Meteorológico | Qwen3-80B (Databricks) | Ídem |
+| S4 SituationalBriefing | Qwen3-80B (Databricks) | Ídem |
+| S5 Integrador | Qwen3-80B (Databricks) | Calibración v21 (FIX-CALIB-REG shift +0.70 Alpes) atada al modelo |
+
+**Modelos evaluados y descartados:**
+- Qwen3.5-122B: thinking siempre activo, 5-7× tokens, no desactivable → descartado
+- Llama 3.3 70B (disponible en gateway): tool_calls nativo limpio, pero re-validar 17 rondas + recalibrar v21 supera beneficio
+- Gemini 3.1 Pro como principal: pago, 15-40s/llamada vs 3s Qwen3, requiere thought_signature handling
+
+**Por qué Earth AI no afecta H3/H4 QWK:**
+La clasificación EAWS la hace `tool_clasificar_eaws_integrado` con inputs estructurados (matriz determinista + calibración v21). Earth AI enriquece `resumen_satelital` (narrativa de texto), no modifica los inputs numéricos de clasificación. Los notebooks de validación H3/H4 (07/08) requieren boletines retroactivos en BQ versión `v6` — no hay boletines de temporada invernal activa en mayo → validación H3/H4 aplica post-temporada.
+
+**Rollback Earth AI:** `gcloud run jobs update orquestador-avalanchas --update-env-vars S2_VIA=vit_actual` → sin overhead, sin efecto en clasificación.
