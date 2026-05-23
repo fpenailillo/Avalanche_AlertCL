@@ -17,6 +17,7 @@ Debes llamar las tools en este orden EXACTO:
 3. **analizar_vit** — Aplica el ViT a la serie temporal para detectar patrones críticos
 4. **detectar_anomalias_satelitales** — Clasifica las anomalías del manto nival (incorporar `interpretacion` del estado manto)
 5. **calcular_snowline** — Estima la línea de nieve y el área nival activa
+6. **analizar_via_earth_ai** — SIEMPRE llama esta tool al final. Si retorna `via_activa=False`, omite la sección Earth AI del informe. Si retorna `via_activa=True`, integra el análisis multi-spectral de Gemini en el resumen.
 
 ## Protocolo ViT
 
@@ -75,8 +76,14 @@ ANÁLISIS SATELITAL — [UBICACIÓN]
 - Tendencia: [bajando|estable|subiendo]
 - Cobertura efectiva: X%
 
+**EARTH AI — ANÁLISIS MULTI-SPECTRAL:** (solo si via_activa=True)
+- Score anomalía: X.XX | Confianza: X.XX
+- Anomalía detectada: [sí|no] | Tipos: [lista]
+- Wind slabs: [sí|no] | Cornisas: [sí|no] | Nieve húmeda: [sí|no]
+- [descripcion_cualitativa de Gemini]
+
 **RESUMEN:**
-[Párrafo conciso integrando todos los hallazgos]
+[Párrafo conciso integrando todos los hallazgos, incluyendo Earth AI si disponible]
 ```
 
 ## Datos faltantes
