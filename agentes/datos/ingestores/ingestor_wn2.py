@@ -115,8 +115,8 @@ def _borrar_particion(bq: bigquery.Client, ingestion_date: str) -> None:
 
 # ── SQL v6 con horizonte completo (beyond_72h incluido) ───────────────────────
 
-def _sql_wn2(lat: float, lon: float) -> str:
-    """SQL parametrizado por lat/lon/@init_date_start/@init_date_end."""
+def _sql_wn2() -> str:
+    """SQL completamente parametrizado (@lat, @lon, @init_date_start, @init_date_end)."""
     return f"""
 WITH
 ensemble_raw AS (
@@ -136,7 +136,7 @@ ensemble_raw AS (
        UNNEST(forecast) AS forecast,
        UNNEST(ensemble) AS ensemble
   WHERE
-    ST_CONTAINS(t1.geography_polygon, ST_GEOGPOINT({lon}, {lat}))
+    ST_CONTAINS(t1.geography_polygon, ST_GEOGPOINT(@lon, @lat))
     AND t1.init_time BETWEEN @init_date_start AND @init_date_end
 ),
 ensemble_members AS (
@@ -406,8 +406,10 @@ class IngestorWN2:
     def _consultar_wn2(
         self, lat: float, lon: float, fecha_inicio: str, fecha_fin: str
     ) -> list[dict]:
-        sql = _sql_wn2(lat, lon)
+        sql = _sql_wn2()
         params = [
+            bigquery.ScalarQueryParameter("lat",            "FLOAT64",    lat),
+            bigquery.ScalarQueryParameter("lon",            "FLOAT64",    lon),
             bigquery.ScalarQueryParameter("init_date_start", "TIMESTAMP", f"{fecha_inicio} 00:00:00 UTC"),
             bigquery.ScalarQueryParameter("init_date_end",   "TIMESTAMP", f"{fecha_fin} 23:59:59 UTC"),
         ]

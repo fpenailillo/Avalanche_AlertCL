@@ -15,9 +15,11 @@ Registra los hallazgos, los fixes implementados y los pendientes priorizados.
 | Fix FIX-VERSION-DEFAULT-08 | ✅ Implementado |
 | Validación H3 (SLF Suiza) con datos reales | ✅ Ejecutada |
 | Validación H4 (Snowlab La Parva) con datos reales | ✅ Ejecutada |
-| FIX-VIENTO-SQL (ingestor_wn2.py:139) | ⏳ Pendiente |
-| Aclarar cobertura imagenes/zonas (25/70 y 39/70) | ⏳ Pendiente |
-| Confirmar job ingestor-wn2 en Cloud Run | ⏳ Pendiente |
+| FIX-VIENTO-SQL (ingestor_wn2.py:139) | ✅ Implementado |
+| FIX-ESTADO-MANTO-VIEW (CREATE VIEW estado_manto_gee) | ✅ Implementado |
+| Aclarar cobertura imagenes/zonas (28 imag. / 39 zonas) | ✅ Aclarado |
+| Confirmar USE_WEATHERNEXT2 en Cloud Run | ✅ Confirmado: `true` |
+| Confirmar job ingestor-wn2 en Cloud Run | ✅ Confirmado: integrado en orquestador |
 
 ---
 
@@ -68,6 +70,78 @@ ambas temporadas completas).
 argumento CLI `--version`.
 
 **Archivos:** `notebooks_validacion/08_validacion_snowlab.py` (líneas 119, 325)
+
+---
+
+---
+
+### FIX-ESTADO-MANTO-VIEW — BigQuery VIEW `climas-chileno.clima.estado_manto_gee`
+
+**Problema:** `obtener_estado_manto()` en `consultor_bigquery.py` consultaba la tabla
+`climas-chileno.clima.estado_manto_gee`, que no existía como tabla física. El método
+retornaba siempre `disponible=False` en silencio. El subagente S2 (Satelital) nunca
+recibía datos de estado del manto (LST, ERA5, gradiente térmico).
+
+**Fix:** Se creó una VIEW en BigQuery que mapea las columnas ERA5/LST de
+`imagenes_satelitales` al esquema esperado por `obtener_estado_manto()`:
+
+```sql
+CREATE OR REPLACE VIEW `climas-chileno.clima.estado_manto_gee` AS
+SELECT
+    nombre_ubicacion,
+    fecha_captura AS fecha,
+    COALESCE(lst_dia_celsius, lst_min_celsius, era5_temp_2m_celsius) AS lst_celsius,
+    era5_temp_2m_celsius AS temp_suelo_l1_celsius,
+    CAST(NULL AS FLOAT64) AS temp_suelo_l2_celsius,
+    CASE ... END AS gradiente_termico,
+    pct_nubes AS cobertura_nubosa_pct,
+    fuente_principal AS fuente_lst
+FROM `climas-chileno.clima.imagenes_satelitales`
+```
+
+**Verificación:** `obtener_estado_manto("La Parva Sector Alto")` retorna:
+`disponible=True, lst_celsius_medio_7d=-1.43, dias_lst_positivo=1,
+gradiente_termico_medio=2.009, n_registros=14`
+
+**Archivos:** Solo BigQuery (DDL), no requiere cambios en código.
+
+---
+
+### FIX-VIENTO-SQL — `agentes/datos/ingestores/ingestor_wn2.py:139`
+
+**Problema:** `ST_GEOGPOINT({lon}, {lat})` usaba interpolación f-string para
+coordenadas geográficas. Aunque `lat`/`lon` son floats (riesgo de inyección bajo),
+rompe el patrón de queries completamente parametrizadas del resto del codebase y
+crea una inconsistencia al mezclar f-strings con `@init_date_start`/`@init_date_end`
+en la misma query.
+
+**Fix:** `_sql_wn2(lat, lon)` → `_sql_wn2()` (sin argumentos). La línea 139 usa
+ahora `ST_GEOGPOINT(@lon, @lat)`. En `_consultar_wn2()` se agregan dos nuevos
+`ScalarQueryParameter("lat", "FLOAT64", lat)` y `ScalarQueryParameter("lon",
+"FLOAT64", lon)`.
+
+**Archivos:** `agentes/datos/ingestores/ingestor_wn2.py` (líneas 118-119, 139, 409-413)
+
+---
+
+## Resumen de consistencia de la capa de datos (2026-05-23)
+
+| Componente | Estado | Notas |
+|---|---|---|
+| `condiciones_actuales` | ✅ Fresco | Ubicaciones operacionales OK; 22 legacy stale (esperado) |
+| `pronostico_horas` / `pronostico_dias` | ✅ Fresco | — |
+| `pronostico_wn2` | ✅ Activo | `USE_WEATHERNEXT2=true` en Cloud Run Job |
+| `imagenes_satelitales` | ✅ Fresco | 25/28 ubicaciones con datos ≤48h; 3 suizas en pausa estacional |
+| `estado_manto_gee` | ✅ VIEW creada | Antes siempre `disponible=False`; ahora funcional |
+| `zonas_avalancha` | ✅ Fresco | 39 ubicaciones operacionales (no 39/70) |
+| `boletines_riesgo` | ✅ OK | Versiones v13/v25 para validación H3/H4 |
+| `slf_danger_levels_qc` | ✅ OK | Sectores 2223/4113/6113 presentes |
+| `snowlab_boletines` | ✅ OK | Temporadas 2024/2025 completas |
+| `snow_depth_caro_2026` | ✅ OK | Pre-QC'd en Zenodo; `qc_status="clean"` intencional |
+| `earth_ai` (S2_VIA) | ✅ Activo | `S2_VIA=ambas_consolidar_vit` en Cloud Run Job |
+| `ingestor_wn2` | ✅ Integrado | Parte del orquestador-avalanchas (no job separado) |
+
+**Pendiente de modelo (no datos):** Sistema nunca predice EAWS ≥ 3 — revisar S5 Integrador.
 
 ---
 
@@ -136,37 +210,16 @@ Todos los pares con Snowlab≥3 fueron clasificados como 1 (MAE=2.417 en torment
 
 ## Hallazgos pendientes (sin fix en esta sesión)
 
-### HIGH — Subestimación sistemática de riesgo alto (nuevo hallazgo de validación)
+### HIGH — Subestimación sistemática de riesgo alto (hallazgo de validación)
 
 Los resultados de H3 y H4 revelan que el sistema no predice niveles EAWS ≥ 3
-en ningún caso. Esto no es un problema de datos, es un problema del modelo (prompts
-de clasificación o calibración post-LLM). La calibración FIX-CALIB-REG v21 tiene
-shift +0.70 en Alpes, pero el suelo de las predicciones es nivel 1 incluso cuando
-SLF reporta 3–4.
+en ningún caso. Esto no es un problema de datos — la capa de datos está consistente.
+Es un problema del modelo (prompts de clasificación o calibración post-LLM).
+La calibración FIX-CALIB-REG v21 tiene shift +0.70 en Alpes, pero el suelo de
+las predicciones es nivel 1 incluso cuando SLF reporta 3–4.
 
 **Próximo paso:** revisar el subagente S5 Integrador y el prompt de clasificación
 EAWS para entender por qué el sistema no llega a niveles ≥ 3.
-
-### MEDIUM — Cobertura incompleta en imagenes_satelitales y zonas_avalancha
-
-- `imagenes_satelitales`: 25/70 ubicaciones con datos en las últimas 24h
-- `zonas_avalancha`: 39/70 ubicaciones
-
-Causa probable: cobertura de cielo despejado para satélite y selección de zonas
-relevantes. Confirmar si el subset de 25/39 es el definido operacionalmente.
-
-### MEDIUM — ingestor-wn2 no encontrado como Cloud Run Job
-
-`gcloud run jobs describe ingestor-wn2` retorna error. El job puede llamarse
-diferente o estar en otra región. El dataset `weathernext_2` existe y tiene datos
-(stale 10.9h, comportamiento esperado), pero no se pudo auditar el proceso de ingesta.
-Confirmar nombre real del job con `gcloud run jobs list --region=us-central1`.
-
-### LOW — f-string SQL en ingestor_wn2.py:139
-
-`ST_GEOGPOINT({lon}, {lat})` por f-string. Bajo riesgo práctico (float), pero
-rompe el patrón de queries parametrizadas del resto del codebase.
-Fix: usar `@lat`, `@lon` como `ScalarQueryParameter`.
 
 ---
 
