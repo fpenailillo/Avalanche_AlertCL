@@ -1,7 +1,7 @@
 """
 Tool: analizar_via_earth_ai
 
-Segunda vía de análisis satelital usando LLM multi-spectral (Qwen3-80B/Databricks).
+Segunda vía de análisis satelital usando Gemini multi-spectral (ClienteGeminiNativo).
 
 Vía Earth AI para S2 — complementaria al ViT actual, corre en paralelo cuando
 S2_VIA = "ambas_consolidar_vit" o "ambas_consolidar_ea".
@@ -100,20 +100,16 @@ def ejecutar_analizar_via_earth_ai(
         contexto_vit=contexto_vit,
     )
 
-    # ── Inferencia LLM ────────────────────────────────────────────────────────
+    # ── Inferencia LLM (Gemini multi-spectral) ───────────────────────────────
     try:
-        from agentes.datos.cliente_llm import crear_cliente
-        cliente = crear_cliente("databricks")
-        respuesta = cliente.crear_mensaje(
-            mensajes=[{"role": "user", "content": prompt}],
+        from agentes.datos.cliente_llm import ClienteGeminiNativo
+        cliente_gemini = ClienteGeminiNativo()
+        texto_analisis = cliente_gemini.generar(
+            prompt=prompt,
             system=_SYSTEM_PROMPT_MULTISPECTRAL,
-            max_tokens=1024,
-            tools=[],
+            max_tokens=2048,
+            thinking_level="LOW",
         )
-        texto_analisis = ""
-        for bloque in respuesta.content:
-            if hasattr(bloque, "text"):
-                texto_analisis += bloque.text
     except Exception as exc:
         logger.error(f"tool_gemini_multispectral: error LLM — {exc}")
         return {
