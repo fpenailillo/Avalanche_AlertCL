@@ -517,26 +517,38 @@ def _determinar_estabilidad_dominante(
         factor_meteorologico
         and factor_meteorologico not in _FACTORES_NEUTROS
     )
+    # Calma absoluta: solo ESTABLE/"" — CICLO_DIURNO_NORMAL es ciclo térmico activo, no calma real
+    _calma_absoluta = factor_meteorologico in ("ESTABLE", "")
 
-    # FIX-CR17A (v17.0): en Andes Chile la topografía siempre reporta 'poor' porque
-    # el PINN refleja el terreno potencial (pendientes >35°, desnivel >600m). Sin embargo,
-    # la estabilidad topográfica es riesgo POTENCIAL, no ACTIVO. Sin trigger meteorológico
-    # ni ventanas críticas, la matriz EAWS no debe superar nivel 2. Capeamos idx_base en
-    # 'fair' para que max(fair, fair_sat_default) = 'fair' → matriz → nivel ≤ 2.
-    # No aplica a Alpes (guard de región) ni cuando hay trigger activo.
+    # FIX-CR17A-ATENUACION (v7.0): sustituye el cap duro de v17.0 por atenuación de 1 paso.
+    # La estabilidad PINN es riesgo POTENCIAL del terreno. Sin trigger ni ventanas críticas,
+    # atenuar para evitar inflar el peligro en calma, pero sin ignorar capas débiles
+    # estructurales (Müller 2025 §3.1, Statham 2018 §4).
+    # Reglas:
+    #   very_poor → poor  (siempre, 1 paso)
+    #   poor → fair       solo con calma ABSOLUTA (ESTABLE) ≥ 3 días consecutivos
+    #   poor + CICLO_DIURNO_NORMAL → mantener poor (ciclo térmico puede movilizar CWL)
     _region_dom = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
     if (
         _region_dom == "andes_chile"
         and not _factor_activo
         and ventanas_criticas_detectadas == 0
-        and idx_base > 1  # solo si la base es peor que 'fair'
+        and idx_base > 1
     ):
-        logger.info(
-            f"[ClasificarEAWS] FIX-CR17A: Andes sin trigger → estabilidad base capada "
-            f"'fair' (original={escala[idx_base]}, factor={factor_meteorologico}, "
-            f"ventanas={ventanas_criticas_detectadas})"
-        )
-        idx_base = 1  # 'fair'
+        if idx_base == 3:  # very_poor → poor (1 paso)
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR17A-ATENUACION: very_poor→poor "
+                f"(factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
+            )
+            idx_base = 2
+        elif idx_base == 2 and _calma_absoluta and dias_consecutivos_nivel_bajo >= 3:
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR17A-ATENUACION: poor→fair "
+                f"(calma_absoluta, dias_bajo={dias_consecutivos_nivel_bajo})"
+            )
+            idx_base = 1
+        # poor + CICLO_DIURNO_NORMAL o calma < 3 días → mantener poor
+        # → habilita matrix(poor × freq × tamano) → nivel ≥ 3 posible
 
     # Ajuste meteorológico
     ajuste_meteo = _obtener_ajuste_meteorologico(factor_meteorologico)
@@ -546,11 +558,10 @@ def _determinar_estabilidad_dominante(
     else:
         idx_final = idx_base
 
-    # Confirmación de calma sostenida: si ≥ 4 días consecutivos nivel ≤ 2 y sin
-    # factor meteorológico activo, el PINN topográfico puede estar sobreestimando.
-    # Cap en 'fair' (índice 1) para evitar piso artificial en nivel 3.
-    # REQ-06: CICLO_DIURNO_NORMAL es neutro (igual que ESTABLE) para la lógica de calma
-    if dias_consecutivos_nivel_bajo >= 4 and not _factor_activo:
+    # Calma sostenida (ESTABLE ≥ 4 días): cap final en 'fair'.
+    # Solo para factor=ESTABLE/"" — CICLO_DIURNO_NORMAL implica ciclo térmico activo
+    # que puede movilizar CWL; no es calma real (FIX-CR17A-ATENUACION).
+    if dias_consecutivos_nivel_bajo >= 4 and _calma_absoluta:
         idx_final = min(idx_final, 1)  # cap en 'fair'
         logger.info(
             f"[ClasificarEAWS] Calma sostenida confirmada ({dias_consecutivos_nivel_bajo} días "
