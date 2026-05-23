@@ -1,5 +1,35 @@
 # Log de Progreso — snow_alert
 
+## Sesión 2026-05-23 — Reproceso v25 + Ronda 18 + Cierre integración Caro 2026
+
+### Fixes ultrareview aplicados ✅ — commit `22c4926`
+
+6 bugs del análisis multi-agente corregidos: bug_001 (IMIS keys), bug_002 (tools_llamadas solo_s5), bug_004 (hashes prompts), bug_009 (umbral redistribución nieve Alpes 3→8 m/s), bug_015 (calibrador COALESCE), bug_017 (timezone WN2 Europe/Zurich vs America/Santiago).
+
+### VERSION_GLOBAL v22 → v25 + reproceso 120 runs ✅ — commit `1f3850b`
+
+Reproceso completo 120 runs (~6h total, 2 timeouts en 2025-09-05). 118 boletines OK en BigQuery.
+
+### Ronda 18 — Resultados v25
+
+**H3 Suiza** (n=30 DEAPSnow 2018–2020):
+- QWK = **+0.3496** (vs −0.064 en v22) — recuperación gracias a bug_009 y bug_001
+- Accuracy ±1 = **1.000** — todos los errores de 1 nivel máximo
+- Objetivo propio ≥0.35: ✅ (rozando). Objetivo Techel ≥0.59: ❌ (gap estructural)
+
+**H4 La Parva Snowlab** (n=87 pares):
+- QWK = **−0.080** (vs 0.003 en v22) — regresión por eliminación de bug de viento que accidentalmente beneficiaba
+- MAE tormentas = 2.417 — FIX-STORM-EXTREME no activa en datos históricos (ERA5 muestra 0mm, WN2/satélite no disponibles para fechas pasadas)
+- Brecha metodológica documentada en `docs/validacion/ronda18_v25_resultados.md`
+
+### Integración Caro 2026 cerrada ✅
+
+- Rol final: exclusivamente validación offline. Datos SD observado NO son input del modelo predictivo.
+- `docs/validacion/validacion_caro2026_andesai.md`: sección §9 Estado integración + tabla artefactos.
+- `docs/validacion/ronda18_v25_resultados.md`: diagnóstico completo ronda 18.
+
+---
+
 ## Sesión 2026-05-22 — FIX-SAT-STORM v23 + FIX-WN2-PINN v24 + FIX-STORM-EXTREME v25 + Validación Caro 2026
 
 ### FIX-SAT-STORM (v23.0) ✅ — commit `52a61d0`

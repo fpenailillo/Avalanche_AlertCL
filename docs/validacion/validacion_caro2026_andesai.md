@@ -298,7 +298,54 @@ no de incorporar observaciones de estaciones que no estarán disponibles en prod
 
 ---
 
-## 9. Referencias
+## 9. Estado de integración — CERRADA
+
+**Fecha de cierre:** 2026-05-23  
+**Estado:** ✅ Integración completa y cerrada.
+
+### Artefactos entregados
+
+| Artefacto | Path | Estado |
+|---|---|---|
+| Tabla BQ | `climas-chileno.clima.snow_depth_caro_2026` | ✅ 106 360 filas (13 Maipo + 7 Elqui) |
+| Módulo QC | `datos/qc/snow_depth_qc.py` | ✅ 94% cobertura, 24 tests |
+| Ingestor | `datos/ingestores/ingestor_caro_2026.py` | ✅ CLI + dry-run |
+| Tests | `agentes/tests/test_snow_depth_qc.py` | ✅ 24 tests |
+| Tests | `agentes/tests/test_ingestor_caro_2026.py` | ✅ 22 tests |
+| Integración BQ | `ConsultorBigQuery.obtener_snow_depth_caro()` | ✅ apply_qc=True |
+| Docs dataset | `docs/datasets/caro_2026.md` | ✅ |
+| Docs QC | `docs/qc/snow_depth_qc.md` | ✅ |
+| Este reporte | `docs/validacion/validacion_caro2026_andesai.md` | ✅ v22–v25 |
+
+### Rol final en AndesAI: exclusivamente validación offline
+
+> **Los datos SD observado de Caro 2026 NO se integran como input del modelo predictivo.**  
+> En producción, las estaciones DGA no estarán disponibles en tiempo real.  
+> Las fuentes operacionales son: **WeatherNext 2 (S3)** y **observaciones satelitales (S2)**.
+
+Usos válidos del dataset:
+1. **Validación offline** de predicciones AndesAI contra SD observado independiente (como en §2–§7).
+2. **PCI de pronósticos WN2** vía `calcular_pci_pronostico()` en `datos/qc/snow_depth_qc.py` (experimental).
+3. **Análisis SD–elevación** para recalibrar gradientes en S1 (pendiente, fuera de alcance de este REQ).
+
+No integrar: API DGA en tiempo real, datos Caro en el pipeline operacional, HN3d observado como input de S5.
+
+### Resultado de validación v25 (ronda 18, 2026-05-23)
+
+La validación retroactiva completa (120 runs, 118 OK) con AndesAI v25.0 mostró:
+
+| Hipótesis | Métrica | Resultado | Limitación |
+|---|---|---|---|
+| H3 Suiza | QWK = 0.3496 | ✅ ≥ 0.35 (rozando) | n=30, ERA5 valle |
+| H4 La Parva | QWK = −0.080 | ❌ < 0.40 | WN2/satélite no disponible históricamente |
+| H4 tormentas | MAE = 2.417 | ❌ > 1.00 | ERA5 subestima convección andina |
+
+La brecha H4 es estructural al framework de validación histórica (ver `ronda18_v25_resultados.md`).  
+Validación real de v25 pendiente con boletines Snowlab La Parva temporada 2025.
+
+---
+
+## 10. Referencias
 
 - Caro, A. et al. (2026). The Southern Andes Daily Snow Depth Dataset (2010–2024).
   *Earth System Science Data Discussions*, in review. doi:10.5194/essd-2026-324
@@ -307,4 +354,5 @@ no de incorporar observaciones de estaciones que no estarán disponibles en prod
   *Journal of Glaciology*, 63(241), 803–822.
 - Snowlab La Parva (CAA, Domingo Valdivieso Ducci) — ground truth H4 AndesAI.
 - REQ-2026-09: Integración Dataset Caro et al. 2026 en AndesAI.
+- `docs/validacion/ronda18_v25_resultados.md` — métricas completas v25.
 - Ronda 17 resultados v22.0: `docs/validacion/ronda17_v22_resultados.md`.
