@@ -53,9 +53,9 @@ REGISTRO_PROMPTS = {
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
         "variable": "SYSTEM_PROMPT_SATELITAL",
-        "version": "4.0.0",
-        "descripcion": "ViT + estado manto: MODIS LST + ERA5 suelo + SAR humedad superficial (REQ-02a/02b)",
-        "hash_sha256": "be0b1be58880835c",
+        "version": "4.1.0",
+        "descripcion": "v4.1: paso 6 obligatorio analizar_via_earth_ai + sección EARTH AI en salida (FIX-EARTH-AI-PROMPT)",
+        "hash_sha256": "634be38467098522",
     },
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
