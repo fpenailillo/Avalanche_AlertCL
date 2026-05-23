@@ -1,29 +1,31 @@
 """
-Reprocesamiento retroactivo v20.0 — AndesAI
+Reprocesamiento retroactivo v25.1 — AndesAI
 
-v20.0 cambios respecto a v19.0 (baseline FIX-CR19):
-  - v20.0 Fase G: FIX-VAL-FRAMEWORK — cache S1-S4 + --solo-s5 (3.5h → ~4 min).
-  - v20.0 Fase C: FIX-LLM-DETER — temperature=0.0, seed=42 en todos los LLM clients.
-  - v20.0 Fase A: FIX-HN24-PROMO — HN24 → precip_efectiva en Alpes cuando supera ERA5.
-  - v20.0 Fase F: FIX-IMIS-EXT — HS_cm, TA_C, VW_ms, VW_max_ms extraídos de IMIS JSON.
-  - v20.0 Fase B: FIX-HN24-SIZE — graduación tamaño D3/D4/D5 por HN24 en Alpes.
-  - v20.0 Fase E: FIX-CR7A-REFACTOR — compuerta condicional Andes reemplaza bloqueo
-           absoluto CR-7A. Habilita EAWS Paso 1 cuando calma sostenida confirmada.
-  - v20.0 Fase H: FIX-WN2-TRIGGERS — alertas WN2 ensemble → ventanas_criticas
-           deterministas (NEVADA_WN2_CONFIRMADA, PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE).
-           Para fechas históricas WN2 retorna disponible=False (sin efecto).
+v25.1 cambios respecto a v25.0 (baseline FIX-CR17A hard cap):
+  - FIX-CR17A-ATENUACION: reemplaza cap duro v17.0 en tool_clasificar_eaws.py.
+      Antes: poor/very_poor en Andes Chile sin trigger activo → forzado a 'fair' → nivel ≤ 2.
+      Ahora:
+        · very_poor → poor (atenuación 1 paso, siempre)
+        · poor → fair  SOLO con ESTABLE + dias_consecutivos_nivel_bajo ≥ 3
+        · poor + CICLO_DIURNO_NORMAL → mantener poor → habilita poor×some×3 → nivel 3
+  - FIX-CICLO-CALMA: calma sostenida (dias_bajo≥4) activa solo con ESTABLE/"".
+      CICLO_DIURNO_NORMAL no es calma real (ciclo térmico activo puede movilizar CWL).
 
-v19.0 cambios respecto a v18.0 (baseline FIX-CR18):
-  - v19.0: FIX-CR19 — nieve_nueva_cm = HN24_cm en condiciones_actuales.
+Contexto — causa raíz del techo en ≤ 2:
+  H3 (SLF Suiza, n=24): QWK=−0.103 en v25.0. AndesAI predecía 0 veces nivel ≥ 3.
+  H4 (Snowlab La Parva, n=87): QWK=−0.080, sesgo=−0.310. Idem.
+  FIX-CR17A-ATENUACION abre la ruta poor×some×3 → nivel 3 en ~270 días/año en La Parva
+  (CICLO_DIURNO_NORMAL es el factor predominante en condiciones de manto consolidado).
 
-v17.0 cambios respecto a v15.5 (baseline post-revert):
-  - v17.0: FIX-CR17A — cap estabilidad base en 'fair' en Andes Chile cuando
-           factor_meteorologico es neutro (CICLO_DIURNO_NORMAL/ESTABLE) y
-           ventanas_criticas=0. El PINN siempre reporta 'poor' en La Parva
-           (terreno potencial), pero sin trigger activo la estabilidad efectiva
-           debe ser 'fair' → matriz EAWS ≤ nivel 2. No aplica a Alpes.
+v25.0 cambios respecto a v19.0 (referencia histórica):
+  - FIX-WN2-TRIGGERS: alertas WN2 ensemble → ventanas deterministas.
+  - FIX-HN24-PROMO / FIX-HN24-SIZE: tamaño graduado por HN24 en Alpes.
+  - FIX-CR7A-REFACTOR: compuerta condicional Andes (reemplaza bloqueo absoluto CR-7A).
+  - FIX-LLM-DETER: temperature=0.0, seed=42.
+  - FIX-VAL-FRAMEWORK: cache S1-S4 + --solo-s5 (3.5h → ~4 min).
 
-La Parva (H4): sin IMIS ni WN2 histórico → mejoras provienen de FIX-CR17A y FIX-CR7A-REFACTOR.
+La Parva (H4): sin IMIS ni WN2 histórico → mejora proviene de FIX-CR17A-ATENUACION.
+Suiza (H3): requiere reproceso completo (ERA5 + IMIS + embeddings S2) para ver delta real.
 
 Prerequisito (solo Suiza): ejecutar antes de este script:
     python agentes/datos/backfill/cargar_imis_condiciones_actuales.py
@@ -34,13 +36,16 @@ leer la cadena de predicciones anteriores al evaluar calma sostenida.
 Fechas procesadas:
   H1/H3 Suiza : 3 estaciones × 10 fechas = 30 runs
   H4 Snowlab  : 3 sectores   × 30 fechas = 90 runs
-  Total       : 120 runs × ~100s ≈ 3.5 horas
+  Total       : 120 runs × ~100s ≈ 3.5 horas (completo)
+               120 runs ×   ~3s ≈ 6 min  (--solo-s5 con cache previo)
 
 Uso:
     python notebooks_validacion/reprocesar_retroactivo.py
     python notebooks_validacion/reprocesar_retroactivo.py --solo-suiza
     python notebooks_validacion/reprocesar_retroactivo.py --solo-snowlab
     python notebooks_validacion/reprocesar_retroactivo.py --dry-run
+    python notebooks_validacion/reprocesar_retroactivo.py --generar-cache --cache-dir /tmp/cache_v25
+    python notebooks_validacion/reprocesar_retroactivo.py --solo-s5 --cache-dir /tmp/cache_v25
 """
 
 import argparse
@@ -145,13 +150,13 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v25 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.1 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v25')
+          AND STARTS_WITH(version_prompts, 'v25.1')
     """
     job = cliente.query(
         q,
@@ -203,7 +208,7 @@ def ejecutar_replay(
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v20.0 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v25.1 — {total} ejecuciones")
     print(f"Modo: {modo}")
     print(f"Estimado: ~{round(total * est_seg / 60)} min ({round(total * est_seg / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
@@ -229,7 +234,7 @@ def ejecutar_replay(
                 continue
         else:
             if ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v25) — {ubicacion} {fecha_str}")
+                logger.info(f"{prefijo} SKIP (ya v25.1) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -311,17 +316,18 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v25.0:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25")
-        print("\nObjetivos v25.0 (FIX-STORM-EXTREME + FIX-SAT-STORM + FIX-WN2-PINN + ultrareview fixes):")
-        print("  H3 QWK Suiza:    ≥ 0.350 (v22: ronda 17)")
-        print("  H4 QWK La Parva: ≥ 0.500 (v22 local demo: +0.687 QWK sobre v22)")
-        print("  H4 sesgo:        ≤ +0.200 (demo: −0.14 sesgo)")
+        print("\nPróximo paso — Validación v25.1:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.1 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.1")
+        print("\nObjetivos v25.1 (FIX-CR17A-ATENUACION):")
+        print("  H4 QWK La Parva: ≥ 0.200 (baseline v25.0: −0.080; cap eliminado)")
+        print("  H4 sesgo:        ≥ −0.200 (baseline v25.0: −0.310)")
+        print("  H4 MAE tormentas (GT≥3): ≤ 1.00 (baseline v25.0: 2.417)")
+        print("  H3 QWK Suiza:    > −0.103 (baseline v25.0; requiere boletines Suiza v25.1)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v20.0")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.1 (FIX-CR17A-ATENUACION)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",

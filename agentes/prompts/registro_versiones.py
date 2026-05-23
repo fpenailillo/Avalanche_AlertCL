@@ -144,7 +144,14 @@ REGISTRO_PROMPTS = {
 #     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
 #   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
 #     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
-VERSION_GLOBAL = "25.0"
+#
+# v25.1 (FIX-CR17A-ATENUACION):
+#   FIX-CR17A-ATENUACION: reemplaza cap duro v17.0 en Andes Chile por atenuación graduada.
+#     very_poor→poor (1 paso); poor→fair solo con ESTABLE + dias_bajo≥3 (calma absoluta).
+#     poor + CICLO_DIURNO_NORMAL → mantener poor → habilita poor×some×3 → nivel 3.
+#   FIX-CICLO-CALMA: separa CICLO_DIURNO_NORMAL de ESTABLE en calma sostenida (dias_bajo≥4).
+#     Activa calma sostenida solo con ESTABLE/""; ciclo térmico activo no es calma real.
+VERSION_GLOBAL = "25.1"
 
 
 def _calcular_hash(contenido: str) -> str:
