@@ -471,13 +471,16 @@ class ConsultorBigQuery:
             temp_min_72h = min(temperaturas) if temperaturas else None
             temp_max_72h = max(temperaturas) if temperaturas else None
             precip_total_acumulada_mm = sum(precipitaciones) if precipitaciones else 0
-            viento_max_ms = max(vientos) if vientos else None
+            # FIX-WIND-PRONOSTICO: pronostico_horas.velocidad_viento está en km/h
+            # (Google Weather API METRIC mode). Convertir a m/s análogo a condiciones_actuales:222.
+            _viento_max_kmh = max(vientos) if vientos else None
+            viento_max_ms = round(_viento_max_kmh / 3.6, 2) if _viento_max_kmh is not None else None
 
             # Hora de viento máximo
             hora_viento_max = None
-            if vientos and viento_max_ms is not None:
+            if vientos and _viento_max_kmh is not None:
                 for f in todas_filas:
-                    if f.get("velocidad_viento") == viento_max_ms:
+                    if f.get("velocidad_viento") == _viento_max_kmh:
                         if f.get("hora_inicio") and hasattr(f["hora_inicio"], "isoformat"):
                             hora_viento_max = f["hora_inicio"].isoformat()
                         elif f.get("hora_inicio"):

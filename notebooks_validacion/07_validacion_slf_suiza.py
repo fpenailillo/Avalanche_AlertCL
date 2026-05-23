@@ -415,8 +415,8 @@ def main():
     )
     parser.add_argument("--verbose", action="store_true", help="Logging detallado")
     parser.add_argument(
-        "--version", default="v6",
-        help="Prefijo de version_prompts a evaluar (default: v6)"
+        "--version", default="v13",
+        help="Prefijo de version_prompts a evaluar (default: v13)"
     )
     parser.add_argument(
         "--imis-gt", action="store_true",
