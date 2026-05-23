@@ -55,7 +55,7 @@ REGISTRO_PROMPTS = {
         "variable": "SYSTEM_PROMPT_SATELITAL",
         "version": "4.1.0",
         "descripcion": "v4.1: paso 6 obligatorio analizar_via_earth_ai + sección EARTH AI en salida (FIX-EARTH-AI-PROMPT)",
-        "hash_sha256": "52150a03875dab15",
+        "hash_sha256": "3bf6c40e5ad4f451",
     },
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
