@@ -208,7 +208,21 @@ REGISTRO_PROMPTS = {
 #   Cambios:
 #     1. tool_calcular_pinn.py: _MIN_NIEVE_CM=5.0 para filtrar ruido p50/p95/3d.
 #     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_p50_ruido_usa_p95_3d (caso real 2024-06-15).
-VERSION_GLOBAL = "25.5"
+#
+# v25.6 (FIX-WN2-LLM-OVERRIDE):
+#   Causa raíz adicional (observada en tracer 2024-06-15 con USE_WEATHERNEXT2=true):
+#     El LLM llama obtener_pronostico_wn2_ventanas (83 ventanas), extrae nieve_24h_cm_p95_corr
+#     y lo pasa como nieve_nueva_cm=4.3 cm al PINN. Como 4.3 != None, la condición
+#     `nieve_nueva_cm is None` era False → fallback 3d nunca se activaba.
+#     Resultado: surcharge=42 N/m², FS=1.81, estado=ESTABLE (igual que sin WN2).
+#   Solución: ampliar condición a `nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM`.
+#     Si el LLM extrae un valor de 24h pequeño (< 5 cm), el fallback lo sobreescribe
+#     con el valor 3d cuando éste tiene señal (>= 5 cm). Si no hay señal >= 5 cm en
+#     ninguna ventana, se mantiene el valor que pasó el LLM (even if small).
+#   Cambios:
+#     1. tool_calcular_pinn.py: condición fallback ampliada a `or nieve_nueva_cm < 5`.
+#     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_llm_valor_pequeno_usa_p95_3d.
+VERSION_GLOBAL = "25.6"
 
 
 def _calcular_hash(contenido: str) -> str:

@@ -154,11 +154,15 @@ def ejecutar_calcular_pinn(
     import math
 
     # ─── FIX-PINN-WN2: fallback determinista WN2 ─────────────────────────────
-    # Si el LLM no consultó obtener_pronostico_wn2_ventanas antes de llamar
-    # esta tool, el PINN lo hace directamente. Garantiza que nieve_nueva_cm
-    # llegue al Mohr-Coulomb incluso cuando Qwen3 omite la llamada explícita.
+    # Si el LLM no consultó obtener_pronostico_wn2_ventanas, o pasó un valor
+    # < _MIN_NIEVE_CM (e.g. p95_24h=4.3 cm en día despejado post-tormenta),
+    # el PINN consulta WN2 directamente y usa el mayor valor significativo
+    # (p50_24h → p95_24h → p95_3d). Garantiza que el surcharge llegue al
+    # Mohr-Coulomb aunque Qwen3 omita la llamada o extraiga solo el 24h.
     _fuente_nieve = None
-    if nieve_nueva_cm is None and nombre_ubicacion and _USE_WEATHERNEXT2:
+    _MIN_NIEVE_CM_FALLBACK = 5.0  # mismo umbral que en la selección interna
+    _nieve_llm = nieve_nueva_cm   # preservar valor del LLM para log
+    if (nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM_FALLBACK) and nombre_ubicacion and _USE_WEATHERNEXT2:
         try:
             from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import (
                 FuenteWeatherNext2,
@@ -210,7 +214,8 @@ def ejecutar_calcular_pinn(
                         logger.info(
                             f"calcular_pinn FIX-PINN-WN2: '{nombre_ubicacion}' "
                             f"{fecha_objetivo} → nieve_nueva_cm={nieve_nueva_cm} cm "
-                            f"(fallback WN2 {fuente_suffix}: p50={val_p50:.1f}, p95={val_p95:.1f}, p95_3d={val_3d:.1f})"
+                            f"(llm={_nieve_llm}, fallback WN2 {fuente_suffix}: "
+                            f"p50={val_p50:.1f}, p95={val_p95:.1f}, p95_3d={val_3d:.1f})"
                         )
         except Exception as _exc_wn2:
             logger.warning(f"calcular_pinn FIX-PINN-WN2: fallback WN2 falló — {_exc_wn2}")

@@ -307,6 +307,59 @@ class TestFallbackWN2Determinista:
             f"Post-tormenta GT=5 (Jun 15 2024) debe ser != ESTABLE, got {res['estado_manto']}"
         )
 
+    @patch.dict(os.environ, {"USE_WEATHERNEXT2": "true"})
+    def test_fallback_wn2_llm_valor_pequeno_usa_p95_3d(self):
+        """FIX-WN2-THRESHOLD: LLM pasa nieve_nueva_cm=4.3 (p95_24h extraído de WN2),
+        el fallback lo detecta como < 5cm y lo sobreescribe con p95_3d=173.6."""
+        from agentes.subagentes.subagente_topografico.tools import tool_calcular_pinn as modulo
+
+        mock_wn2 = {
+            "disponible": True,
+            "diario": {
+                "nieve_24h_cm_p50_corr": 0.13,
+                "nieve_24h_cm_p95_corr": 2.42,
+                "nieve_3d_cm_p95_corr":  173.6,
+                "temp_p50_c": -5.0,
+            },
+            "ventanas": [],
+        }
+        mock_instancia = MagicMock()
+        mock_instancia.obtener_ventanas_6h.return_value = mock_wn2
+        mock_clase = MagicMock(return_value=mock_instancia)
+
+        with patch.object(modulo, "_USE_WEATHERNEXT2", True), \
+             patch(
+                 "agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2.FuenteWeatherNext2",
+                 mock_clase,
+             ), \
+             patch(
+                 "agentes.datos.constantes_zonas.COORDENADAS_ZONAS",
+                 {"La Parva Sector Alto": (-33.55, -70.29)},
+             ), \
+             patch(
+                 "agentes.datos.constantes_zonas.obtener_elevacion_referencia",
+                 return_value=3200,
+             ), \
+             patch(
+                 "agentes.datos.consultor_bigquery.obtener_fecha_referencia_global",
+                 return_value=None,
+             ):
+            # El LLM extrajo p95_24h y lo pasó como nieve_nueva_cm=4.3
+            res = modulo.ejecutar_calcular_pinn(
+                **PINN_BASE_KWARGS,
+                nieve_nueva_cm=4.3,
+                nombre_ubicacion="La Parva Sector Alto",
+                fecha_objetivo="2024-06-15",
+            )
+
+        # 4.3 < 5 → fallback activa; 3d=173.6 >= 5 → sobreescribe
+        assert res["metricas_fisicas"]["nieve_nueva_cm"] == 173.6, (
+            f"LLM pasó 4.3 (<5 cm umbral), fallback debe sobreescribir con 3d=173.6, "
+            f"got {res['metricas_fisicas']['nieve_nueva_cm']}"
+        )
+        assert res["metricas_fisicas"]["fuente_nieve_nueva"] == "wn2_fallback_determinista_p95_3d"
+        assert res["estado_manto"] != "ESTABLE"
+
     def test_fallback_sin_wn2_env_no_consulta(self):
         """Con USE_WEATHERNEXT2=false, el fallback NO llega a instanciar FuenteWeatherNext2."""
         from agentes.subagentes.subagente_topografico.tools import tool_calcular_pinn as modulo

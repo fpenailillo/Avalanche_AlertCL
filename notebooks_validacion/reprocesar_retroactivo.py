@@ -1,7 +1,7 @@
 """
-Reprocesamiento retroactivo v25.5 — AndesAI
+Reprocesamiento retroactivo v25.6 — AndesAI
 
-v25.5 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
+v25.6 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
   - FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
       Causa raíz: TOOL_PRONOSTICO_WN2_VENTANAS no estaba registrada en S1.
       Ahora: S1 puede llamar WN2 → nieve_nueva_cm → surcharge Mohr-Coulomb →
@@ -148,7 +148,7 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v25.2, v25.3, v25.4 o v25.5 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.2–v25.6 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
@@ -157,7 +157,8 @@ def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) ->
           AND (STARTS_WITH(version_prompts, 'v25.2')
             OR STARTS_WITH(version_prompts, 'v25.3')
             OR STARTS_WITH(version_prompts, 'v25.4')
-            OR STARTS_WITH(version_prompts, 'v25.5'))
+            OR STARTS_WITH(version_prompts, 'v25.5')
+            OR STARTS_WITH(version_prompts, 'v25.6'))
     """
     job = cliente.query(
         q,
@@ -222,7 +223,7 @@ def ejecutar_replay(
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v25.5 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v25.6 — {total} ejecuciones")
     if fechas_filtro:
         print(f"Filtro fechas: {fechas_filtro}")
     print(f"Modo: {modo}")
@@ -250,7 +251,7 @@ def ejecutar_replay(
                 continue
         else:
             if not force and ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v25.5) — {ubicacion} {fecha_str}")
+                logger.info(f"{prefijo} SKIP (ya v25.6) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -332,10 +333,10 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v25.5:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.5 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.5")
-        print("\nObjetivos v25.5 (FIX-WN2-THRESHOLD):")
+        print("\nPróximo paso — Validación v25.6:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.6 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.6")
+        print("\nObjetivos v25.6 (FIX-WN2-LLM-OVERRIDE):")
         print("  H4 QWK La Parva: ≥ 0.100 (baseline v25.1: +0.008)")
         print("  H4 MAE tormentas (GT≥3): ≤ 1.50 (baseline v25.1: 2.000)")
         print("  H4 boletines nivel ≥3: ≥ 6 (baseline v25.1: 0)")
@@ -343,7 +344,7 @@ def ejecutar_replay(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.5 (FIX-WN2-THRESHOLD)")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.6 (FIX-WN2-LLM-OVERRIDE)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
