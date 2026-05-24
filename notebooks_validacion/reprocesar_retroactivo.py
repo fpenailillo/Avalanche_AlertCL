@@ -1,15 +1,13 @@
 """
-Reprocesamiento retroactivo v25.1 — AndesAI
+Reprocesamiento retroactivo v25.2 — AndesAI
 
-v25.1 cambios respecto a v25.0 (baseline FIX-CR17A hard cap):
-  - FIX-CR17A-ATENUACION: reemplaza cap duro v17.0 en tool_clasificar_eaws.py.
-      Antes: poor/very_poor en Andes Chile sin trigger activo → forzado a 'fair' → nivel ≤ 2.
-      Ahora:
-        · very_poor → poor (atenuación 1 paso, siempre)
-        · poor → fair  SOLO con ESTABLE + dias_consecutivos_nivel_bajo ≥ 3
-        · poor + CICLO_DIURNO_NORMAL → mantener poor → habilita poor×some×3 → nivel 3
-  - FIX-CICLO-CALMA: calma sostenida (dias_bajo≥4) activa solo con ESTABLE/"".
-      CICLO_DIURNO_NORMAL no es calma real (ciclo térmico activo puede movilizar CWL).
+v25.2 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
+  - FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
+      Causa raíz: TOOL_PRONOSTICO_WN2_VENTANAS no estaba registrada en S1.
+      Ahora: S1 puede llamar WN2 → nieve_nueva_cm → surcharge Mohr-Coulomb →
+      factor_seguridad < 1.5 → estado MARGINAL/INESTABLE → estabilidad poor/very_poor →
+      guard idx_base > 1 en FIX-CR17A-ATENUACION → nivel EAWS ≥3.
+      Además: fallback determinista en calcular_pinn garantiza WN2 aunque el LLM lo omita.
 
 Contexto — causa raíz del techo en ≤ 2:
   H3 (SLF Suiza, n=24): QWK=−0.103 en v25.0. AndesAI predecía 0 veces nivel ≥ 3.
@@ -150,13 +148,13 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v25.1 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.2 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v25.1')
+          AND STARTS_WITH(version_prompts, 'v25.2')
     """
     job = cliente.query(
         q,
@@ -168,10 +166,18 @@ def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) ->
     return list(job.result())[0]["n"] > 0
 
 
-def construir_lista_runs(solo_suiza: bool, solo_snowlab: bool) -> list[tuple[str, str]]:
+def construir_lista_runs(
+    solo_suiza: bool,
+    solo_snowlab: bool,
+    fechas_filtro: list[str] | None = None,
+) -> list[tuple[str, str]]:
     """
     Construye la lista de (ubicacion, fecha_str) a procesar, ordenada
     cronológicamente para que REQ-01 pueda leer la cadena de predicciones anteriores.
+
+    Args:
+        fechas_filtro: si se provee, solo incluye runs cuya fecha_str esté en esta lista.
+                       Útil para reproceso focalizado (ej. 6 fechas GT≥3 de Snowlab).
     """
     runs: list[tuple[str, str]] = []
 
@@ -185,6 +191,9 @@ def construir_lista_runs(solo_suiza: bool, solo_snowlab: bool) -> list[tuple[str
             for sector in SECTORES_LAPARVA:
                 runs.append((sector, fecha))
 
+    if fechas_filtro:
+        runs = [(u, f) for u, f in runs if f in fechas_filtro]
+
     # Ordenar cronológicamente (por fecha, luego por ubicacion)
     runs.sort(key=lambda x: (x[1], x[0]))
     return runs
@@ -197,18 +206,21 @@ def ejecutar_replay(
     cache_dir: str | None = None,
     solo_s5: bool = False,
     generar_cache: bool = False,
+    fechas_filtro: list[str] | None = None,
 ) -> None:
     from agentes.validacion.cache_subagentes import existe_cache
 
     cliente = bigquery.Client(project=GCP_PROJECT)
 
-    runs = construir_lista_runs(solo_suiza, solo_snowlab)
+    runs = construir_lista_runs(solo_suiza, solo_snowlab, fechas_filtro)
     total = len(runs)
 
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v25.1 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v25.2 — {total} ejecuciones")
+    if fechas_filtro:
+        print(f"Filtro fechas: {fechas_filtro}")
     print(f"Modo: {modo}")
     print(f"Estimado: ~{round(total * est_seg / 60)} min ({round(total * est_seg / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
@@ -234,7 +246,7 @@ def ejecutar_replay(
                 continue
         else:
             if ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v25.1) — {ubicacion} {fecha_str}")
+                logger.info(f"{prefijo} SKIP (ya v25.2) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -316,18 +328,18 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v25.1:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.1 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.1")
-        print("\nObjetivos v25.1 (FIX-CR17A-ATENUACION):")
-        print("  H4 QWK La Parva: ≥ 0.200 (baseline v25.0: −0.080; cap eliminado)")
-        print("  H4 sesgo:        ≥ −0.200 (baseline v25.0: −0.310)")
-        print("  H4 MAE tormentas (GT≥3): ≤ 1.00 (baseline v25.0: 2.417)")
-        print("  H3 QWK Suiza:    > −0.103 (baseline v25.0; requiere boletines Suiza v25.1)")
+        print("\nPróximo paso — Validación v25.2:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.2 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.2")
+        print("\nObjetivos v25.2 (FIX-PINN-WN2):")
+        print("  H4 QWK La Parva: ≥ 0.100 (baseline v25.1: +0.008)")
+        print("  H4 MAE tormentas (GT≥3): ≤ 1.50 (baseline v25.1: 2.000)")
+        print("  H4 boletines nivel ≥3: ≥ 6 (baseline v25.1: 0)")
+        print("  factor_seguridad_pinn: CV > 0.05 por sector (baseline: constante)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.1 (FIX-CR17A-ATENUACION)")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.2 (FIX-PINN-WN2)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
@@ -344,6 +356,9 @@ def main():
     parser.add_argument("--generar-cache", action="store_true",
                         help="Ejecutar pipeline completo y guardar S1-S4 en --cache-dir "
                              "para uso posterior con --solo-s5. Requiere --cache-dir.")
+    parser.add_argument("--fechas", nargs="+", default=None,
+                        help="Filtrar por fechas específicas YYYY-MM-DD (ej. --fechas 2024-06-15 2024-06-21). "
+                             "Útil para reproceso focalizado en las 6 fechas GT≥3 de Snowlab antes del batch completo.")
     args = parser.parse_args()
 
     if (args.solo_s5 or args.generar_cache) and not args.cache_dir:
@@ -359,6 +374,7 @@ def main():
         cache_dir=args.cache_dir,
         solo_s5=args.solo_s5,
         generar_cache=args.generar_cache,
+        fechas_filtro=args.fechas,
     )
 
 

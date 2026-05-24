@@ -116,7 +116,7 @@ MAPA_SECTOR = {
 }
 
 
-def cargar_datos(cliente, version: str = "v25.1"):
+def cargar_datos(cliente, version: str = "v25.2"):
     job_config = bigquery.QueryJobConfig(query_parameters=[
         bigquery.ScalarQueryParameter("version", "STRING", version),
     ])
@@ -322,8 +322,8 @@ def main():
                         help="'banda' usa el nivel por elevación; 'max' usa nivel_max global")
     parser.add_argument("--exportar", type=str, default=None,
                         help="Ruta CSV para exportar los pares (ej. /tmp/pares_h4.csv)")
-    parser.add_argument("--version", default="v25.1",
-                        help="Prefijo de version_prompts a evaluar (default: v25.1)")
+    parser.add_argument("--version", default="v25.2",
+                        help="Prefijo de version_prompts a evaluar (default: v25.2)")
     args = parser.parse_args()
 
     cliente = bigquery.Client(project=GCP_PROJECT)

@@ -46,8 +46,8 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "7.5.0",
-        "descripcion": "v7.5: eliminados triggers meteo de S1 (S1 no tiene datos meteo); S5 determina EAWS Paso 1",
+        "version": "8.0.0",
+        "descripcion": "v8.0: FIX-PINN-WN2 — WN2 OBLIGATORIO en S1; pasa nombre_ubicacion+fecha_objetivo a calcular_pinn",
         "hash_sha256": "537ff36ba4602bcc",
     },
     "satelital": {
@@ -151,7 +151,23 @@ REGISTRO_PROMPTS = {
 #     poor + CICLO_DIURNO_NORMAL → mantener poor → habilita poor×some×3 → nivel 3.
 #   FIX-CICLO-CALMA: separa CICLO_DIURNO_NORMAL de ESTABLE en calma sostenida (dias_bajo≥4).
 #     Activa calma sostenida solo con ESTABLE/""; ciclo térmico activo no es calma real.
-VERSION_GLOBAL = "25.1"
+#   Resultado validación H4 v25.1 (n=87): QWK=+0.008 (+0.088 vs v25.0). Techo ≤2 persiste.
+#   Causa raíz: PINN retornaba FS constante por sector (sin WN2). FIX-CR17A sin efecto.
+#
+# v25.2 (FIX-PINN-WN2):
+#   FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
+#     Causa raíz identificada con datos BQ (17 boletines v25.1 La Parva GT≥3):
+#     TOOL_PRONOSTICO_WN2_VENTANAS solo estaba registrada en S3, no en S1.
+#     Qwen3 no podía invocarla desde S1 aunque el prompt lo indicara.
+#     WN2 ensemble tiene señal retroactiva para todas las fechas GT≥3
+#     (prec_6h_max 10-41 mm, confirmado query BQ weathernext_2_0_0).
+#   Cambios:
+#     1. subagente_topografico/agente.py: registra TOOL_PRONOSTICO_WN2_VENTANAS en S1.
+#     2. tool_calcular_pinn.py: fallback determinista — si nieve_nueva_cm no viene del LLM
+#        y USE_WEATHERNEXT2=true y nombre_ubicacion provisto, consulta WN2 directamente.
+#        Acepta nombre_ubicacion + fecha_objetivo como params opcionales del schema.
+#     3. subagente_topografico/prompts.py: cambia "opcionalmente" → "OBLIGATORIO".
+VERSION_GLOBAL = "25.2"
 
 
 def _calcular_hash(contenido: str) -> str:

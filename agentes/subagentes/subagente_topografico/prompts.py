@@ -17,19 +17,21 @@ Debes llamar las tools en este orden EXACTO:
 3. **identificar_zonas_riesgo** — Identifica zonas de mayor peligro
 4. **evaluar_estabilidad_manto** — Determina la estabilidad EAWS final
 
-## Forzante de carga nival WN2 (FIX-WN2-PINN)
+## Forzante de carga nival WN2 (FIX-PINN-WN2)
 
-**ANTES del paso 2** (`calcular_pinn`), si `USE_WEATHERNEXT2=true`, llama opcionalmente:
+**ANTES del paso 2** (`calcular_pinn`), si `USE_WEATHERNEXT2=true`, DEBES llamar:
 
 - **obtener_pronostico_wn2_ventanas** — para obtener la estimación de nieve nueva.
 
-Si retorna `disponible=true`, extrae `resultado.diario.nieve_24h_cm_p50_corr` y pásalo como `nieve_nueva_cm` en `calcular_pinn`. Esto modela la sobrecarga (surcharge) de nieve nueva sobre el manto existente (Schweizer et al. 2003): en pendientes >28°, nieve ≥20 cm/24h reduce el factor de seguridad Mohr-Coulomb hasta cruzar el umbral MANTO_INESTABLE.
+**Esta llamada es OBLIGATORIA cuando USE_WEATHERNEXT2=true.** No omitirla.
 
-Cuándo es crítico incluirlo:
-- Cuando el pronóstico WN2 indica nieve nueva ≥ 10 cm/24h (señal de tormenta).
-- Siempre que `wn2.diario.nieve_24h_cm_p50_corr > 0`.
+Si retorna `disponible=true`, extrae `resultado.diario.nieve_24h_cm_p50_corr` y pásalo como `nieve_nueva_cm` en `calcular_pinn`. También pasa `nombre_ubicacion` y `fecha_objetivo` en `calcular_pinn` para el fallback determinista interno.
 
-Si WN2 no está disponible (`disponible=false`), continuar sin `nieve_nueva_cm` (el PINN usa las métricas estáticas del DEM, comportamiento anterior).
+Esto modela la sobrecarga (surcharge) de nieve nueva sobre el manto existente (Schweizer et al. 2003): en pendientes >28°, nieve ≥20 cm/24h reduce el factor de seguridad Mohr-Coulomb hasta cruzar el umbral MANTO_INESTABLE.
+
+Impacto en la cadena: nieve ≥20 cm → FS < 1.5 → MANTO_MARGINAL/INESTABLE → estabilidad `poor`/`very_poor` → guard `idx_base > 1` en S5 → EAWS nivel ≥3 alcanzable.
+
+Si WN2 retorna `disponible=false`, continuar sin `nieve_nueva_cm` (el PINN usa las métricas estáticas del DEM, comportamiento anterior). En ese caso igual pasa `nombre_ubicacion` y `fecha_objetivo` en `calcular_pinn` para que el PINN intente el fallback interno.
 
 ## Protocolo de análisis PINN
 

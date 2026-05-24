@@ -11,6 +11,12 @@ El PINN resuelve:
     - Balance energético de la interfaz nieve-suelo
 """
 
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+_USE_WEATHERNEXT2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
+
 
 TOOL_CALCULAR_PINN = {
     "name": "calcular_pinn",
@@ -73,6 +79,19 @@ TOOL_CALCULAR_PINN = {
                                "Añade sobrecarga (surcharge) al manto existente: incrementa tensión "
                                "de cizalle en pendientes >28° → reduce FS. En tormentas de ≥20 cm/24h, "
                                "puede empujar el estado de MANTO_MARGINAL a MANTO_INESTABLE."
+            },
+            "nombre_ubicacion": {
+                "type": "string",
+                "description": "(FIX-PINN-WN2) Nombre exacto de la ubicación (ej. 'La Parva Sector Alto'). "
+                               "Requerido para el fallback determinista WN2: si nieve_nueva_cm no fue "
+                               "obtenido previamente, el PINN lo consulta directamente. Pasar siempre "
+                               "que USE_WEATHERNEXT2=true."
+            },
+            "fecha_objetivo": {
+                "type": "string",
+                "description": "(FIX-PINN-WN2) Fecha ISO YYYY-MM-DD del análisis (ej. '2024-06-15'). "
+                               "Permite consultar WN2 retroactivo para esa fecha. Si se omite, "
+                               "se usa la fecha de referencia global del sistema."
             }
         },
         "required": [
@@ -97,6 +116,8 @@ def ejecutar_calcular_pinn(
     curvatura_vertical: float = None,
     drift_embedding_ae: float = None,
     nieve_nueva_cm: float = None,
+    nombre_ubicacion: str = None,
+    fecha_objetivo: str = None,
 ) -> dict:
     """
     Ejecuta el modelo PINN de manto nival.
@@ -123,11 +144,56 @@ def ejecutar_calcular_pinn(
         curvatura_vertical: (TAGEE/GLO-30) curvatura vertical promedio
         drift_embedding_ae: (AlphaEarth) drift máximo interanual del embedding
         nieve_nueva_cm: (WN2) nieve nueva 24h en cm — sobrecarga sobre manto existente
+        nombre_ubicacion: (FIX-PINN-WN2) nombre exacto de la zona para fallback WN2
+        fecha_objetivo: (FIX-PINN-WN2) fecha ISO YYYY-MM-DD para consulta WN2 retroactiva
 
     Returns:
         dict con estado del manto, factor de seguridad y riesgo de falla
     """
     import math
+
+    # ─── FIX-PINN-WN2: fallback determinista WN2 ─────────────────────────────
+    # Si el LLM no consultó obtener_pronostico_wn2_ventanas antes de llamar
+    # esta tool, el PINN lo hace directamente. Garantiza que nieve_nueva_cm
+    # llegue al Mohr-Coulomb incluso cuando Qwen3 omite la llamada explícita.
+    _fuente_nieve = None
+    if nieve_nueva_cm is None and nombre_ubicacion and _USE_WEATHERNEXT2:
+        try:
+            from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import (
+                FuenteWeatherNext2,
+            )
+            from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+
+            if fecha_objetivo is None:
+                fecha_ref = obtener_fecha_referencia_global()
+                if fecha_ref is not None:
+                    fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
+
+            coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
+            if coords and fecha_objetivo:
+                lat, lon = coords
+                elev = obtener_elevacion_referencia(nombre_ubicacion)
+                fuente = FuenteWeatherNext2()
+                res_wn2 = fuente.obtener_ventanas_6h(
+                    zona=nombre_ubicacion,
+                    lat=lat,
+                    lon=lon,
+                    fecha_objetivo=fecha_objetivo,
+                    elevacion_m=elev,
+                )
+                if res_wn2.get("disponible") and res_wn2.get("diario"):
+                    val = res_wn2["diario"].get("nieve_24h_cm_p50_corr")
+                    if val is not None and val > 0:
+                        nieve_nueva_cm = float(val)
+                        _fuente_nieve = "wn2_fallback_determinista"
+                        logger.info(
+                            f"calcular_pinn FIX-PINN-WN2: '{nombre_ubicacion}' "
+                            f"{fecha_objetivo} → nieve_nueva_cm={nieve_nueva_cm} cm "
+                            f"(fallback WN2 automático)"
+                        )
+        except Exception as _exc_wn2:
+            logger.warning(f"calcular_pinn FIX-PINN-WN2: fallback WN2 falló — {_exc_wn2}")
 
     # ─── 1. Difusividad térmica de la nieve ──────────────────────────────────
     # k_neve = 2.9e-6 * (densidad/917)^2  [m²/s]  (Sturm et al.)
@@ -253,6 +319,7 @@ def ejecutar_calcular_pinn(
             "factor_temperatura": round(factor_temp, 2),
             "nieve_nueva_cm": nieve_nueva_cm,
             "peso_surcharge_N_m2": round(peso_surcharge, 1),
+            "fuente_nieve_nueva": _fuente_nieve,
         },
         "interpretacion": estado_manto["interpretacion"],
         "alertas_pinn": estado_manto["alertas"]
