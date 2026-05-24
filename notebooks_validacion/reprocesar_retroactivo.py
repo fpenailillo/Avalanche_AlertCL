@@ -1,7 +1,7 @@
 """
-Reprocesamiento retroactivo v25.2 — AndesAI
+Reprocesamiento retroactivo v25.5 — AndesAI
 
-v25.2 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
+v25.5 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
   - FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
       Causa raíz: TOOL_PRONOSTICO_WN2_VENTANAS no estaba registrada en S1.
       Ahora: S1 puede llamar WN2 → nieve_nueva_cm → surcharge Mohr-Coulomb →
@@ -148,13 +148,16 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v25.2 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.2, v25.3, v25.4 o v25.5 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v25.2')
+          AND (STARTS_WITH(version_prompts, 'v25.2')
+            OR STARTS_WITH(version_prompts, 'v25.3')
+            OR STARTS_WITH(version_prompts, 'v25.4')
+            OR STARTS_WITH(version_prompts, 'v25.5'))
     """
     job = cliente.query(
         q,
@@ -207,6 +210,7 @@ def ejecutar_replay(
     solo_s5: bool = False,
     generar_cache: bool = False,
     fechas_filtro: list[str] | None = None,
+    force: bool = False,
 ) -> None:
     from agentes.validacion.cache_subagentes import existe_cache
 
@@ -218,7 +222,7 @@ def ejecutar_replay(
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v25.2 — {total} ejecuciones")
+    print(f"REPROCESAMIENTO RETROACTIVO v25.5 — {total} ejecuciones")
     if fechas_filtro:
         print(f"Filtro fechas: {fechas_filtro}")
     print(f"Modo: {modo}")
@@ -245,8 +249,8 @@ def ejecutar_replay(
                 skip += 1
                 continue
         else:
-            if ya_procesado_v6(cliente, ubicacion, fecha_str):
-                logger.info(f"{prefijo} SKIP (ya v25.2) — {ubicacion} {fecha_str}")
+            if not force and ya_procesado_v6(cliente, ubicacion, fecha_str):
+                logger.info(f"{prefijo} SKIP (ya v25.5) — {ubicacion} {fecha_str}")
                 skip += 1
                 continue
 
@@ -328,10 +332,10 @@ def ejecutar_replay(
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Validación v25.2:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.2 --imis-gt")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.2")
-        print("\nObjetivos v25.2 (FIX-PINN-WN2):")
+        print("\nPróximo paso — Validación v25.5:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.5 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.5")
+        print("\nObjetivos v25.5 (FIX-WN2-THRESHOLD):")
         print("  H4 QWK La Parva: ≥ 0.100 (baseline v25.1: +0.008)")
         print("  H4 MAE tormentas (GT≥3): ≤ 1.50 (baseline v25.1: 2.000)")
         print("  H4 boletines nivel ≥3: ≥ 6 (baseline v25.1: 0)")
@@ -339,7 +343,7 @@ def ejecutar_replay(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.2 (FIX-PINN-WN2)")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.5 (FIX-WN2-THRESHOLD)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
@@ -359,6 +363,9 @@ def main():
     parser.add_argument("--fechas", nargs="+", default=None,
                         help="Filtrar por fechas específicas YYYY-MM-DD (ej. --fechas 2024-06-15 2024-06-21). "
                              "Útil para reproceso focalizado en las 6 fechas GT≥3 de Snowlab antes del batch completo.")
+    parser.add_argument("--force", action="store_true",
+                        help="Forzar reproceso incluso si ya existe v25.x en BQ (sobreescribe). "
+                             "Útil al corregir bugs entre sub-versiones.")
     args = parser.parse_args()
 
     if (args.solo_s5 or args.generar_cache) and not args.cache_dir:
@@ -375,6 +382,7 @@ def main():
         solo_s5=args.solo_s5,
         generar_cache=args.generar_cache,
         fechas_filtro=args.fechas,
+        force=args.force,
     )
 
 

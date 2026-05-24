@@ -46,9 +46,9 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "8.0.0",
-        "descripcion": "v8.0: FIX-PINN-WN2 — WN2 OBLIGATORIO en S1; pasa nombre_ubicacion+fecha_objetivo a calcular_pinn",
-        "hash_sha256": "537ff36ba4602bcc",
+        "version": "8.1.0",
+        "descripcion": "v8.1: FIX-PINN-WN2-P95 — usar p95 si p50==0 (ensemble disperso en tormentas)",
+        "hash_sha256": "349d8ac7c25bb680",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
@@ -167,7 +167,48 @@ REGISTRO_PROMPTS = {
 #        y USE_WEATHERNEXT2=true y nombre_ubicacion provisto, consulta WN2 directamente.
 #        Acepta nombre_ubicacion + fecha_objetivo como params opcionales del schema.
 #     3. subagente_topografico/prompts.py: cambia "opcionalmente" → "OBLIGATORIO".
-VERSION_GLOBAL = "25.2"
+#
+# v25.3 (FIX-PINN-WN2-P95):
+#   Causa raíz adicional (data-driven, observada en reproceso v25.2):
+#     nieve_24h_cm_p50_corr = 0.0 para todas las fechas GT≥3 — el percentil p50 del
+#     ensemble de 64 miembros WN2 es 0 porque <50% de miembros predicen precipitación
+#     para eventos de tormenta con alta incertidumbre. La señal existe en p95 (10-41 mm).
+#   Cambios:
+#     1. tool_calcular_pinn.py: fallback usa p95 cuando p50==0 y p95>0 (ensemble disperso).
+#        Metodológicamente: p95 = escenario de planificación (tail-risk EAWS).
+#        fuente_nieve_nueva distingue "wn2_fallback_determinista_p50" vs "_p95".
+#     2. subagente_topografico/prompts.py v8.1: instrucción LLM de usar p95 si p50==0.
+#     3. reprocesar_retroactivo.py: añade flag --force para reescribir boletines existentes.
+#
+# v25.4 (FIX-WN2-3D):
+#   Causa raíz confirmada con análisis data-driven (perfil datos + Caro 2026 Río Maipo):
+#     GT=5 (2024-06-15): la tormenta ocurrió jun 12-14 (HN3d=87cm en Farellones DGA 2452m).
+#     El día del boletín (jun 15) no hubo nueva precipitación → p50=0, p95≈0 en WN2.
+#     El peligro persiste por placas de tormenta ya formadas (Schweizer et al. 2003).
+#     WN2 ventana 24h = correcto para el día, pero no captura la carga acumulada del storm.
+#   Solución: ampliar la ventana de consulta WN2 a 3 días previos al boletín (t-2, t-1, t).
+#   El CTE diario_3d (mejor init por ventana via rn=1) suma p95 corr de los 3 días.
+#   El init_date_start se extiende 5 días atrás para que esos runs estén disponibles.
+#   Prioridad fallback en tool_calcular_pinn.py: p50_24h → p95_24h → p95_3d.
+#   Validación oracle (Caro DGA offline): AUC=1.000 para HN3d vs GT≥3 en 14 fechas 2024.
+#   Cambios:
+#     1. fuente_weathernext2.py: CTE diario_3d + param @fecha_obj + init 5d atrás.
+#     2. tool_calcular_pinn.py: prioridad p50→p95→p95_3d; fuente_nieve distingue "p95_3d".
+#
+# v25.5 (FIX-WN2-THRESHOLD):
+#   Causa raíz: WN2 ensemble siempre devuelve nieve_24h_cm_p50_corr > 0 por ruido numérico
+#     (~0.1-0.5 cm), incluso en días completamente despejados. Para 2024-06-15 (GT=5):
+#     p50=0.13 cm (ruido) → condición `val_p50 > 0` TRUE → surcharge=2 N/m² → FS=1.81 (sin cambio).
+#     La ventana 3d (173.6 cm) nunca se evaluaba porque p50>0 siempre.
+#   Solución: umbral mínimo 5 cm (Schweizer 2003: HN24h < 5 cm no genera placas de tormenta).
+#     Condición cambia de `> 0` a `>= 5` para p50 y p95.
+#   Diagnóstico confirmado con query BQ: Jun 13 p95=30-35 cm/slot × 4 slots = señal fuerte.
+#     Con threshold: p50=0.13 < 5 → skip; p95=2.42 < 5 → skip; 3d=173.6 >= 5 → usa 3d.
+#     Resultado esperado: FS=1.566, SURCHARGE_NIEVE_EXTREMA_174cm → riesgo_falla="alto" → INESTABLE.
+#   Cambios:
+#     1. tool_calcular_pinn.py: _MIN_NIEVE_CM=5.0 para filtrar ruido p50/p95/3d.
+#     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_p50_ruido_usa_p95_3d (caso real 2024-06-15).
+VERSION_GLOBAL = "25.5"
 
 
 def _calcular_hash(contenido: str) -> str:
