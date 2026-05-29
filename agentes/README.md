@@ -85,20 +85,21 @@ python agentes/datos/backfill/backfill_clima_historico.py
 
 ```bash
 # Suite completa (sin credenciales externas)
-python -m pytest agentes/tests/ -q
-# → 334 passed, 8 skipped
+python3 -m pytest agentes/tests/ -q
+# → 529 passed, 8 skipped
 
 # Por subagente / requerimiento
-python -m pytest agentes/tests/test_situational_briefing.py -v          # S4 — 20 tests
-python -m pytest agentes/tests/test_weathernext2.py -v                  # S3 WeatherNext 2 — 17 tests
-python -m pytest agentes/tests/test_s1_glo30.py -v                      # S1 GLO-30/TAGEE/AlphaEarth — 23 tests
-python -m pytest agentes/tests/test_s2_earth_ai.py -v                   # S2 Gemini multispectral — 15 tests
-python -m pytest agentes/tests/test_req01_persistencia_temporal.py -v   # REQ-01 calma sostenida — 12 tests
-python -m pytest agentes/tests/test_req02a_estado_manto_gee.py -v       # REQ-02a MODIS LST — 10 tests
-python -m pytest agentes/tests/test_req02b_sar_humedad.py -v            # REQ-02b SAR humedad — 10 tests
-python -m pytest agentes/tests/test_req03_correccion_orografica.py -v   # REQ-03 ERA5 orográfico — 15 tests
-python -m pytest agentes/tests/test_req04_mapeo_slf.py -v               # REQ-04 mapeo SLF — 10 tests
-python -m pytest agentes/tests/test_req05_st_regionstats.py -v          # ST_REGIONSTATS — 19 tests
+python3 -m pytest agentes/tests/test_situational_briefing.py -v          # S4 — 20 tests
+python3 -m pytest agentes/tests/test_weathernext2.py -v                  # S3 WeatherNext 2 — 17 tests
+python3 -m pytest agentes/tests/test_s1_glo30.py -v                      # S1 GLO-30/TAGEE/AlphaEarth — 23 tests
+python3 -m pytest agentes/tests/test_s2_earth_ai.py -v                   # S2 Gemini multispectral — 15 tests
+python3 -m pytest agentes/tests/test_req01_persistencia_temporal.py -v   # REQ-01 calma sostenida — 12 tests
+python3 -m pytest agentes/tests/test_req02a_estado_manto_gee.py -v       # REQ-02a MODIS LST — 10 tests
+python3 -m pytest agentes/tests/test_req02b_sar_humedad.py -v            # REQ-02b SAR humedad — 10 tests
+python3 -m pytest agentes/tests/test_req03_correccion_orografica.py -v   # REQ-03 ERA5 orográfico — 15 tests
+python3 -m pytest agentes/tests/test_req04_mapeo_slf.py -v               # REQ-04 mapeo SLF — 10 tests
+python3 -m pytest agentes/tests/test_req05_st_regionstats.py -v          # ST_REGIONSTATS — 19 tests
+python3 -m pytest agentes/tests/test_fix_pinn_wn2.py -v                  # FIX-PINN-WN2 v25.x — tests de regresión
 
 # Test E2E (requiere ANTHROPIC_API_KEY o Databricks token)
 python -m pytest agentes/tests/test_sistema_completo.py -v -s
@@ -183,7 +184,7 @@ agentes/
 │   └── agente_principal.py            # Coordina S1→S2→S3→S4→S5; manejo de degradación graceful
 │
 ├── prompts/
-│   └── registro_versiones.py          # Hashes SHA-256 de prompts + VERSION_GLOBAL (actualmente v4.0)
+│   └── registro_versiones.py          # Hashes SHA-256 de prompts + VERSION_GLOBAL (actualmente v25.10)
 │
 ├── salidas/
 │   ├── almacenador.py                 # DELETE+INSERT idempotente en BQ; upload GCS
@@ -232,6 +233,8 @@ agentes/
 
 Calcula el factor de seguridad (FS) del manto nival usando PINNs con datos de Copernicus GLO-30 (DEM 30m), atributos TAGEE (curvatura horizontal/vertical, northness/eastness, zonas de convergencia de runout) y embeddings AlphaEarth (64 dimensiones multi-sensor, señal de cambio interanual). Aplica UQ Taylor para IC 95% del FS. El drift interanual de AlphaEarth activa alerta de incertidumbre sin modificar el FS.
 
+El campo `estabilidad_eaws` en el retorno de `tool_calcular_pinn` aplica el mapeo determinista Mohr-Coulomb→EAWS (ESTABLE→`good`, MARGINAL→`fair`, INESTABLE→`poor`, CRITICO→`very_poor`), evitando que el LLM reinterprete el estado del manto (FIX-PINN-EAWS-MAP, v25.9).
+
 ### S2 — Subagente Satelital
 
 Analiza el estado del manto desde tres vías:
@@ -244,7 +247,7 @@ Analiza el estado del manto desde tres vías:
 `ConsolidadorMeteorologico` fusiona tres fuentes con patrón Strategy:
 - **Open-Meteo**: fuente primaria, siempre activa
 - **ERA5-Land**: reanálisis, siempre activo
-- **WeatherNext 2** (flag `USE_WEATHERNEXT2=true`): 64 miembros ensemble vía BigQuery Analytics Hub; calcula P10/P50/P90; detecta divergencias >3°C temperatura o >50% precipitación
+- **WeatherNext 2** (`USE_WEATHERNEXT2=true` en producción): 64 miembros ensemble vía BigQuery Analytics Hub; calcula P10/P50/P90; expone `nieve_3d_cm_p95_corr` (acumulado 3 días); umbrales diferenciados p50≥5 cm / p95≥30 cm / p95_3d≥5 cm (FIX-WN2-P95-THRESHOLD v25.8)
 
 ### S4 — AgenteSituationalBriefing
 
@@ -274,7 +277,7 @@ El integrador determina 3 factores para aplicar la matriz EAWS:
 
 | Variable | Default | Descripción |
 |----------|---------|-------------|
-| `USE_WEATHERNEXT2` | `false` | Activa WeatherNext 2 en S3 |
+| `USE_WEATHERNEXT2` | `true` (prod) | Activa WeatherNext 2 en S3; `true` en Cloud Run Job desde v7.0 |
 | `S2_VIA` | `vit_actual` | Vía satelital S2: `vit_actual`, `ambas_consolidar_vit`, `ambas_consolidar_gemini` |
 | `DATABRICKS_TOKEN` | — | Token Databricks (producción desde Secret Manager) |
 | `ANTHROPIC_API_KEY` | — | API key Anthropic (uso local) |

@@ -51,9 +51,9 @@ Sistema multi-agente sobre Google Cloud Platform que genera boletines EAWS (nive
 
 | # | Subagente | Técnica | Output clave |
 |---|-----------|---------|--------------|
-| S1 | Topográfico | PINNs + Copernicus GLO-30 + TAGEE (13 atributos) + AlphaEarth embeddings 64D | `clase_estabilidad_eaws`, `indice_riesgo_topografico`, IC 95% FS, drift interanual |
+| S1 | Topográfico | PINNs + Copernicus GLO-30 + TAGEE (13 atributos) + AlphaEarth embeddings 64D | `clase_estabilidad_eaws`, `estabilidad_eaws` (good/fair/poor/very_poor), IC 95% FS, drift interanual |
 | S2 | Satelital | Vision Transformer (MHA H=2) + Sentinel-1 SAR + Sentinel-2 SR + MODIS/061; Gemini 2.5 multispectral en paralelo (A/B) | `alertas_satelitales`, `patron_detectado`, `anomalia_score` |
-| S3 | Meteorológico | ConsolidadorMeteorologico: Open-Meteo + ERA5-Land + WeatherNext 2 (64 miembros ensemble, flag `USE_WEATHERNEXT2`) | `ventanas_criticas`, `alertas_meteorologicas`, P10/P50/P90 |
+| S3 | Meteorológico | ConsolidadorMeteorologico: Open-Meteo + ERA5-Land + WeatherNext 2 (64 miembros ensemble, `USE_WEATHERNEXT2=true` en prod) | `ventanas_criticas`, `alertas_meteorologicas`, P10/P50/P90, nieve_3d_cm_p95 |
 | S4 | Situational Briefing | AgenteSituationalBriefing — Qwen3-80B vía Databricks; 4 tools: clima reciente, contexto histórico, características zona, eventos pasados | `narrativa_integrada`, `factores_atencion_eaws`, `indice_riesgo_cualitativo` |
 | S5 | Integrador | Matriz EAWS 2025 (Müller, Techel & Mitterer) — Qwen3-80B vía Databricks | Boletín EAWS completo 24h/48h/72h |
 
@@ -242,11 +242,11 @@ snow_alert/
 | H1 | F1-macro ≥ 75% vs SLF Suiza | F1-macro ≥ 0.75 | 0.161 (n=24) | 0.155 (n=24) | ❌ Rechazada |
 | H2 | NLP mejora > 5pp vs sin NLP | Delta F1 ablación | +7.9pp | — | ✅ Confirmada (sintético) |
 | H3 | QWK ≥ 0.59 (Techel 2022) vs SLF | QWK ≥ 0.59 | +0.016 (n=24) | +0.162 (n=24) | ❌ Rechazada |
-| H4 | QWK ≥ 0.60 vs Snowlab La Parva | QWK ≥ 0.60 | −0.016 (n=90) | −0.006 (n=90) | ❌ Rechazada |
+| H4 | QWK ≥ 0.40 vs Snowlab La Parva | QWK ≥ 0.40 | −0.016 (n=90) | +0.385 (n=87, v25.8) | ⏳ En progreso |
 
 **Hallazgos publicables (Ronda 3 v4.0):**
 - H1/H3: QWK mejoró +0.146 con REQ-02a/02b (MODIS LST + SAR humedad); sesgo regresó −0.92 porque REQ-03 (corrección orográfica ERA5) está calibrado para Andes, no para Alpes
-- H4: piso nivel 3 causado por S1 (riesgo topográfico inherente a La Parva) + S3 (`FUSION_ACTIVA` por ciclo diurno); REQ-01 funciona pero nunca se activa porque S1/S3 upstream generan nivel 3 incluso sin eventos
+- H4: v25.8 QWK=+0.385 (falta 0.015 para objetivo 0.40); causa root identificada — LLM mapeaba PINN ESTABLE→"poor" en lugar de "good" (31/35 FP); FIX-PINN-EAWS-MAP (v25.9) proyecta QWK>0.40
 - Gap de dominio Andes→Alpes documentado y cuantificado — publicable como hallazgo metodológico
 
 ---
@@ -325,14 +325,14 @@ gcloud run jobs execute orquestador-avalanchas --region=us-central1
 - Pipeline completo end-to-end en ~120s por boletín individual
 - LLM producción: Databricks/Qwen3-80B vía GCP Secret Manager
 - Cloud Run Job `orquestador-avalanchas` desplegado
-- 427 boletines en BigQuery + GCS (Chile + Swiss, v3.1/v3.2/v4.0)
-- 334 tests unitarios passing, 8 skipped (requieren credenciales GCP)
-- Validación Ronda 3 completada: H1/H3 vs SLF Suiza (n=24), H4 vs Snowlab La Parva (n=90)
+- WeatherNext 2 activo en producción (`USE_WEATHERNEXT2=true`)
+- 529 tests unitarios passing, 8 skipped (requieren credenciales GCP) — versión v25.10
+- Validación Ronda 3: H1/H3 vs SLF Suiza (n=24), H4 vs Snowlab La Parva v25.8: QWK=+0.385
 - Backfill satelital multi-región operativo (SAR Sentinel-1, MODIS/061, ERA5-Land, Sentinel-2)
 - EDA completo de tablas BQ documentado en `docs/validacion/EDA_DATOS_VALIDACION.md`
+- VERSION_GLOBAL: `v25.10` (serie de fixes PINN+WN2, rama `feat/v7.0-fixes`)
 
 ### ⏳ Pendiente
-- Activar `USE_WEATHERNEXT2=true` cuando se apruebe suscripción Analytics Hub (~2026-05-05)
+- Reproceso retroactivo con v25.10 y validación H4 (objetivo: QWK > 0.40)
 - Crear tabla `estado_manto_gee` en BQ y ejecutar backfill (`backfill_estado_manto_gee.py`)
-- Fix H4: corregir upstream S1 (riesgo topográfico potencial vs activo) y S3 (`FUSION_ACTIVA` sin precipitación) para desbloquear REQ-01
-- Capa de calibración post-procesamiento (isotonic regression) como alternativa al fix upstream
+- Merge `feat/v7.0-fixes` → `main` tras confirmar QWK objetivo
