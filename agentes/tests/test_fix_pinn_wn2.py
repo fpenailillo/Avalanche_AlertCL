@@ -25,6 +25,45 @@ PINN_BASE_KWARGS = {
 }
 
 
+class TestPINNEAWSMap:
+    """FIX-PINN-EAWS-MAP (v25.9): el campo estabilidad_eaws refleja el mapeo físico correcto."""
+
+    def test_estable_devuelve_good(self):
+        from agentes.subagentes.subagente_topografico.tools.tool_calcular_pinn import (
+            ejecutar_calcular_pinn,
+        )
+        res = ejecutar_calcular_pinn(**PINN_BASE_KWARGS)
+        assert res["estado_manto"] == "ESTABLE"
+        assert res["estabilidad_eaws"] == "good", (
+            f"PINN ESTABLE debe mapear a 'good', got '{res['estabilidad_eaws']}'"
+        )
+
+    def test_inestable_devuelve_poor(self):
+        from agentes.subagentes.subagente_topografico.tools.tool_calcular_pinn import (
+            ejecutar_calcular_pinn,
+        )
+        res = ejecutar_calcular_pinn(**PINN_BASE_KWARGS, nieve_nueva_cm=40.0)
+        assert res["estado_manto"] != "ESTABLE"
+        eaws = res["estabilidad_eaws"]
+        assert eaws in ("poor", "very_poor", "fair"), (
+            f"PINN no-ESTABLE debe mapear a poor/very_poor/fair, got '{eaws}'"
+        )
+
+    def test_eaws_map_nunca_es_none(self):
+        from agentes.subagentes.subagente_topografico.tools.tool_calcular_pinn import (
+            ejecutar_calcular_pinn,
+        )
+        for nieve in [None, 0.0, 5.0, 35.0, 80.0]:
+            kwargs = {**PINN_BASE_KWARGS}
+            if nieve is not None:
+                kwargs["nieve_nueva_cm"] = nieve
+            res = ejecutar_calcular_pinn(**kwargs)
+            assert res.get("estabilidad_eaws") in ("good", "fair", "poor", "very_poor"), (
+                f"estabilidad_eaws debe ser good/fair/poor/very_poor, got {res.get('estabilidad_eaws')} "
+                f"(nieve={nieve})"
+            )
+
+
 class TestPINNSurcharge:
     """El parámetro nieve_nueva_cm reduce FS respecto al baseline estático."""
 
@@ -141,8 +180,44 @@ class TestFallbackWN2Determinista:
         )
 
     @patch.dict(os.environ, {"USE_WEATHERNEXT2": "true"})
+    def test_fallback_wn2_p95_bajo_umbral_usa_3d(self):
+        """FIX-WN2-P95-THRESHOLD: p50=0, p95=20 cm (< 30 cm umbral) → descarta p95 y usa p95_3d."""
+        from agentes.subagentes.subagente_topografico.tools import tool_calcular_pinn as modulo
+
+        mock_wn2 = {
+            "disponible": True,
+            "diario": {
+                "nieve_24h_cm_p50_corr": 0.0,
+                "nieve_24h_cm_p95_corr": 20.0,   # dispersión ensemble, < umbral 30 cm
+                "nieve_3d_cm_p95_corr":  45.0,   # acumulación 3d real
+                "temp_p50_c": -5.0,
+            },
+            "ventanas": [],
+        }
+        mock_instancia = MagicMock()
+        mock_instancia.obtener_ventanas_6h.return_value = mock_wn2
+        mock_clase = MagicMock(return_value=mock_instancia)
+
+        with patch.object(modulo, "_USE_WEATHERNEXT2", True), \
+             patch("agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2.FuenteWeatherNext2", mock_clase), \
+             patch("agentes.datos.constantes_zonas.COORDENADAS_ZONAS", {"La Parva Sector Alto": (-33.55, -70.29)}), \
+             patch("agentes.datos.constantes_zonas.obtener_elevacion_referencia", return_value=3200), \
+             patch("agentes.datos.consultor_bigquery.obtener_fecha_referencia_global", return_value=None):
+            res = modulo.ejecutar_calcular_pinn(
+                **PINN_BASE_KWARGS,
+                nombre_ubicacion="La Parva Sector Alto",
+                fecha_objetivo="2024-07-19",
+            )
+
+        # p95=20 < 30 → descartado; p95_3d=45 >= 5 → usa 3d
+        assert res["metricas_fisicas"]["nieve_nueva_cm"] == 45.0, (
+            f"p95=20 debe ignorarse (< 30 cm), usa 3d=45.0, got {res['metricas_fisicas']['nieve_nueva_cm']}"
+        )
+        assert res["metricas_fisicas"]["fuente_nieve_nueva"] == "wn2_fallback_determinista_p95_3d"
+
+    @patch.dict(os.environ, {"USE_WEATHERNEXT2": "true"})
     def test_fallback_wn2_p50_cero_usa_p95(self):
-        """Si p50=0 pero p95=35 (tormenta con ensemble disperso), el PINN usa p95."""
+        """Si p50=0 pero p95=35 cm (>= 30 cm umbral, tormenta con ensemble disperso), usa p95."""
         from agentes.subagentes.subagente_topografico.tools import tool_calcular_pinn as modulo
 
         mock_instancia = MagicMock()

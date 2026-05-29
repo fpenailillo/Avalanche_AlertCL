@@ -127,10 +127,13 @@ TOOL_CLASIFICAR_EAWS_INTEGRADO = {
             "nieve_nueva_cm_wn2": {
                 "type": "number",
                 "description": "v25.0 FIX-WN2-SIZE-ANDES: nieve nueva en 24h estimada por WeatherNext 2 (nieve_24h_cm_p50_corr). Análogo a nieve_nueva_cm_imis (IMIS/Alpes) pero para Andes Chile. Permite graduación de tamaño D3/D4/D5 (umbrales: 25→D3, 40→D4, 60→D5) cuando la tormenta está activa. Pasar cuando S1 usó nieve_nueva_cm en PINN."
+            },
+            "estado_pinn": {
+                "type": "string",
+                "description": "v25.9 FIX-PINN-EAWS-MAP: estado del manto calculado por el PINN de S1 (ESTABLE/MARGINAL/INESTABLE/CRITICO). Si se provee, la tool calcula estabilidad_topografica determinísticamente usando el mapeo físico Mohr-Coulomb→EAWS (ESTABLE→good, MARGINAL→fair, INESTABLE→poor, CRITICO→very_poor), ignorando el valor que pase el LLM para estabilidad_topografica. SIEMPRE pasar este campo con el valor exacto del campo estado_pinn del análisis PINN de S1."
             }
         },
         "required": [
-            "estabilidad_topografica",
             "factor_meteorologico"
         ]
     }
@@ -156,9 +159,17 @@ _AJUSTE_METEOROLOGICO = {
 _FACTORES_NEUTROS = frozenset({"ESTABLE", "CICLO_DIURNO_NORMAL", ""})
 
 
+_ESTADO_PINN_A_EAWS = {
+    "ESTABLE":   "good",
+    "MARGINAL":  "fair",
+    "INESTABLE": "poor",
+    "CRITICO":   "very_poor",
+}
+
+
 def ejecutar_clasificar_riesgo_eaws_integrado(
-    estabilidad_topografica: str,
     factor_meteorologico: str,
+    estabilidad_topografica: str = "fair",
     estabilidad_satelital: str = None,
     frecuencia_topografica: str = None,
     tamano_eaws: str = None,
@@ -174,6 +185,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     nieve_nueva_cm_imis: float = None,
     precipitacion_72h_corregida_mm: float = None,
     nieve_nueva_cm_wn2: float = None,
+    estado_pinn: str = None,
 ) -> dict:
     """
     Clasifica el riesgo EAWS integrando los análisis de todos los subagentes.
@@ -193,6 +205,20 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
+    # ─── FIX-PINN-EAWS-MAP (v25.9): mapeo determinista estado_pinn → estabilidad_topografica ──
+    # El LLM tiende a desplazar el mapeo un escalón (ESTABLE→"poor"/"fair" en lugar de "good").
+    # Si el LLM proporciona estado_pinn, el código sobreescribe estabilidad_topografica
+    # con el mapeo físico correcto, ignorando lo que el LLM haya puesto en estabilidad_topografica.
+    if estado_pinn is not None:
+        _estab_determinista = _ESTADO_PINN_A_EAWS.get(estado_pinn.upper())
+        if _estab_determinista:
+            if _estab_determinista != estabilidad_topografica:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-PINN-EAWS-MAP: estado_pinn={estado_pinn} → "
+                    f"estabilidad_topografica {estabilidad_topografica!r}→{_estab_determinista!r}"
+                )
+            estabilidad_topografica = _estab_determinista
+
     # ─── FIX-CR7A-REFACTOR (v20.0): compuerta condicional en Andes Chile ──────
     # Reemplaza el bloqueo absoluto de CR-7A (v9.0) por una compuerta basada en
     # señales positivas de calma. ERA5 retroactivo sigue rechazado salvo que tres

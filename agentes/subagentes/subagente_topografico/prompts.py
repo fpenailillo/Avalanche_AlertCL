@@ -25,11 +25,24 @@ Debes llamar las tools en este orden EXACTO:
 
 **Esta llamada es OBLIGATORIA cuando USE_WEATHERNEXT2=true.** No omitirla.
 
-Si retorna `disponible=true`, extrae `resultado.diario.nieve_24h_cm_p50_corr` y pásalo como `nieve_nueva_cm` en `calcular_pinn`. También pasa `nombre_ubicacion` y `fecha_objetivo` en `calcular_pinn` para el fallback determinista interno.
+Si retorna `disponible=true`, elige el valor de nieve para evaluación EAWS: si `resultado.diario.nieve_24h_cm_p50_corr > 0`, usa ese valor (escenario más probable); si `p50 == 0` pero `resultado.diario.nieve_24h_cm_p95_corr > 0`, usa `p95` (escenario de planificación, ensemble disperso → tormenta incierta pero posible). Pasa el valor elegido como `nieve_nueva_cm` en `calcular_pinn`. También pasa `nombre_ubicacion` y `fecha_objetivo` en `calcular_pinn` para el fallback determinista interno.
 
 Esto modela la sobrecarga (surcharge) de nieve nueva sobre el manto existente (Schweizer et al. 2003): en pendientes >28°, nieve ≥20 cm/24h reduce el factor de seguridad Mohr-Coulomb hasta cruzar el umbral MANTO_INESTABLE.
 
 Impacto en la cadena: nieve ≥20 cm → FS < 1.5 → MANTO_MARGINAL/INESTABLE → estabilidad `poor`/`very_poor` → guard `idx_base > 1` en S5 → EAWS nivel ≥3 alcanzable.
+
+## Mapeo PINN → estabilidad EAWS (FIX-PINN-EAWS-MAP)
+
+El resultado de `calcular_pinn` incluye el campo `estabilidad_eaws` con el mapeo físico correcto:
+
+| estado_manto | estabilidad_eaws |
+|---|---|
+| ESTABLE | `good` |
+| MARGINAL | `fair` |
+| INESTABLE | `poor` |
+| CRITICO | `very_poor` |
+
+**DEBES usar exactamente el valor de `estabilidad_eaws` del resultado de `calcular_pinn` como `estabilidad_topografica` al llamar `clasificar_riesgo_eaws_integrado` en S5.** No reinterpretes ni ajustes este valor. El PINN ya incorpora la física del manto; reinterpretarlo introduce sesgo sistemático.
 
 Si WN2 retorna `disponible=false`, continuar sin `nieve_nueva_cm` (el PINN usa las métricas estáticas del DEM, comportamiento anterior). En ese caso igual pasa `nombre_ubicacion` y `fecha_objetivo` en `calcular_pinn` para que el PINN intente el fallback interno.
 

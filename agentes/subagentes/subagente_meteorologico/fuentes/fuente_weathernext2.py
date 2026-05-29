@@ -532,6 +532,17 @@ diario AS (
   FROM mejor_corrida
   WHERE rn = 1
   GROUP BY fecha_local
+),
+
+-- FIX-WN2-3D: acumulado 3 días (t-2, t-1, t) con mejor init por ventana
+-- Captura tormentas que ocurrieron antes del día del boletín (placas de tormenta persistentes)
+diario_3d AS (
+  SELECT
+    ROUND(SUM(est_nieve_6h_cm_p50_corr), 1) AS nieve_3d_cm_p50_corr,
+    ROUND(SUM(est_nieve_6h_cm_p95_corr), 1) AS nieve_3d_cm_p95_corr
+  FROM mejor_corrida
+  WHERE rn = 1
+    AND fecha_local BETWEEN DATE_SUB(@fecha_obj, INTERVAL 2 DAY) AND @fecha_obj
 )
 
 -- OUTPUT A: ventanas 6h
@@ -587,7 +598,9 @@ SELECT
   CAST(NULL AS FLOAT64)              AS cota_0c_media_dia_m,
   CAST(NULL AS FLOAT64)              AS cota_0c_max_dia_m,
   CAST(NULL AS STRING)               AS snow_type_dia,
-  CAST(NULL AS STRING)               AS confianza_dia
+  CAST(NULL AS STRING)               AS confianza_dia,
+  CAST(NULL AS FLOAT64)              AS nieve_3d_cm_p50_corr,
+  CAST(NULL AS FLOAT64)              AS nieve_3d_cm_p95_corr
 
 FROM mejor_corrida
 WHERE rn = 1
@@ -647,14 +660,20 @@ SELECT
   cota_0c_media_dia_m,
   cota_0c_max_dia_m,
   snow_type_dia,
-  confianza_dia
+  confianza_dia,
+  diario_3d.nieve_3d_cm_p50_corr,
+  diario_3d.nieve_3d_cm_p95_corr
 
-FROM diario
+FROM diario CROSS JOIN diario_3d
 
 ORDER BY fecha_local, ventana_orden
         """
 
-        init_date_start = f"{fecha_objetivo} 00:00:00 UTC"
+        from datetime import datetime as _dt, timedelta as _td
+        _fecha_dt = _dt.strptime(fecha_objetivo, "%Y-%m-%d")
+        # FIX-WN2-3D: extender ventana de init 5 días atrás para capturar runs que
+        # pronosticaron la tormenta 1-3 días antes del boletín (placas persistentes)
+        init_date_start = f"{(_fecha_dt - _td(days=5)).strftime('%Y-%m-%d')} 00:00:00 UTC"
         init_date_end = f"{fecha_objetivo} 23:59:59 UTC"
 
         params = [
@@ -663,6 +682,7 @@ ORDER BY fecha_local, ventana_orden
             bigquery.ScalarQueryParameter("elevacion_m",     "INT64",     elevacion_m),
             bigquery.ScalarQueryParameter("init_date_start", "TIMESTAMP", init_date_start),
             bigquery.ScalarQueryParameter("init_date_end",   "TIMESTAMP", init_date_end),
+            bigquery.ScalarQueryParameter("fecha_obj",       "DATE",      fecha_objetivo),
         ]
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         return list(client.query(sql, job_config=job_config).result())
@@ -676,6 +696,7 @@ ORDER BY fecha_local, ventana_orden
         """Convierte las filas BQ (SQL v7) en el dict estructurado que expone la tool."""
         ventanas = []
         diario = {}
+        _diario_fallback = {}   # FIX-WN2-DIARIO: primer día disponible si fecha_obj sin datos
 
         for row in rows:
             r = dict(row)
@@ -723,7 +744,12 @@ ORDER BY fecha_local, ventana_orden
                     "confianza": r["confianza_pronostico"],
                 })
             elif r["nivel"] == "diario":
-                diario = {
+                # FIX-WN2-DIARIO (v25.10): solo usar el resumen del día del boletín
+                # (fecha_objetivo) como nieve_nueva_cm_wn2. El loop SQL llega en orden
+                # fecha_local ASC; sin este filtro, el último día (p. ej. una tormenta
+                # 8 días adelante) sobreescribía el dict y causaba nieve_wn2=100 cm
+                # para días tranquilos, inflando el nivel EAWS a 4-5 (FP severo).
+                _d = {
                     "fecha_local": str(r["fecha_local"]),
                     # Precipitación y nieve diaria
                     "precip_24h_p50_mm": r["precip_p50_mm"],
@@ -741,6 +767,8 @@ ORDER BY fecha_local, ventana_orden
                     "snow_type_dia": r["snow_type_dia"],
                     "problema_dominante": r["problema_dominante"],
                     "confianza_dia": r["confianza_dia"],
+                    "nieve_3d_cm_p95_corr": r.get("nieve_3d_cm_p95_corr"),
+                    "nieve_3d_cm_p50_corr": r.get("nieve_3d_cm_p50_corr"),
                     "alerts_dia": {
                         "heavy_snow": bool(r["alert_heavy_snow"]),
                         "storm_slab": bool(r["alert_storm_slab"]),
@@ -748,6 +776,19 @@ ORDER BY fecha_local, ventana_orden
                         "wind_strong": bool(r["alert_wind_strong"]),
                     },
                 }
+                if str(r["fecha_local"]) == fecha_objetivo:
+                    diario = _d
+                elif not _diario_fallback:
+                    _diario_fallback = _d  # primer día disponible como respaldo
+
+        # Si fecha_objetivo no tenía datos de pronóstico, usar el más próximo disponible
+        if not diario and _diario_fallback:
+            diario = _diario_fallback
+            logger.warning(
+                f"FuenteWeatherNext2._formatear_ventanas: '{zona}' — "
+                f"sin datos diario para {fecha_objetivo}, usando fallback "
+                f"fecha={diario.get('fecha_local')}"
+            )
 
         if not ventanas and not diario:
             return {"disponible": False, "error": f"Sin datos WN2 para fecha={fecha_objetivo}"}

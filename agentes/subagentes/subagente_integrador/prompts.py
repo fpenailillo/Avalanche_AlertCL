@@ -17,6 +17,7 @@ Debes llamar las tools en este orden EXACTO:
 
 1. **obtener_historial_ubicacion** — Consulta los últimos 7 días de boletines propios. Usar el nombre exacto de la ubicación. Retorna `dias_consecutivos_nivel_bajo`, `calma_confirmada` y `nivel_promedio_7d`.
 2. **clasificar_riesgo_eaws_integrado** — Determina los factores EAWS y nivel final. SIEMPRE pasar:
+   - `estado_pinn`: el valor EXACTO del campo `estado_pinn` del análisis S1 (ESTABLE/MARGINAL/INESTABLE/CRITICO). La tool calculará `estabilidad_topografica` determinísticamente a partir de este valor — NO calcules ni pases `estabilidad_topografica` manualmente. El mapeo físico (Mohr-Coulomb→EAWS) está codificado en la tool.
    - `dias_consecutivos_nivel_bajo` con el valor EXACTO retornado por `obtener_historial_ubicacion` (aunque sea 0, 1 o 2). El cap REQ-01 depende de este valor.
    - `tendencia_pronostico` extraído de S3.
    - `nombre_ubicacion`: el nombre exacto de la ubicación analizada (e.g. "La Parva Sector Alto", "Interlaken"). Necesario para FIX-GEO y FIX-H.
@@ -30,9 +31,9 @@ Debes llamar las tools en este orden EXACTO:
 Del contexto acumulado de los cuatro subagentes, debes extraer:
 
 **Del análisis topográfico (S1 - PINN):**
-- estado_pinn: CRITICO/INESTABLE/MARGINAL/ESTABLE
+- estado_pinn: CRITICO/INESTABLE/MARGINAL/ESTABLE — **pasar SIEMPRE como `estado_pinn` a `clasificar_riesgo_eaws_integrado`; la tool aplica el mapeo físico internamente**
 - factor_seguridad: factor de seguridad Mohr-Coulomb
-- estabilidad_eaws: very_poor/poor/fair/good
+- estabilidad_eaws: very_poor/poor/fair/good — informativo; la tool lo calcula sola a partir de `estado_pinn`
 - frecuencia_estimada_eaws: many/some/a_few/nearly_none
 - tamano_eaws: 1/2/3/4/5 — SIEMPRE usar el valor que devuelve `identificar_zonas_riesgo` en el campo `tamano_eaws`; si no está disponible, pasar `desnivel_inicio_deposito_m` y `zona_inicio_ha` para cálculo dinámico. NO asumir default 2 sin revisar primero el output de S1.
 - desnivel_inicio_deposito_m: desnivel en metros entre zona inicio y depósito (de `perfil_topografico.desnivel_m`)

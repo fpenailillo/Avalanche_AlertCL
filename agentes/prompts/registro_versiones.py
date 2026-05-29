@@ -46,8 +46,8 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "8.1.0",
-        "descripcion": "v8.1: FIX-PINN-WN2-P95 — usar p95 si p50==0 (ensemble disperso en tormentas)",
+        "version": "8.2.0",
+        "descripcion": "v8.2: FIX-PINN-EAWS-MAP — usar campo estabilidad_eaws del PINN directamente, sin reinterpretar",
         "hash_sha256": "349d8ac7c25bb680",
     },
     "satelital": {
@@ -74,8 +74,8 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "10.2.0",
-        "descripcion": "v10.2: FIX-CR18-CH-1 — eliminar ref a obtener_condiciones_actuales_meteo (no tool de S5); añadir instrucción viento_kmh",
+        "version": "10.3.0",
+        "descripcion": "v10.3: FIX-PINN-EAWS-MAP — pasar estado_pinn a clasificar_riesgo_eaws_integrado; la tool calcula estabilidad_topografica determinísticamente",
         "hash_sha256": "98dacfa68aa412cc",
     },
 }
@@ -222,7 +222,77 @@ REGISTRO_PROMPTS = {
 #   Cambios:
 #     1. tool_calcular_pinn.py: condición fallback ampliada a `or nieve_nueva_cm < 5`.
 #     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_llm_valor_pequeno_usa_p95_3d.
-VERSION_GLOBAL = "25.6"
+# v25.7 (FIX-PINN-FECHA-GLOBAL):
+#   Bug detectado en reproceso completo: el LLM siempre pasaba fecha_objetivo="2024-06-15"
+#   al PINN independiente del boletín real, porque el prompt de S1 no incluye la fecha
+#   y el LLM la infería del contexto WN2 previo (que tiene datos de jun-15).
+#   El fallback determinista usaba esa fecha incorrecta → siempre consultaba la tormenta
+#   de jun-15 (235.7 cm) para todos los boletines → sobreestimación sistémica.
+#   Solución: en el fallback de tool_calcular_pinn.py, priorizar
+#   obtener_fecha_referencia_global() (establecida por el orquestador con la fecha real
+#   del boletín) sobre la fecha que pasa el LLM.
+#   Cambios:
+#     1. tool_calcular_pinn.py: fecha_ref global siempre override la del LLM en fallback.
+# v25.8 (FIX-WN2-P95-THRESHOLD):
+#   Análisis data-driven del sesgo +0.448 en validación H4 v25.7:
+#     El p95_24h del ensemble activa el PINN con 6-57 cm en días sin tormenta real
+#     (p50_24h ≈ 0, wn2_avalanche_problem=low_load). Dispersión natural del ensemble,
+#     no señal genuina. Ejemplos: 2024-07-19 p50=0.3/p95=41.9 cm → AI=3, GT=1.
+#   Solución: umbrales diferenciados por nivel de confianza:
+#     p50_24h: 5 cm (escenario mediano — señal real)
+#     p95_24h: 30 cm (cola del ensemble — Schweizer 2003: HN24h≥30 cm para placas)
+#     p95_3d:  5 cm (suma 3 días — 5 cm/3d es acumulación genuina)
+#   Cambios:
+#     1. tool_calcular_pinn.py: _MIN_P95_CM = 30.0 (antes 5.0)
+#     2. test_fix_pinn_wn2.py: test actualizado para nuevo umbral
+#   Resultado validación H4 v25.8 (n=87 pares):
+#     QWK=+0.385, MAE=0.782, sesgo=+0.414, MAE_tormentas=1.250
+#     H4 RECHAZADA — QWK 0.015 bajo el objetivo de 0.40
+#     Por sector: Alto QWK=0.211 | Bajo QWK=0.213 | Medio QWK=0.578
+#
+# v25.9 (FIX-PINN-EAWS-MAP) — PENDIENTE:
+#   Diagnóstico data-driven del sesgo residual +0.414 en H4 v25.8:
+#     35 pares GT=1→AI≥2 analizados. 31/35 tienen PINN=ESTABLE (FS=1.81),
+#     wn2_prob=low_load, wn2_storm_slab=False. Sin señal física de tormenta.
+#     Causa: el LLM en S5 mapea estado_manto PINN a escala EAWS un escalón arriba:
+#       PINN ESTABLE (FS>1.5) → LLM pasa estabilidad_topografica="poor" o "fair"
+#       Correcto: ESTABLE → "good"
+#     Con "good+a_few+D2" la matriz EAWS → nivel 1. Con "fair+a_few+D2" → nivel 2.
+#     Verificado en tools_llamadas BQ: 2024-07-05 La Parva Alto, PINN ESTABLE,
+#     LLM pasa estabilidad_topografica="poor" → nivel 2 (GT=1).
+#   Tabla EAWS (datos/analizador_avalanchas/eaws_constantes.py):
+#     good + any_freq + D1/D2/D3 → siempre nivel 1
+#     fair + a_few + D2 → nivel 2
+#     poor + a_few + D2 → nivel 2
+#   Mapeo correcto PINN → estabilidad_eaws (Schweizer 2003):
+#     ESTABLE  (FS ≥ 1.5)          → "good"
+#     MARGINAL (1.3 ≤ FS < 1.5)   → "fair"
+#     INESTABLE (1.0 ≤ FS < 1.3)  → "poor"
+#     CRITICO  (FS < 1.0)          → "very_poor"
+#   Impacto en GT≥3: INESTABLE "poor" en lugar de "very_poor" no baja niveles altos:
+#     poor+some+D3=3 (igual que very_poor+some+D3=3). Neutral en tormentas reales.
+#   Cambios:
+#     1. tool_calcular_pinn.py: añadir campo "estabilidad_eaws" al dict de retorno.
+#     2. subagente_topografico/prompts.py: instrucción explícita de copiar
+#        estabilidad_eaws directamente como estabilidad_topografica, sin reinterpretar.
+#   Proyección: eliminar ~31 falsos positivos GT=1 → QWK proyectado > 0.40,
+#     MAE tormentas proyectado ≤ 1.00 (objetivo H4 cumplido).
+#
+# v25.10 (FIX-WN2-DIARIO):
+#   Bug identificado post-validación v25.9: fuente_weathernext2._formatear_ventanas
+#   sobreescribía el dict `diario` en cada iteración (loop SQL ORDER BY fecha_local ASC).
+#   El último día procesado (hasta 8 días adelante) ganaba, reportando p. ej.
+#   nieve_24h_cm_p50_corr=100 cm para una tormenta futura como si fuera snow de hoy.
+#   Síntoma: 2025-09-12 Alto obtuvo nieve_wn2=100 (tormenta del 17-20 sep, 8 días out),
+#   que combinada con NEVADA_RECIENTE+ventanas=3 → nivel=4 para GT=1 → QWK=0.138.
+#   FIX-PINN-EAWS-MAP (v25.9) funcionó correctamente (ESTABLE→good confirmado en log),
+#   pero la señal WN2 falsa lo sobreescribió vía la lógica meteorológica.
+#   Fix: en _formatear_ventanas, solo actualizar `diario` cuando
+#   r["fecha_local"] == fecha_objetivo; guardar primer día disponible como fallback.
+#   Cambios:
+#     1. fuente_weathernext2.py: lógica de selección diario por fecha_objetivo.
+#   Proyección: QWK recupera niveles v25.9 correctos, esperado > 0.40.
+VERSION_GLOBAL = "25.10"
 
 
 def _calcular_hash(contenido: str) -> str:

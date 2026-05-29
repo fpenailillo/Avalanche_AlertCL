@@ -148,7 +148,7 @@ def _worker(
 
 
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v25.2–v25.6 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.2–v25.10 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
@@ -158,7 +158,11 @@ def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) ->
             OR STARTS_WITH(version_prompts, 'v25.3')
             OR STARTS_WITH(version_prompts, 'v25.4')
             OR STARTS_WITH(version_prompts, 'v25.5')
-            OR STARTS_WITH(version_prompts, 'v25.6'))
+            OR STARTS_WITH(version_prompts, 'v25.6')
+            OR STARTS_WITH(version_prompts, 'v25.7')
+            OR STARTS_WITH(version_prompts, 'v25.8')
+            OR STARTS_WITH(version_prompts, 'v25.9')
+            OR STARTS_WITH(version_prompts, 'v25.10'))
     """
     job = cliente.query(
         q,
@@ -223,7 +227,8 @@ def ejecutar_replay(
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
     est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v25.6 — {total} ejecuciones")
+    from agentes.prompts.registro_versiones import VERSION_GLOBAL
+    print(f"REPROCESAMIENTO RETROACTIVO v{VERSION_GLOBAL} — {total} ejecuciones")
     if fechas_filtro:
         print(f"Filtro fechas: {fechas_filtro}")
     print(f"Modo: {modo}")

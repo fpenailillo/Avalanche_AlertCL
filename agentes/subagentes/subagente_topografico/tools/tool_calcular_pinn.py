@@ -170,10 +170,13 @@ def ejecutar_calcular_pinn(
             from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
             from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
 
-            if fecha_objetivo is None:
-                fecha_ref = obtener_fecha_referencia_global()
-                if fecha_ref is not None:
-                    fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
+            # Priorizar la fecha global del orquestador sobre la del LLM:
+            # el LLM puede pasar una fecha incorrecta (e.g. la de los datos WN2
+            # previos en el contexto); el orquestador siempre establece la fecha
+            # real del boletín vía establecer_fecha_referencia_global().
+            fecha_ref = obtener_fecha_referencia_global()
+            if fecha_ref is not None:
+                fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
 
             coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
             if coords and fecha_objetivo:
@@ -194,17 +197,21 @@ def ejecutar_calcular_pinn(
                     # FIX-WN2-3D: ventana 3 días — captura tormentas que ocurrieron
                     # antes del día del boletín (placas de tormenta persistentes)
                     val_3d  = diario.get("nieve_3d_cm_p95_corr")  or 0.0
-                    # FIX-WN2-THRESHOLD: umbral mínimo para filtrar ruido del ensemble
-                    # WN2 siempre devuelve p50 > 0 por ruido numérico (0.1-0.5 cm),
-                    # lo que bloqueaba el fallthrough al 3d en días post-tormenta (día
-                    # despejado con nieve acumulada de días previos). Schweizer (2003):
-                    # HN24h < 5 cm no genera placas de tormenta significativas.
-                    _MIN_NIEVE_CM = 5.0
-                    if val_p50 >= _MIN_NIEVE_CM:
+                    # Umbrales diferenciados por nivel de confianza (FIX-WN2-P95-THRESHOLD):
+                    # - p50_24h: umbral 5 cm — escenario mediano, señal real si supera
+                    # - p95_24h: umbral 30 cm — cola del ensemble; con p50≈0 el p95 puede
+                    #   alcanzar 10-60 cm por dispersión natural sin tormenta real
+                    #   (data-driven: 2024-07-19 p50=0.3/p95=41.9, GT=1; Schweizer 2003:
+                    #   HN24h≥30 cm para placas de tormenta significativas en Alpes)
+                    # - p95_3d: umbral 5 cm — suma 3 días, 5 cm/3d es acumulación genuina
+                    _MIN_P50_CM  = 5.0
+                    _MIN_P95_CM  = 30.0
+                    _MIN_3D_CM   = 5.0
+                    if val_p50 >= _MIN_P50_CM:
                         val, fuente_suffix = val_p50, "p50"
-                    elif val_p95 >= _MIN_NIEVE_CM:
+                    elif val_p95 >= _MIN_P95_CM:
                         val, fuente_suffix = val_p95, "p95"
-                    elif val_3d >= _MIN_NIEVE_CM:
+                    elif val_3d >= _MIN_3D_CM:
                         val, fuente_suffix = val_3d, "p95_3d"
                     else:
                         val, fuente_suffix = 0.0, "none"
@@ -326,10 +333,23 @@ def ejecutar_calcular_pinn(
         nieve_nueva_cm=nieve_nueva_cm,
     )
 
+    # FIX-PINN-EAWS-MAP (v25.9): mapeo determinista estado_manto → escala EAWS.
+    # El LLM tendía a desplazar el mapeo un escalón hacia arriba (ESTABLE→"poor").
+    # Con "good", la matriz EAWS da nivel 1 para cualquier frecuencia/tamaño —
+    # elimina falsos positivos en días sin señal WN2 (wn2_prob=low_load).
+    _MANTO_A_EAWS = {
+        "ESTABLE":   "good",
+        "MARGINAL":  "fair",
+        "INESTABLE": "poor",
+        "CRITICO":   "very_poor",
+    }
+    _estabilidad_eaws = _MANTO_A_EAWS.get(estado_manto["estado"], "fair")
+
     return {
         "factor_seguridad_mohr_coulomb": factor_seguridad_ajustado,
         "factor_seguridad_base": factor_seguridad,
         "estado_manto": estado_manto["estado"],
+        "estabilidad_eaws": _estabilidad_eaws,
         "riesgo_falla": estado_manto["riesgo_falla"],
         "incertidumbre_pinn": uq,
         "features_glo30_tagee_ae": features_glo30,
