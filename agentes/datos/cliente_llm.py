@@ -359,9 +359,9 @@ class ClienteGemini:
     Convierte tools Anthropic → OpenAI (mismo patrón que ClienteDatabricks).
 
     Variables de entorno:
-        GEMINI_GCP_PROJECT  — proyecto GCP con créditos Gemini (default: ai-models)
-        GEMINI_GCP_LOCATION — región Vertex AI (default: us-central1)
-        GEMINI_MODEL        — nombre del modelo (default: gemini-3.1-pro-preview)
+        GEMINI_GCP_PROJECT  — proyecto GCP con créditos Gemini (default: project-c742757f-1731-44cd-a40)
+        GEMINI_GCP_LOCATION — región Vertex AI (default: global)
+        GEMINI_MODEL        — nombre del modelo (default: google/gemini-3.1-pro-preview)
     """
 
     GCP_PROJECT_DEFAULT = "project-c742757f-1731-44cd-a40"

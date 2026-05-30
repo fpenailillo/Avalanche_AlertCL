@@ -5,8 +5,9 @@ Implementa el agentic loop con tool_use multi-proveedor.
 Cada subagente es una instancia independiente del LLM con su propio
 historial de mensajes y conjunto de tools especializadas.
 
-Proveedor activo: "databricks" (Qwen3-80B via AI Gateway).
-Cambiable con PROVEEDOR = "gemini" | "anthropic" en la subclase.
+Proveedor activo: "databricks" (Qwen3-80B via AI Gateway) por defecto.
+Cambiar globalmente con env var SUBAGENTES_PROVEEDOR=gemini3|anthropic|gemini.
+Cambiar por subagente sobreescribiendo el atributo de clase PROVEEDOR.
 """
 
 import json
@@ -61,9 +62,12 @@ class BaseSubagente(ABC):
 
     def __init__(self):
         """Inicializa el subagente con el cliente LLM correspondiente al proveedor."""
-        self.cliente = crear_cliente(self.PROVEEDOR)
+        # SUBAGENTES_PROVEEDOR permite alternar proveedor global sin editar cada agente.py
+        # Ej: SUBAGENTES_PROVEEDOR=gemini3 activa Gemini Pro en todos los subagentes.
+        proveedor = os.environ.get("SUBAGENTES_PROVEEDOR", self.PROVEEDOR)
+        self.cliente = crear_cliente(proveedor)
         logger.debug(
-            f"{self.NOMBRE}: cliente inicializado — proveedor: {self.PROVEEDOR}"
+            f"{self.NOMBRE}: cliente inicializado — proveedor: {proveedor}"
         )
 
         self._tools_definicion = self._cargar_tools()
@@ -167,7 +171,8 @@ class BaseSubagente(ABC):
                 time.sleep(espera)
             except error_servidor as exc:
                 codigo = getattr(exc, "status_code", 0)
-                if codigo >= 500:
+                # 429 = rate limit / RESOURCE_EXHAUSTED (Gemini quota, Databricks QPS)
+                if codigo >= 500 or codigo == 429:
                     ultimo_error = exc
                     espera = min(
                         ESPERA_BASE_SEGUNDOS * (2 ** intento),
