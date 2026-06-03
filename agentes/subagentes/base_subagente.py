@@ -170,7 +170,12 @@ class BaseSubagente(ABC):
                 )
                 time.sleep(espera)
             except error_servidor as exc:
-                codigo = getattr(exc, "status_code", 0)
+                # google-genai usa .code; openai usa .status_code
+                codigo = (
+                    getattr(exc, "status_code", None)
+                    or getattr(exc, "code", None)
+                    or 0
+                )
                 # 429 = rate limit / RESOURCE_EXHAUSTED (Gemini quota, Databricks QPS)
                 if codigo >= 500 or codigo == 429:
                     ultimo_error = exc

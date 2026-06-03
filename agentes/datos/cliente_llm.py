@@ -767,7 +767,7 @@ class ClienteGemini3:
 
     @property
     def errores_recuperables(self):
-        return (self._errors.ServerError,)
+        return (self._errors.ServerError, TimeoutError)
 
     @property
     def error_servidor(self):
@@ -905,8 +905,15 @@ class ClienteGemini3:
     # ── Normalización ─────────────────────────────────────────────────────────
 
     def _normalizar_respuesta(self, resp) -> RespuestaNormalizada:
+        # candidates puede ser None o [] si Gemini bloquea la respuesta (safety filter)
+        if not resp.candidates:
+            logger.warning("ClienteGemini3: respuesta sin candidatos (safety block o vacía)")
+            return RespuestaNormalizada(
+                stop_reason="end_turn", content=[], usage=_Usage(0, 0)
+            )
         candidate = resp.candidates[0]
-        parts = candidate.content.parts if candidate.content else []
+        # content.parts puede ser None incluso cuando content no lo es
+        parts = (candidate.content.parts if candidate.content else None) or []
 
         bloques: list = []
         for i, part in enumerate(parts):
@@ -949,10 +956,11 @@ class ClienteGemini3:
         gemini_tools = self._tools_a_gemini(tools) if tools else None
         contents = self._mensajes_a_gemini(system, messages)
 
+        thinking_level = os.environ.get("GEMINI_THINKING_LEVEL", "LOW")
         config_kw: dict = {
             "max_output_tokens": max_tokens,
             "temperature": 1.0,
-            "thinking_config": types.ThinkingConfig(thinking_level="LOW"),
+            "thinking_config": types.ThinkingConfig(thinking_level=thinking_level),
         }
         if system:
             config_kw["system_instruction"] = system
@@ -961,11 +969,23 @@ class ClienteGemini3:
 
         config = types.GenerateContentConfig(**config_kw)
 
-        resp = self._client.models.generate_content(
-            model=self._modelo,
-            contents=contents,
-            config=config,
-        )
+        import signal
+        _TIMEOUT_S = 360
+
+        def _alarm_handler(signum, frame):
+            raise TimeoutError(f"Gemini request timed out after {_TIMEOUT_S}s")
+
+        old_handler = signal.signal(signal.SIGALRM, _alarm_handler)
+        signal.alarm(_TIMEOUT_S)
+        try:
+            resp = self._client.models.generate_content(
+                model=self._modelo,
+                contents=contents,
+                config=config,
+            )
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
         return self._normalizar_respuesta(resp)
 
 

@@ -23,6 +23,7 @@ Uso:
 import hashlib
 import importlib
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -292,7 +293,7 @@ REGISTRO_PROMPTS = {
 #   Cambios:
 #     1. fuente_weathernext2.py: lógica de selección diario por fecha_objetivo.
 #   Proyección: QWK recupera niveles v25.9 correctos, esperado > 0.40.
-VERSION_GLOBAL = "25.10"
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.10")
 
 
 def _calcular_hash(contenido: str) -> str:

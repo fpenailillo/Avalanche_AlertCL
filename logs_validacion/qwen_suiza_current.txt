@@ -1,0 +1,1 @@
+logs_validacion/qwen_suiza_v2511_20260603_125523.log
