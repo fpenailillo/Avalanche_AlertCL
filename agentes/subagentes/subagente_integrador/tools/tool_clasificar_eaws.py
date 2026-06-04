@@ -24,6 +24,27 @@ from analizador_avalanchas.eaws_constantes import (
     NIVELES_PELIGRO
 )
 
+# FIX-GEO / FIX-H (v7.0): región por ubicación para caps condicionales
+try:
+    from agentes.datos.constantes_zonas import obtener_region as _obtener_region
+except ImportError:
+    try:
+        sys.path.insert(0, os.path.join(_ROOT, 'agentes'))
+        from datos.constantes_zonas import obtener_region as _obtener_region
+    except ImportError:
+        def _obtener_region(zona: str) -> str:  # type: ignore[misc]
+            return "andes_chile"
+
+# FIX-CALIB-REG (Fase D, v21.0): calibración estadística post-LLM
+try:
+    from agentes.validacion.calibrador import aplicar_calibracion_regional as _calibrar_nivel
+except ImportError:
+    try:
+        from validacion.calibrador import aplicar_calibracion_regional as _calibrar_nivel
+    except ImportError:
+        def _calibrar_nivel(nivel: int, region: str) -> int:  # type: ignore[misc]
+            return nivel
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,10 +107,33 @@ TOOL_CLASIFICAR_EAWS_INTEGRADO = {
             "dias_consecutivos_nivel_bajo": {
                 "type": "integer",
                 "description": "Días consecutivos con nivel ≤ 2 (de obtener_historial_ubicacion). Si ≥ 4 y factor ESTABLE, confirma calma sostenida."
+            },
+            "nombre_ubicacion": {
+                "type": "string",
+                "description": "Nombre de la ubicación analizada (e.g. 'La Parva Sector Alto', 'Interlaken'). Usado para aplicar caps y defaults condicionales por región (FIX-GEO/FIX-H v7.0)."
+            },
+            "condiciones_meteo_disponibles": {
+                "type": "boolean",
+                "description": "v7.5: True si S3 reportó datos meteorológicos reales (temperatura, precipitación, viento medidos). False o ausente cuando S3 no tuvo datos (e.g. runs retroactivos sin condiciones_actuales). EAWS Paso 1 solo se activa con True."
+            },
+            "nieve_nueva_cm_imis": {
+                "type": "number",
+                "description": "v20.0 FIX-HN24-SIZE: nieve nueva en 24h según medición directa IMIS (HN24_cm). Solo disponible en Alpes suizos. Permite graduación de tamaño D3/D4/D5 según Techel 2022 Tabla 7 (25→D3, 40→D4, 60→D5). Pasar solo si S3 reportó nieve_nueva_cm con fuente IMIS."
+            },
+            "precipitacion_72h_corregida_mm": {
+                "type": "number",
+                "description": "v20.0 FIX-CR7A-REFACTOR: precipitación acumulada 72h con corrección orográfica aplicada (correccion_orografica.py). Usado para evaluar calma confirmada en Andes Chile (< 5mm es condición necesaria para habilitar EAWS Paso 1). Pasar si S3 lo reporta."
+            },
+            "nieve_nueva_cm_wn2": {
+                "type": "number",
+                "description": "v25.0 FIX-WN2-SIZE-ANDES: nieve nueva en 24h estimada por WeatherNext 2 (nieve_24h_cm_p50_corr). Análogo a nieve_nueva_cm_imis (IMIS/Alpes) pero para Andes Chile. Permite graduación de tamaño D3/D4/D5 (umbrales: 25→D3, 40→D4, 60→D5) cuando la tormenta está activa. Pasar cuando S1 usó nieve_nueva_cm en PINN."
+            },
+            "estado_pinn": {
+                "type": "string",
+                "description": "v25.9 FIX-PINN-EAWS-MAP: estado del manto calculado por el PINN de S1 (ESTABLE/MARGINAL/INESTABLE/CRITICO). Si se provee, la tool calcula estabilidad_topografica determinísticamente usando el mapeo físico Mohr-Coulomb→EAWS (ESTABLE→good, MARGINAL→fair, INESTABLE→poor, CRITICO→very_poor), ignorando el valor que pase el LLM para estabilidad_topografica. SIEMPRE pasar este campo con el valor exacto del campo estado_pinn del análisis PINN de S1."
             }
         },
         "required": [
-            "estabilidad_topografica",
             "factor_meteorologico"
         ]
     }
@@ -115,9 +159,17 @@ _AJUSTE_METEOROLOGICO = {
 _FACTORES_NEUTROS = frozenset({"ESTABLE", "CICLO_DIURNO_NORMAL", ""})
 
 
+_ESTADO_PINN_A_EAWS = {
+    "ESTABLE":   "good",
+    "MARGINAL":  "fair",
+    "INESTABLE": "poor",
+    "CRITICO":   "very_poor",
+}
+
+
 def ejecutar_clasificar_riesgo_eaws_integrado(
-    estabilidad_topografica: str,
     factor_meteorologico: str,
+    estabilidad_topografica: str = "fair",
     estabilidad_satelital: str = None,
     frecuencia_topografica: str = None,
     tamano_eaws: str = None,
@@ -128,6 +180,12 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     pendiente_max_grados: float = None,
     tendencia_pronostico: str = None,
     dias_consecutivos_nivel_bajo: int = 0,
+    nombre_ubicacion: str = None,
+    condiciones_meteo_disponibles: bool = None,
+    nieve_nueva_cm_imis: float = None,
+    precipitacion_72h_corregida_mm: float = None,
+    nieve_nueva_cm_wn2: float = None,
+    estado_pinn: str = None,
 ) -> dict:
     """
     Clasifica el riesgo EAWS integrando los análisis de todos los subagentes.
@@ -147,12 +205,121 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
+    # ─── FIX-PINN-EAWS-MAP (v25.9): mapeo determinista estado_pinn → estabilidad_topografica ──
+    # El LLM tiende a desplazar el mapeo un escalón (ESTABLE→"poor"/"fair" en lugar de "good").
+    # Si el LLM proporciona estado_pinn, el código sobreescribe estabilidad_topografica
+    # con el mapeo físico correcto, ignorando lo que el LLM haya puesto en estabilidad_topografica.
+    if estado_pinn is not None:
+        _estab_determinista = _ESTADO_PINN_A_EAWS.get(estado_pinn.upper())
+        if _estab_determinista:
+            if _estab_determinista != estabilidad_topografica:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-PINN-EAWS-MAP: estado_pinn={estado_pinn} → "
+                    f"estabilidad_topografica {estabilidad_topografica!r}→{_estab_determinista!r}"
+                )
+            estabilidad_topografica = _estab_determinista
+
+    # ─── FIX-CR7A-REFACTOR (v20.0): compuerta condicional en Andes Chile ──────
+    # Reemplaza el bloqueo absoluto de CR-7A (v9.0) por una compuerta basada en
+    # señales positivas de calma. ERA5 retroactivo sigue rechazado salvo que tres
+    # señales independientes (precip corregida, viento, calma sostenida) respalden.
+    # Criterio: habilitar EAWS Paso 1 SOLO cuando todas las condiciones de calma se
+    # satisfacen simultáneamente, evitando falsos negativos en días de tormenta.
+    _region_meteo = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if _region_meteo == "andes_chile" and condiciones_meteo_disponibles is True:
+        _precip_ok = precipitacion_72h_corregida_mm is not None and precipitacion_72h_corregida_mm < 5
+        _viento_ok = viento_kmh is not None and viento_kmh < 30
+        senales_calma_confirmada = (
+            factor_meteorologico in _FACTORES_NEUTROS
+            and ventanas_criticas_detectadas == 0
+            and _precip_ok
+            and _viento_ok
+            and dias_consecutivos_nivel_bajo >= 2
+        )
+        if not senales_calma_confirmada:
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR7A-REFACTOR: Andes sin calma confirmada "
+                f"→ condiciones_meteo_disponibles=False "
+                f"(factor={factor_meteorologico}, p72h_corr={precipitacion_72h_corregida_mm}, "
+                f"viento={viento_kmh}, dias_bajo={dias_consecutivos_nivel_bajo}, "
+                f"ventanas={ventanas_criticas_detectadas})"
+            )
+            condiciones_meteo_disponibles = False
+        else:
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR7A-REFACTOR: Andes con calma confirmada "
+                f"→ EAWS Paso 1 habilitado "
+                f"(p72h_corr={precipitacion_72h_corregida_mm}mm, "
+                f"viento={viento_kmh}km/h, dias_bajo={dias_consecutivos_nivel_bajo})"
+            )
+
+    # ─── CR-14 (v14.0): bloqueo EAWS Paso 1 en Alpes suizos ────────────────────
+    # En Alpes, EAWS nivel 1 requiere confirmación explícita del manto nival
+    # (Sclass2, pwl_100 — datos IMIS). Sin ellos, capas persistentes débiles son
+    # invisibles a mediciones de superficie y el Paso 1 produce nivel 1 espurio.
+    # La matriz estándar (estabilidad_pinn=poor, factor=ESTABLE) da nivel 2 → correcto.
+    _paso1_bloqueado_alpes = (
+        _region_meteo == "alpes_swiss"
+        and condiciones_meteo_disponibles is True
+    )
+    if _paso1_bloqueado_alpes:
+        logger.info(
+            f"[ClasificarEAWS] CR-14 (v14.0): EAWS Paso 1 bloqueado en Alpes — "
+            f"sin datos manto nival (Sclass2/pwl_100) → matriz estándar "
+            f"(ubicacion={nombre_ubicacion})"
+        )
+
+    # ─── EAWS Paso 1 (v7.5 — gate basado en datos, no en supuestos) ─────────
+    # Implementa EAWS 2025 Tabla 6 Paso 1: "no avalanche problems → level 1-Low".
+    # CONDICIÓN: solo se activa cuando S3 tenía datos meteorológicos REALES que
+    # permiten confirmar la ausencia de trigger. Si S3 no tuvo datos (e.g. runs
+    # retroactivos donde condiciones_actuales está vacío), "sin datos" ≠ "sin trigger"
+    # → se toma el camino conservador (matriz estándar).
+    # Excepción: Alpes suizos bloqueados por CR-14 (sin datos de manto nival).
+    _eaws_paso1 = (
+        condiciones_meteo_disponibles is True
+        and factor_meteorologico in _FACTORES_NEUTROS
+        and ventanas_criticas_detectadas == 0
+        and not _paso1_bloqueado_alpes
+    )
+    if _eaws_paso1:
+        logger.info(
+            f"[ClasificarEAWS] EAWS Paso 1 (v7.5): datos_meteo=True, "
+            f"factor={factor_meteorologico}, ventanas=0 → nivel 1 directo"
+        )
+        return {
+            "nivel_eaws_24h": 1,
+            "nivel_eaws_48h": 1,
+            "nivel_eaws_72h": 1,
+            "nombre_nivel_24h": "Débil",
+            "factores_eaws": {
+                "estabilidad": "good",
+                "frecuencia": "nearly_none",
+                "tamano": 1,
+                "fuente_tamano": "eaws_paso1_sin_problema_confirmado",
+            },
+            "fuentes_estabilidad": {
+                "topografica_pinn": estabilidad_topografica,
+                "satelital_vit": estabilidad_satelital,
+                "ajuste_meteorologico": None,
+            },
+            "factor_meteorologico": factor_meteorologico,
+            "tendencia_pronostico": tendencia_pronostico,
+            "viento_kmh": viento_kmh,
+            "recomendaciones": [],
+            "descripcion_nivel": "Sin problemas de avalancha confirmados por datos meteorológicos (EAWS Paso 1). Manto estable con condiciones calmas.",
+            "problema_avalancha_presente": False,
+            "tipo_problema_eaws": "no_distinct_avalanche_problem",
+        }
+
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
     estabilidad_final = _determinar_estabilidad_dominante(
         estabilidad_topografica=estabilidad_topografica,
         estabilidad_satelital=estabilidad_satelital,
         factor_meteorologico=factor_meteorologico,
         dias_consecutivos_nivel_bajo=dias_consecutivos_nivel_bajo,
+        nombre_ubicacion=nombre_ubicacion,
+        ventanas_criticas_detectadas=ventanas_criticas_detectadas,
     )
 
     # ─── 2. Ajustar frecuencia ───────────────────────────────────────────────
@@ -161,7 +328,8 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         ventanas_criticas=ventanas_criticas_detectadas,
         factor_meteorologico=factor_meteorologico,
         estabilidad=estabilidad_final,
-        viento_kmh=viento_kmh
+        viento_kmh=viento_kmh,
+        nombre_ubicacion=nombre_ubicacion,
     )
 
     # ─── 3. Determinar tamaño (dinámico desde topografía si es posible) ──────
@@ -172,21 +340,98 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         pendiente_max_grados=pendiente_max_grados
     )
 
-    # FIX-T: cap tamano≤3 en condiciones calmas.
-    # El tamano topográfico (desnivel/ha/pendiente) refleja el potencial máximo
-    # del terreno, no las condiciones actuales del manto. En días sin precipitación
-    # reciente ni viento, aludes de tamaño 4-5 no son posibles aunque el terreno
-    # tenga ese potencial. Condición: factor neutro Y ventanas_criticas < 2.
+    # FIX-HN24-SIZE (v20.0): graduación de tamaño por HN24 IMIS (D3/D4/D5).
+    # Reemplaza FIX-CR18-CH-3 (boost binario) por umbrales escalonados según Techel 2022 Tabla 7.
+    # Guard region=alpes_swiss: La Parva no tiene IMIS → nieve_nueva_cm_imis siempre None en Andes.
+    # Outlier filter: nieve_nueva_cm_imis validada en consultor_bigquery.py (0–200cm).
+    _region = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if _region == "alpes_swiss":
+        if nieve_nueva_cm_imis is not None and nieve_nueva_cm_imis > 0:
+            # Escala graduada por medición directa HN24
+            if   nieve_nueva_cm_imis >= 60: tamano_min_hn24 = 5
+            elif nieve_nueva_cm_imis >= 40: tamano_min_hn24 = 4
+            elif nieve_nueva_cm_imis >= 25: tamano_min_hn24 = 3
+            else:                            tamano_min_hn24 = 0
+            if tamano_min_hn24 > tamano_final:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-HN24-SIZE: tamano "
+                    f"{tamano_final}→{tamano_min_hn24} (HN24={nieve_nueva_cm_imis}cm)"
+                )
+                tamano_final = tamano_min_hn24
+                fuente_tamano = f"{fuente_tamano}→hn24_grad"
+        elif (
+            "NEVADA_RECIENTE" in factor_meteorologico
+            and ventanas_criticas_detectadas >= 2
+            and tamano_final < 3
+        ):
+            # Fallback CR18-CH-3: sin HN24 IMIS disponible, usar el comportamiento anterior
+            logger.info(
+                f"[ClasificarEAWS] FIX-HN24-SIZE fallback (sin HN24): tamano mínimo 3 "
+                f"(original={tamano_final}, factor={factor_meteorologico}, "
+                f"ventanas={ventanas_criticas_detectadas})"
+            )
+            tamano_final = 3
+            fuente_tamano = f"{fuente_tamano}→min3_cr18ch3_fallback"
+
+    # FIX-WN2-SIZE-ANDES (v25.0): graduación de tamaño por pronóstico ensemble WN2 (Andes Chile).
+    # Análogo a FIX-HN24-SIZE pero usando nieve_24h_cm_p50_corr de WeatherNext 2 en lugar de IMIS.
+    # Guard: solo cuando factor de tormenta activo (evita falsos positivos en calma).
+    # Umbrales Techel 2022 Tabla 7: 25cm→D3, 40cm→D4, 60cm→D5.
+    # Schweizer et al. (2003): carga nívea ≥ 25cm/24h sobre pendientes >28° → avalancha de placa.
+    _factor_activo_tamano_pre = bool(
+        factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
+    )
+    if _region == "andes_chile" and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
+        if _factor_activo_tamano_pre:
+            if   nieve_nueva_cm_wn2 >= 60: tamano_min_wn2 = 5
+            elif nieve_nueva_cm_wn2 >= 40: tamano_min_wn2 = 4
+            elif nieve_nueva_cm_wn2 >= 25: tamano_min_wn2 = 3
+            else:                           tamano_min_wn2 = 0
+            if tamano_min_wn2 > tamano_final:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-WN2-SIZE-ANDES: tamano "
+                    f"{tamano_final}→{tamano_min_wn2} (WN2_nieve={nieve_nueva_cm_wn2:.0f}cm)"
+                )
+                tamano_final = tamano_min_wn2
+                fuente_tamano = f"{fuente_tamano}→wn2_size_andes"
+
+    # FIX-T+FIX-GEO (v7.0): cap tamano≤3 en condiciones calmas, solo en Andes Chile.
+    # FIX-T (v6.2): en días sin factor activo ni ventanas críticas, el terreno andino
+    #   de alta pendiente (desnivel/ha) sobreestima el tamaño posible.
+    # FIX-GEO (v7.0): este cap solo aplica en Andes Chile. En Alpes suizos, ERA5/SLF
+    #   reflejan las condiciones reales y el cap produce subestimación sistemática.
     _factor_activo_tamano = bool(
         factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
     )
-    if tamano_final > 3 and not _factor_activo_tamano and ventanas_criticas_detectadas < 2:
+    if (
+        _region == "andes_chile"
+        and tamano_final > 3
+        and not _factor_activo_tamano
+        and ventanas_criticas_detectadas < 2
+    ):
         logger.info(
-            f"[ClasificarEAWS] FIX-T: tamano capado {tamano_final}→3 "
-            f"(factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
+            f"[ClasificarEAWS] FIX-T+FIX-GEO: tamano capado {tamano_final}→3 "
+            f"(region={_region}, factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
         )
         tamano_final = 3
         fuente_tamano = f"{fuente_tamano}→cap_calmo"
+
+    # FIX-CR7C (v8.0): cap adicional para tamano EXPLÍCITO en Andes Chile con factor neutro.
+    # Cuando S5 provee tamano_eaws=4/5 basado en área topográfica pero el factor es neutro,
+    # el LLM sobreestima el tamaño posible. Este cap es independiente de ventanas_criticas
+    # (defensa en profundidad vs CR-7b donde vc inflado bloqueaba el cap anterior).
+    if (
+        fuente_tamano == "explicito"
+        and _region == "andes_chile"
+        and tamano_final > 3
+        and not _factor_activo_tamano
+    ):
+        logger.info(
+            f"[ClasificarEAWS] FIX-CR7C: tamano explícito capado {tamano_final}→3 "
+            f"(region={_region}, fuente=explicito, factor_neutro)"
+        )
+        tamano_final = 3
+        fuente_tamano = "explicito→cap_cr7c"
 
     # ─── 4. Consultar matriz EAWS ─────────────────────────────────────────────
     # consultar_matriz_eaws devuelve Tuple[int, Optional[int]] → (D1, D2)
@@ -217,8 +462,22 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "transporte eolico activo incrementa frecuencia de avalanchas"
         )
 
+    # FIX-CALIB-REG (Fase D, v21.0): calibración estadística post-LLM.
+    # Aplica α+β·nivel por región solo si los gates estadísticos se aprobaron
+    # en el entrenamiento offline (coeficientes_calibracion.json).
+    # Si el JSON no existe o la región no fue aprobada, retorna identidad.
+    _region_cal = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    nivel_24h_raw = nivel_24h
+    nivel_48h_raw = nivel_48h
+    nivel_72h_raw = nivel_72h
+    nivel_24h = _calibrar_nivel(nivel_24h, _region_cal)
+    nivel_48h = _calibrar_nivel(nivel_48h, _region_cal)
+    nivel_72h = _calibrar_nivel(nivel_72h, _region_cal)
+    info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
+
     return {
         "nivel_eaws_24h": nivel_24h,
+        "nivel_eaws_24h_raw": nivel_24h_raw,
         "nivel_eaws_48h": nivel_48h,
         "nivel_eaws_72h": nivel_72h,
         "nombre_nivel_24h": info_nivel.get("nombre"),
@@ -237,7 +496,9 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         "tendencia_pronostico": tendencia_pronostico,
         "viento_kmh": viento_kmh,
         "recomendaciones": recomendaciones,
-        "descripcion_nivel": info_nivel.get("descripcion", "")
+        "descripcion_nivel": info_nivel.get("descripcion", ""),
+        "problema_avalancha_presente": None,
+        "tipo_problema_eaws": None,
     }
 
 
@@ -246,6 +507,8 @@ def _determinar_estabilidad_dominante(
     estabilidad_satelital: str,
     factor_meteorologico: str,
     dias_consecutivos_nivel_bajo: int = 0,
+    nombre_ubicacion: str = None,
+    ventanas_criticas_detectadas: int = 0,
 ) -> str:
     """
     Determina la estabilidad dominante combinando todas las fuentes.
@@ -260,8 +523,58 @@ def _determinar_estabilidad_dominante(
 
     # Estabilidad base: la peor entre topo y satelital
     idx_topo = escala.index(estabilidad_topografica) if estabilidad_topografica in escala else 1
-    idx_sat = escala.index(estabilidad_satelital) if estabilidad_satelital in escala else 1
+
+    # FIX-H (v7.0): cuando ViT no tiene datos, el default de estabilidad satelital
+    # depende de la región. En Andes Chile, ViT fue entrenado aquí → default 'fair'.
+    # En Alpes suizos, ViT no tiene datos de entrenamiento → default conservador 'poor'.
+    if estabilidad_satelital in escala:
+        idx_sat = escala.index(estabilidad_satelital)
+    else:
+        _region_sat = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+        _default_sat = "fair" if _region_sat == "andes_chile" else "poor"
+        idx_sat = escala.index(_default_sat)
+        logger.info(
+            f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
+            f"default '{_default_sat}' (region={_region_sat})"
+        )
     idx_base = max(idx_topo, idx_sat)
+
+    _factor_activo = bool(
+        factor_meteorologico
+        and factor_meteorologico not in _FACTORES_NEUTROS
+    )
+    # Calma absoluta: solo ESTABLE/"" — CICLO_DIURNO_NORMAL es ciclo térmico activo, no calma real
+    _calma_absoluta = factor_meteorologico in ("ESTABLE", "")
+
+    # FIX-CR17A-ATENUACION (v7.0): sustituye el cap duro de v17.0 por atenuación de 1 paso.
+    # La estabilidad PINN es riesgo POTENCIAL del terreno. Sin trigger ni ventanas críticas,
+    # atenuar para evitar inflar el peligro en calma, pero sin ignorar capas débiles
+    # estructurales (Müller 2025 §3.1, Statham 2018 §4).
+    # Reglas:
+    #   very_poor → poor  (siempre, 1 paso)
+    #   poor → fair       solo con calma ABSOLUTA (ESTABLE) ≥ 3 días consecutivos
+    #   poor + CICLO_DIURNO_NORMAL → mantener poor (ciclo térmico puede movilizar CWL)
+    _region_dom = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    if (
+        _region_dom == "andes_chile"
+        and not _factor_activo
+        and ventanas_criticas_detectadas == 0
+        and idx_base > 1
+    ):
+        if idx_base == 3:  # very_poor → poor (1 paso)
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR17A-ATENUACION: very_poor→poor "
+                f"(factor={factor_meteorologico}, ventanas={ventanas_criticas_detectadas})"
+            )
+            idx_base = 2
+        elif idx_base == 2 and _calma_absoluta and dias_consecutivos_nivel_bajo >= 3:
+            logger.info(
+                f"[ClasificarEAWS] FIX-CR17A-ATENUACION: poor→fair "
+                f"(calma_absoluta, dias_bajo={dias_consecutivos_nivel_bajo})"
+            )
+            idx_base = 1
+        # poor + CICLO_DIURNO_NORMAL o calma < 3 días → mantener poor
+        # → habilita matrix(poor × freq × tamano) → nivel ≥ 3 posible
 
     # Ajuste meteorológico
     ajuste_meteo = _obtener_ajuste_meteorologico(factor_meteorologico)
@@ -271,15 +584,10 @@ def _determinar_estabilidad_dominante(
     else:
         idx_final = idx_base
 
-    # Confirmación de calma sostenida: si ≥ 4 días consecutivos nivel ≤ 2 y sin
-    # factor meteorológico activo, el PINN topográfico puede estar sobreestimando.
-    # Cap en 'fair' (índice 1) para evitar piso artificial en nivel 3.
-    # REQ-06: CICLO_DIURNO_NORMAL es neutro (igual que ESTABLE) para la lógica de calma
-    _factor_activo = bool(
-        factor_meteorologico
-        and factor_meteorologico not in _FACTORES_NEUTROS
-    )
-    if dias_consecutivos_nivel_bajo >= 4 and not _factor_activo:
+    # Calma sostenida (ESTABLE ≥ 4 días): cap final en 'fair'.
+    # Solo para factor=ESTABLE/"" — CICLO_DIURNO_NORMAL implica ciclo térmico activo
+    # que puede movilizar CWL; no es calma real (FIX-CR17A-ATENUACION).
+    if dias_consecutivos_nivel_bajo >= 4 and _calma_absoluta:
         idx_final = min(idx_final, 1)  # cap en 'fair'
         logger.info(
             f"[ClasificarEAWS] Calma sostenida confirmada ({dias_consecutivos_nivel_bajo} días "
@@ -302,7 +610,8 @@ def _determinar_frecuencia(
     ventanas_criticas: int,
     factor_meteorologico: str,
     estabilidad: str,
-    viento_kmh: float = None
+    viento_kmh: float = None,
+    nombre_ubicacion: str = None,
 ) -> str:
     """
     Determina la frecuencia EAWS final.
@@ -316,8 +625,22 @@ def _determinar_frecuencia(
 
     idx_base = escala.index(frecuencia_topografica) if frecuencia_topografica in escala else 1
 
-    # Ajuste por ventanas críticas
-    if ventanas_criticas >= 3:
+    # Ajuste por ventanas críticas.
+    # FIX-CR18-CH-2 (v18.0): en Alpes suizos con NEVADA_RECIENTE activa, bajar el
+    # umbral de >=3 a >=2. Durante nevadas intensas (HN24 >30cm), 2 ventanas EAWS
+    # ya reflejan condiciones de alta frecuencia de desprendimiento (D3+).
+    _region_freq = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
+    _vc_threshold = (
+        2
+        if (_region_freq == "alpes_swiss" and "NEVADA_RECIENTE" in factor_meteorologico)
+        else 3
+    )
+    if ventanas_criticas >= _vc_threshold:
+        logger.info(
+            f"[ClasificarEAWS] FIX-CR18-CH-2: frecuencia boost por ventanas "
+            f"({ventanas_criticas}>={_vc_threshold}, region={_region_freq}, "
+            f"factor={factor_meteorologico})"
+        )
         idx_base = min(3, idx_base + 1)
 
     # Ajuste por viento fuerte (C3: >40 km/h → transporte eólico activo)
@@ -330,6 +653,22 @@ def _determinar_frecuencia(
     # Ajuste por estabilidad: si very_poor → frecuencia sube
     if estabilidad == "very_poor" and idx_base < 2:
         idx_base = 2  # Al menos "some"
+
+    # FIX-STORM-FREQ-WN2 (v25.0): tormenta extrema confirmada → frecuencia "many".
+    # Cuando manto CRITICO (very_poor) + señal NEVADA_RECIENTE activa + al menos 1 ventana,
+    # todos los terrenos >28° se movilizan simultáneamente (Schweizer et al. 2003, §4.2).
+    # Solo Andes Chile; en Alpes el mecanismo equivalente es FIX-CR18-CH-2 + IMIS.
+    if (
+        _region_freq == "andes_chile"
+        and estabilidad == "very_poor"
+        and "NEVADA_RECIENTE" in factor_meteorologico
+        and ventanas_criticas >= 1
+    ):
+        idx_base = 3  # many
+        logger.info(
+            f"[ClasificarEAWS] FIX-STORM-FREQ-WN2: tormenta extrema confirmada "
+            f"(very_poor + NEVADA_RECIENTE + ventanas={ventanas_criticas}) → frecuencia=many"
+        )
 
     # Ajuste por factor meteorológico de precipitación crítica
     if "PRECIPITACION_CRITICA" in factor_meteorologico:

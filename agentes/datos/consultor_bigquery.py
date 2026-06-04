@@ -157,7 +157,8 @@ class ConsultorBigQuery:
                         cobertura_nubes,
                         condicion_clima,
                         hora_actual,
-                        es_dia
+                        es_dia,
+                        datos_json_crudo
                     FROM `{proyecto}.{dataset}.condiciones_actuales`
                     WHERE nombre_ubicacion = @ubicacion
                       AND hora_actual >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 12 HOUR)
@@ -182,11 +183,12 @@ class ConsultorBigQuery:
                         cobertura_nubes,
                         condicion_clima,
                         hora_actual,
-                        es_dia
+                        es_dia,
+                        datos_json_crudo
                     FROM `{proyecto}.{dataset}.condiciones_actuales`
                     WHERE nombre_ubicacion = @ubicacion
                       AND hora_actual >= TIMESTAMP_SUB(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
-                      AND hora_actual <= TIMESTAMP(@fecha_ref)
+                      AND hora_actual <= TIMESTAMP_ADD(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
                     ORDER BY hora_actual DESC
                     LIMIT 1
                 """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
@@ -210,6 +212,49 @@ class ConsultorBigQuery:
             resultado = filas[0]
             resultado["disponible"] = True
 
+            # FIX-WIND-UNITS (bug_021): condiciones_actuales.velocidad_viento se almacena
+            # en km/h por todas las rutas de ingesta. Normalizar a m/s aquí para que los
+            # consumers (_clasificar_viento, detectar_ventanas_criticas, fuente_open_meteo,
+            # tool_clima_reciente) usen sus umbrales Beaufort correctamente, y almacenador
+            # vuelva a km/h con el ×3.6 ya existente.
+            _vw = resultado.get("velocidad_viento")
+            if _vw is not None:
+                resultado["velocidad_viento"] = round(_vw / 3.6, 2)
+
+            # FIX-CR19 + FIX-IMIS-EXT (v20.0): extraer señales IMIS de datos_json_crudo.
+            crudo_str = resultado.pop("datos_json_crudo", None)
+            if crudo_str:
+                import json as _json
+                try:
+                    crudo = _json.loads(crudo_str)
+                    # HN24 (original CR-19)
+                    nieve_cm = crudo.get("nieve_nueva_cm") or crudo.get("HN24_cm")
+                    if nieve_cm is not None:
+                        resultado["nieve_nueva_cm"] = float(nieve_cm)
+                    # FIX-IMIS-EXT: variables adicionales con filtro de outliers.
+                    # Prioridad sobre ERA5 cuando disponibles (ver subagente S3).
+                    imis: dict = {}
+                    # FIX-BUG001: claves alineadas con el productor (cargar_imis_condiciones_actuales.py).
+                    # El backfill escribe HS_meas_cm (no HS_cm) y TA_c (no TA_C, case-sensitive).
+                    # VW_max_ms no es escrito por el backfill; se elimina para evitar silencio.
+                    for key, k_imis, lo, hi in [
+                        ("hs_cm",      "HS_meas_cm",  0,   600),
+                        ("ta_imis_c",  "TA_c",      -40,    30),
+                        ("vw_imis_ms", "VW_ms",       0,    60),
+                    ]:
+                        v = crudo.get(k_imis)
+                        if v is not None:
+                            try:
+                                fv = float(v)
+                                if lo <= fv <= hi:
+                                    imis[key] = fv
+                            except (ValueError, TypeError):
+                                pass
+                    if imis:
+                        resultado["imis_directo"] = imis
+                except Exception:
+                    pass
+
             # Serializar tipos especiales
             if resultado.get("hora_actual") and hasattr(resultado["hora_actual"], "isoformat"):
                 resultado["hora_actual"] = resultado["hora_actual"].isoformat()
@@ -222,6 +267,81 @@ class ConsultorBigQuery:
         except Exception as e:
             logger.error(f"Error consultando condiciones actuales para {ubicacion}: {e}")
             return {"error": str(e)}
+
+    def _tendencia_desde_imis(
+        self,
+        ubicacion: str,
+        fecha_referencia,
+    ) -> dict | None:
+        """
+        Fallback v14.0: construye tendencia meteorológica desde condiciones_actuales
+        cuando pronostico_horas está vacío (fechas DEAPSnow 2018-2020).
+
+        Solo activa si hay un registro IMIS (fuente='IMIS_DEAPSnow_RF2') en
+        condiciones_actuales para la ubicación y fecha de referencia.
+        """
+        import json as _json
+
+        try:
+            sql = """
+                SELECT
+                    temperatura, velocidad_viento, precipitacion_acumulada,
+                    humedad_relativa, datos_json_crudo
+                FROM `{proyecto}.{dataset}.condiciones_actuales`
+                WHERE nombre_ubicacion = @ubicacion
+                  AND hora_actual >= TIMESTAMP_SUB(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
+                  AND hora_actual <= TIMESTAMP_ADD(TIMESTAMP(@fecha_ref), INTERVAL 12 HOUR)
+                  AND JSON_VALUE(datos_json_crudo, '$.fuente') = 'IMIS_DEAPSnow_RF2'
+                ORDER BY hora_actual DESC
+                LIMIT 1
+            """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
+
+            parametros = [
+                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", fecha_referencia),
+            ]
+            filas = self._ejecutar_query(sql, parametros)
+            if not filas:
+                return None
+
+            fila = filas[0]
+            ta = fila.get("temperatura")
+            vw_kmh = fila.get("velocidad_viento")
+            vw_ms = round(vw_kmh / 3.6, 2) if vw_kmh is not None else None
+
+            # HN24 del JSON crudo para estimar precipitación 72h
+            crudo = fila.get("datos_json_crudo") or "{}"
+            if isinstance(crudo, str):
+                crudo = _json.loads(crudo)
+            hn24_cm = crudo.get("HN24_cm")
+            precip_proxy = round(hn24_cm / 10.0, 2) if (hn24_cm is not None and hn24_cm > 0) else 0.0
+
+            alertas = []
+            if precip_proxy > 10:
+                alertas.append({"tipo": "PRECIPITACION_CRITICA", "valor": f"{precip_proxy}mm (proxy IMIS)"})
+            if vw_ms and vw_ms > 15:
+                alertas.append({"tipo": "VIENTO_FUERTE", "valor": f"{round(vw_ms, 1)} m/s"})
+
+            logger.info(
+                f"[IMIS fallback] tendencia desde condiciones_actuales: "
+                f"{ubicacion} TA={ta}°C VW={vw_kmh}km/h HN24={hn24_cm}cm"
+            )
+            return {
+                "disponible": True,
+                "fuente": "IMIS_DEAPSnow_RF2_proxy",
+                "temp_min_72h": ta,
+                "temp_max_72h": ta,
+                "precip_total_acumulada_mm": precip_proxy,
+                "viento_max_ms": vw_ms,
+                "hora_viento_max": None,
+                "horas_con_precipitacion": 1 if precip_proxy > 0 else 0,
+                "tendencia_temperatura": "estable",
+                "alertas": alertas,
+            }
+
+        except Exception as e:
+            logger.warning(f"[IMIS fallback] error en _tendencia_desde_imis: {e}")
+            return None
 
     def obtener_tendencia_meteorologica(
         self,
@@ -332,6 +452,10 @@ class ConsultorBigQuery:
             filas_futuro = self._ejecutar_query(sql_futuro, parametros)
 
             if not filas_pasado and not filas_futuro:
+                # FIX-IMIS-TENDENCIA (v14.0): fallback a condiciones_actuales con IMIS
+                imis_tendencia = self._tendencia_desde_imis(ubicacion, fecha_referencia)
+                if imis_tendencia:
+                    return imis_tendencia
                 return {
                     "disponible": False,
                     "razon": "Sin datos de pronóstico horario"
@@ -347,13 +471,16 @@ class ConsultorBigQuery:
             temp_min_72h = min(temperaturas) if temperaturas else None
             temp_max_72h = max(temperaturas) if temperaturas else None
             precip_total_acumulada_mm = sum(precipitaciones) if precipitaciones else 0
-            viento_max_ms = max(vientos) if vientos else None
+            # FIX-WIND-PRONOSTICO: pronostico_horas.velocidad_viento está en km/h
+            # (Google Weather API METRIC mode). Convertir a m/s análogo a condiciones_actuales:222.
+            _viento_max_kmh = max(vientos) if vientos else None
+            viento_max_ms = round(_viento_max_kmh / 3.6, 2) if _viento_max_kmh is not None else None
 
             # Hora de viento máximo
             hora_viento_max = None
-            if vientos and viento_max_ms is not None:
+            if vientos and _viento_max_kmh is not None:
                 for f in todas_filas:
-                    if f.get("velocidad_viento") == viento_max_ms:
+                    if f.get("velocidad_viento") == _viento_max_kmh:
                         if f.get("hora_inicio") and hasattr(f["hora_inicio"], "isoformat"):
                             hora_viento_max = f["hora_inicio"].isoformat()
                         elif f.get("hora_inicio"):
@@ -524,15 +651,13 @@ class ConsultorBigQuery:
                 elif prob_noche is not None:
                     dia["prob_precipitacion_dia"] = prob_noche
 
-                # viento_max (máximo entre diurno y nocturno)
+                # FIX-WIND-PRONOSTICO-DIAS: diurno/nocturno_velocidad_viento en km/h → m/s
                 viento_dia = dia.get("diurno_velocidad_viento")
                 viento_noche = dia.get("nocturno_velocidad_viento")
-                if viento_dia is not None and viento_noche is not None:
-                    dia["viento_max"] = max(viento_dia, viento_noche)
-                elif viento_dia is not None:
-                    dia["viento_max"] = viento_dia
-                elif viento_noche is not None:
-                    dia["viento_max"] = viento_noche
+                _vmax_kmh = max(v for v in [viento_dia, viento_noche] if v is not None) if any(
+                    v is not None for v in [viento_dia, viento_noche]
+                ) else None
+                dia["viento_max_ms"] = round(_vmax_kmh / 3.6, 2) if _vmax_kmh is not None else None
 
                 # condicion_dia (priorizar diurna)
                 dia["condicion_dia"] = dia.get("diurno_condicion") or dia.get("nocturno_condicion")
@@ -1277,38 +1402,73 @@ class ConsultorBigQuery:
             f"(reciente ≤{n_dias_reciente}d, baseline {n_dias_reciente}-{n_dias_baseline}d)"
         )
         try:
-            sql_reciente = """
-                SELECT
-                    sar_vv_medio_db,
-                    sar_pct_nieve_humeda,
-                    sar_pct_nieve_seca,
-                    fecha_captura
-                FROM `climas-chileno.clima.imagenes_satelitales`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND sar_disponible = TRUE
-                  AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
-                ORDER BY fecha_captura DESC
-                LIMIT 1
-            """
-            parametros_reciente = [
-                bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
-            ]
+            _fref = _fecha_referencia_global
+            if _fref is not None:
+                sql_reciente = """
+                    SELECT
+                        sar_vv_medio_db,
+                        sar_pct_nieve_humeda,
+                        sar_pct_nieve_seca,
+                        fecha_captura
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_reciente DAY)
+                      AND fecha_captura <= DATE(@fecha_ref)
+                    ORDER BY fecha_captura DESC
+                    LIMIT 1
+                """
+                parametros_reciente = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                    bigquery.ScalarQueryParameter("fecha_ref",  "TIMESTAMP", _fref),
+                ]
+                sql_baseline = """
+                    SELECT AVG(sar_vv_medio_db) AS baseline_vv
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_baseline DAY)
+                      AND fecha_captura <  DATE_SUB(DATE(@fecha_ref), INTERVAL @n_reciente DAY)
+                """
+                parametros_baseline = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                    bigquery.ScalarQueryParameter("fecha_ref",  "TIMESTAMP", _fref),
+                ]
+            else:
+                sql_reciente = """
+                    SELECT
+                        sar_vv_medio_db,
+                        sar_pct_nieve_humeda,
+                        sar_pct_nieve_seca,
+                        fecha_captura
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
+                    ORDER BY fecha_captura DESC
+                    LIMIT 1
+                """
+                parametros_reciente = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                ]
+                sql_baseline = """
+                    SELECT AVG(sar_vv_medio_db) AS baseline_vv
+                    FROM `climas-chileno.clima.imagenes_satelitales`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND sar_disponible = TRUE
+                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_baseline DAY)
+                      AND fecha_captura <  DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
+                """
+                parametros_baseline = [
+                    bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
+                    bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
+                ]
             filas_reciente = self._ejecutar_query(sql_reciente, parametros_reciente)
-
-            sql_baseline = """
-                SELECT AVG(sar_vv_medio_db) AS baseline_vv
-                FROM `climas-chileno.clima.imagenes_satelitales`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND sar_disponible = TRUE
-                  AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_baseline DAY)
-                  AND fecha_captura <  DATE_SUB(CURRENT_DATE(), INTERVAL @n_reciente DAY)
-            """
-            parametros_baseline = [
-                bigquery.ScalarQueryParameter("ubicacion",  "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_baseline", "INT64",  n_dias_baseline),
-                bigquery.ScalarQueryParameter("n_reciente", "INT64",  n_dias_reciente),
-            ]
             filas_baseline = self._ejecutar_query(sql_baseline, parametros_baseline)
 
             if not filas_reciente:
@@ -1381,25 +1541,43 @@ class ConsultorBigQuery:
         """
         logger.info(f"[ConsultorBigQuery] estado manto → {ubicacion} (últimos {n_dias} días)")
         try:
-            sql = """
-                SELECT
+            _fref = _fecha_referencia_global
+            _cols = """
                     fecha,
                     lst_celsius,
                     temp_suelo_l1_celsius,
                     temp_suelo_l2_celsius,
                     gradiente_termico,
                     cobertura_nubosa_pct,
-                    fuente_lst
-                FROM `climas-chileno.clima.estado_manto_gee`
-                WHERE nombre_ubicacion = @ubicacion
-                  AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_dias DAY)
-                ORDER BY fecha DESC
-                LIMIT 14
-            """
-            parametros = [
-                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
-                bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
-            ]
+                    fuente_lst"""
+            if _fref is not None:
+                sql = f"""
+                    SELECT{_cols}
+                    FROM `climas-chileno.clima.estado_manto_gee`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND fecha >= DATE_SUB(DATE(@fecha_ref), INTERVAL @n_dias DAY)
+                      AND fecha <= DATE(@fecha_ref)
+                    ORDER BY fecha DESC
+                    LIMIT 14
+                """
+                parametros = [
+                    bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
+                    bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", _fref),
+                ]
+            else:
+                sql = f"""
+                    SELECT{_cols}
+                    FROM `climas-chileno.clima.estado_manto_gee`
+                    WHERE nombre_ubicacion = @ubicacion
+                      AND fecha >= DATE_SUB(CURRENT_DATE(), INTERVAL @n_dias DAY)
+                    ORDER BY fecha DESC
+                    LIMIT 14
+                """
+                parametros = [
+                    bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                    bigquery.ScalarQueryParameter("n_dias", "INT64", n_dias),
+                ]
             filas = self._ejecutar_query(sql, parametros)
 
             if not filas:
@@ -1547,4 +1725,128 @@ class ConsultorBigQuery:
                 "total_relatos_unicos": 0,
                 "indice_riesgo_calculado": 0.0,
                 "razon": tabla_msg,
+            }
+
+    def obtener_snow_depth_caro(
+        self,
+        estacion: str,
+        fecha_inicio: str,
+        fecha_fin: str,
+        qc_status: str = "clean",
+        apply_qc: bool = False,
+    ) -> dict:
+        """
+        Consulta observaciones de profundidad de nieve del dataset Caro et al. 2026.
+
+        Referencia: Medina & Caro (2026), doi:10.5281/zenodo.20089265
+
+        Args:
+            estacion: station_name o station_id de la estación.
+            fecha_inicio: fecha inicio ISO 'YYYY-MM-DD'.
+            fecha_fin: fecha fin ISO 'YYYY-MM-DD'.
+            qc_status: 'raw' | 'clean' (default: 'clean').
+            apply_qc: si True, aplica pipeline QC de datos/qc/snow_depth_qc.py
+                      sobre la serie retornada (solo útil para qc_status='raw').
+
+        Returns:
+            dict con: disponible, estacion, n_observaciones, observaciones (lista),
+                      metadata_estacion, pci (si apply_qc=True).
+        """
+        logger.info(
+            f"[ConsultorBigQuery] snow_depth_caro → {estacion} "
+            f"({fecha_inicio}–{fecha_fin}, qc_status={qc_status})"
+        )
+        try:
+            sql = """
+                SELECT
+                  station_id, station_name, basin, andean_zone, elevation_m,
+                  observation_date, snow_depth_cm, data_source, sensor_model
+                FROM `climas-chileno.clima.snow_depth_caro_2026`
+                WHERE (station_name = @estacion OR station_id = @estacion)
+                  AND qc_status = @qc_status
+                  AND observation_date BETWEEN @fecha_inicio AND @fecha_fin
+                ORDER BY observation_date
+            """
+            parametros = [
+                bigquery.ScalarQueryParameter("estacion", "STRING", estacion),
+                bigquery.ScalarQueryParameter("qc_status", "STRING", qc_status),
+                bigquery.ScalarQueryParameter("fecha_inicio", "DATE", fecha_inicio),
+                bigquery.ScalarQueryParameter("fecha_fin", "DATE", fecha_fin),
+            ]
+            filas = self._ejecutar_query(sql, parametros)
+
+            if not filas:
+                return {
+                    "disponible": False,
+                    "sin_datos": True,
+                    "razon": f"Sin observaciones para '{estacion}' en rango {fecha_inicio}–{fecha_fin}",
+                }
+
+            meta = {
+                k: filas[0].get(k)
+                for k in ["station_id", "station_name", "basin", "andean_zone", "elevation_m", "data_source"]
+            }
+            observaciones = [
+                {"fecha": str(f["observation_date"]), "snow_depth_cm": f["snow_depth_cm"]}
+                for f in filas
+            ]
+
+            resultado: dict = {
+                "disponible": True,
+                "estacion": meta["station_name"],
+                "n_observaciones": len(observaciones),
+                "metadata_estacion": meta,
+                "observaciones": observaciones,
+                "qc_status": qc_status,
+            }
+
+            if apply_qc:
+                # Importación lazy: no afecta a módulos que no usan pandas
+                import pandas as pd
+                from datos.qc.snow_depth_qc import PARAMETROS_POR_ZONA, aplicar_pipeline_qc
+
+                zona_map = {
+                    "Mediterranean": "mediterranea",
+                    "Arid": "arida",
+                    "Wet": "humeda",
+                }
+                zona_clave = zona_map.get(meta.get("andean_zone", ""), "mediterranea")
+                params_qc = PARAMETROS_POR_ZONA[zona_clave]
+
+                indice = pd.to_datetime([obs["fecha"] for obs in observaciones])
+                serie = pd.Series(
+                    [obs["snow_depth_cm"] for obs in observaciones],
+                    index=indice,
+                    dtype=float,
+                )
+                serie_qc = aplicar_pipeline_qc(serie, params_qc)
+
+                n_original = serie.notna().sum()
+                n_qc = serie_qc.notna().sum()
+                n_spikes = int(n_original - n_qc)
+                pct_removido = round(n_spikes / max(n_original, 1) * 100, 2)
+
+                logger.info(
+                    f"[ConsultorBigQuery] QC aplicado → spikes={n_spikes} pct_removido={pct_removido}%"
+                )
+
+                # Actualizar observaciones con valores post-QC
+                resultado["observaciones"] = [
+                    {"fecha": str(d.date()), "snow_depth_cm": (None if pd.isna(v) else v)}
+                    for d, v in zip(serie_qc.index, serie_qc.values)
+                ]
+                resultado["qc_aplicado"] = True
+                resultado["qc_metricas"] = {
+                    "n_spikes_detectados": n_spikes,
+                    "pct_removido": pct_removido,
+                    "zona_parametros": zona_clave,
+                }
+
+            return resultado
+
+        except Exception as e:
+            logger.warning(f"[ConsultorBigQuery] Error obteniendo snow_depth_caro: {e}")
+            return {
+                "disponible": False,
+                "razon": str(e),
             }

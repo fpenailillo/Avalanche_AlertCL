@@ -15,7 +15,13 @@
     "name": "nivel_eaws_24h",
     "type": "INT64",
     "mode": "NULLABLE",
-    "description": "Nivel de peligro EAWS para las próximas 24 horas (1-5)"
+    "description": "Nivel de peligro EAWS para las próximas 24 horas (1-5, calibrado)"
+  },
+  {
+    "name": "nivel_eaws_24h_raw",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "Nivel predicho por LLM antes de calibración estadística (Fase D v21.0)"
   },
   {
     "name": "nivel_eaws_48h",
@@ -202,5 +208,53 @@
     "type": "STRING",
     "mode": "NULLABLE",
     "description": "JSON con lista de subagentes que fallaron y fueron degradados gracefully"
+  },
+  {
+    "name": "problema_avalancha_presente",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "FIX-S1-SEMANTICA (v7.0): true si hay al menos un problema EAWS activo (trigger + manto inestable). false activa EAWS Paso 1 → nivel 1 directo."
+  },
+  {
+    "name": "tipo_problema_eaws",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "FIX-S1-SEMANTICA (v7.0): new_snow | wind_slab | wet_snow | persistent_weak_layer | no_distinct_avalanche_problem"
+  },
+  {
+    "name": "wn2_alert_heavy_snow",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: alerta nieve intensa (prob_snow>=80% AND precip_p95>=5mm). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "wn2_alert_storm_slab",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: alerta placa de tormenta (prob_dry_snow>=89% AND precip_p50>=2mm AND viento100m>=8m/s). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "wn2_alert_wet_snow",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: alerta nieve húmeda (prob_wet_snow>=40% AND temp_mean>-1°C). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "wn2_alert_wind_strong",
+    "type": "BOOL",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: alerta viento fuerte (wind_100m_p95>=15m/s). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "wn2_avalanche_problem",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: problema dominante del día según ensemble (storm_slab|wind_slab|new_snow|wet_snow|persistent_weak_layer|low_load). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "wn2_confianza",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "WN2 v15.0: confianza del pronóstico ensemble (alta|media|baja|muy_baja basado en temp_std). NULL cuando USE_WEATHERNEXT2=false."
   }
 ]

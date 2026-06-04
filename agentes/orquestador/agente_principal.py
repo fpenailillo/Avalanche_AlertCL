@@ -22,6 +22,12 @@ import time
 from datetime import datetime, timezone
 from typing import Optional
 
+from agentes.validacion.cache_subagentes import (
+    cargar_cache,
+    guardar_cache,
+    existe_cache,
+)
+
 from agentes.datos.consultor_bigquery import (
     establecer_fecha_referencia_global,
     obtener_fecha_referencia_global,
@@ -91,7 +97,10 @@ class OrquestadorAvalancha:
     def generar_boletin(
         self,
         nombre_ubicacion: str,
-        fecha_referencia: Optional[datetime] = None
+        fecha_referencia: Optional[datetime] = None,
+        cache_dir: Optional[str] = None,
+        solo_s5: bool = False,
+        generar_cache: bool = False,
     ) -> dict:
         """
         Genera un boletín EAWS completo para una ubicación.
@@ -105,6 +114,10 @@ class OrquestadorAvalancha:
                 Si es None, usa datos actuales (comportamiento normal).
                 Si se provee, propaga a ConsultorBigQuery para consultar
                 datos históricos de esa fecha.
+            cache_dir: directorio local donde persistir/leer cache S1-S4.
+            solo_s5: si True, carga S1-S4 del cache y ejecuta solo S5.
+                     Requiere que cache_dir exista y tenga el archivo.
+            generar_cache: si True, guarda S1-S4 en cache tras ejecutarlos.
 
         Returns:
             dict con boletín completo, nivel EAWS, metadata y resultados
@@ -134,103 +147,157 @@ class OrquestadorAvalancha:
         resultados_subagentes = {}
         tools_llamadas_total = []
 
+        # Derivar fecha_str para el cache
+        _fecha_str_cache = (
+            fecha_referencia.strftime("%Y-%m-%d")
+            if fecha_referencia is not None
+            else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        )
+
         try:
-            # ─── Subagente 1: Topográfico ─────────────────────────────────────
-            logger.info("\n--- Subagente 1: Topográfico (DEM + PINNs) ---")
-            resultado_topo = self.subagente_topografico.ejecutar(
-                nombre_ubicacion=nombre_ubicacion,
-                contexto_previo=None  # Primer subagente sin contexto previo
-            )
-            resultados_subagentes["topografico"] = resultado_topo
-            tools_llamadas_total.extend(resultado_topo.get("tools_llamadas", []))
+            if solo_s5 and cache_dir:
+                # ─── Modo solo-S5: cargar S1-S4 del cache ────────────────────
+                cache = cargar_cache(cache_dir, nombre_ubicacion, _fecha_str_cache)
+                if cache is None:
+                    raise ErrorOrquestador(
+                        f"[solo_s5] Cache no encontrado para "
+                        f"'{nombre_ubicacion}' {_fecha_str_cache} en {cache_dir}"
+                    )
+                resultado_topo  = cache["resultado_topo"]
+                resultado_sat   = cache["resultado_sat"]
+                resultado_meteo = cache["resultado_meteo"]
+                resultado_nlp   = cache["resultado_nlp"]
+                contexto_acumulado = cache["contexto_s4"]
 
-            # Actualizar contexto acumulado
-            contexto_acumulado = self._construir_contexto(
-                contexto_previo="",
-                nombre_subagente="ANÁLISIS TOPOGRÁFICO (PINN)",
-                analisis=resultado_topo.get("analisis", "")
-            )
-            logger.info(
-                f"✓ Subagente Topográfico completado en "
-                f"{resultado_topo.get('duracion_segundos', 0)}s"
-            )
+                resultados_subagentes["topografico"]  = resultado_topo
+                resultados_subagentes["satelital"]    = resultado_sat
+                resultados_subagentes["meteorologico"] = resultado_meteo
+                resultados_subagentes["nlp"]          = resultado_nlp
+                # FIX-BUG002: propagar tools_llamadas del cache a tools_llamadas_total.
+                # Sin esto, almacenador._construir_campos_subagentes no encuentra
+                # calcular_pinn/analizar_vit/etc. y persiste ~15 columnas en NULL.
+                tools_llamadas_total.extend(resultado_topo.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_sat.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_meteo.get("tools_llamadas", []))
+                tools_llamadas_total.extend(resultado_nlp.get("tools_llamadas", []))
+                logger.info(
+                    f"[solo_s5] S1-S4 cargados del cache — "
+                    f"{nombre_ubicacion} {_fecha_str_cache}"
+                )
+            else:
+                # ─── Flujo normal: ejecutar S1-S4 ────────────────────────────
+                # ─── Subagente 1: Topográfico ─────────────────────────────────
+                logger.info("\n--- Subagente 1: Topográfico (DEM + PINNs) ---")
+                resultado_topo = self.subagente_topografico.ejecutar(
+                    nombre_ubicacion=nombre_ubicacion,
+                    contexto_previo=None  # Primer subagente sin contexto previo
+                )
+                resultados_subagentes["topografico"] = resultado_topo
+                tools_llamadas_total.extend(resultado_topo.get("tools_llamadas", []))
 
-            # ─── Subagente 2: Satelital ───────────────────────────────────────
-            logger.info("\n--- Subagente 2: Satelital (ViT) ---")
-            resultado_sat = self.subagente_satelital.ejecutar(
-                nombre_ubicacion=nombre_ubicacion,
-                contexto_previo=contexto_acumulado
-            )
-            resultados_subagentes["satelital"] = resultado_sat
-            tools_llamadas_total.extend(resultado_sat.get("tools_llamadas", []))
+                contexto_acumulado = self._construir_contexto(
+                    contexto_previo="",
+                    nombre_subagente="ANÁLISIS TOPOGRÁFICO (PINN)",
+                    analisis=resultado_topo.get("analisis", "")
+                )
+                logger.info(
+                    f"✓ Subagente Topográfico completado en "
+                    f"{resultado_topo.get('duracion_segundos', 0)}s"
+                )
 
-            contexto_acumulado = self._construir_contexto(
-                contexto_previo=contexto_acumulado,
-                nombre_subagente="ANÁLISIS SATELITAL (ViT)",
-                analisis=resultado_sat.get("analisis", "")
-            )
-            logger.info(
-                f"✓ Subagente Satelital completado en "
-                f"{resultado_sat.get('duracion_segundos', 0)}s"
-            )
-
-            # ─── Subagente 3: Meteorológico ───────────────────────────────────
-            logger.info("\n--- Subagente 3: Meteorológico ---")
-            resultado_meteo = self.subagente_meteorologico.ejecutar(
-                nombre_ubicacion=nombre_ubicacion,
-                contexto_previo=contexto_acumulado
-            )
-            resultados_subagentes["meteorologico"] = resultado_meteo
-            tools_llamadas_total.extend(resultado_meteo.get("tools_llamadas", []))
-
-            contexto_acumulado = self._construir_contexto(
-                contexto_previo=contexto_acumulado,
-                nombre_subagente="ANÁLISIS METEOROLÓGICO",
-                analisis=resultado_meteo.get("analisis", "")
-            )
-            logger.info(
-                f"✓ Subagente Meteorológico completado en "
-                f"{resultado_meteo.get('duracion_segundos', 0)}s"
-            )
-
-            # ─── Subagente 4: Situational Briefing ───────────────────────────
-            # No-crítico: si falla, el pipeline continúa con los datos
-            # de los 3 subagentes anteriores + integrador
-            logger.info("\n--- Subagente 4: Situational Briefing ---")
-            try:
-                resultado_nlp = self.subagente_nlp.ejecutar(
+                # ─── Subagente 2: Satelital ───────────────────────────────────
+                logger.info("\n--- Subagente 2: Satelital (ViT) ---")
+                resultado_sat = self.subagente_satelital.ejecutar(
                     nombre_ubicacion=nombre_ubicacion,
                     contexto_previo=contexto_acumulado
                 )
-                resultados_subagentes["nlp"] = resultado_nlp
-                tools_llamadas_total.extend(resultado_nlp.get("tools_llamadas", []))
+                resultados_subagentes["satelital"] = resultado_sat
+                tools_llamadas_total.extend(resultado_sat.get("tools_llamadas", []))
 
                 contexto_acumulado = self._construir_contexto(
                     contexto_previo=contexto_acumulado,
-                    nombre_subagente="SITUATIONAL BRIEFING",
-                    analisis=resultado_nlp.get("analisis", "")
+                    nombre_subagente="ANÁLISIS SATELITAL (ViT)",
+                    analisis=resultado_sat.get("analisis", "")
                 )
                 logger.info(
-                    f"✓ Subagente Situational Briefing completado en "
-                    f"{resultado_nlp.get('duracion_segundos', 0)}s"
+                    f"✓ Subagente Satelital completado en "
+                    f"{resultado_sat.get('duracion_segundos', 0)}s"
                 )
-            except Exception as exc_nlp:
-                logger.warning(
-                    f"⚠ Subagente Situational Briefing falló (no-crítico, continuando): {exc_nlp}"
+
+                # ─── Subagente 3: Meteorológico ───────────────────────────────
+                logger.info("\n--- Subagente 3: Meteorológico ---")
+                resultado_meteo = self.subagente_meteorologico.ejecutar(
+                    nombre_ubicacion=nombre_ubicacion,
+                    contexto_previo=contexto_acumulado
                 )
-                resultados_subagentes["nlp"] = {
-                    "analisis": f"[SituationalBriefing no disponible: {exc_nlp}]",
-                    "tools_llamadas": [],
-                    "iteraciones": 0,
-                    "duracion_segundos": 0,
-                    "error": str(exc_nlp),
-                    "degradado": True,
-                }
+                resultados_subagentes["meteorologico"] = resultado_meteo
+                tools_llamadas_total.extend(resultado_meteo.get("tools_llamadas", []))
+
                 contexto_acumulado = self._construir_contexto(
                     contexto_previo=contexto_acumulado,
-                    nombre_subagente="SITUATIONAL BRIEFING",
-                    analisis="[No disponible — sin datos históricos de relatos]"
+                    nombre_subagente="ANÁLISIS METEOROLÓGICO",
+                    analisis=resultado_meteo.get("analisis", "")
                 )
+                logger.info(
+                    f"✓ Subagente Meteorológico completado en "
+                    f"{resultado_meteo.get('duracion_segundos', 0)}s"
+                )
+
+                # ─── Subagente 4: Situational Briefing ───────────────────────
+                # No-crítico: si falla, el pipeline continúa con los datos
+                # de los 3 subagentes anteriores + integrador
+                logger.info("\n--- Subagente 4: Situational Briefing ---")
+                try:
+                    resultado_nlp = self.subagente_nlp.ejecutar(
+                        nombre_ubicacion=nombre_ubicacion,
+                        contexto_previo=contexto_acumulado
+                    )
+                    resultados_subagentes["nlp"] = resultado_nlp
+                    tools_llamadas_total.extend(resultado_nlp.get("tools_llamadas", []))
+
+                    contexto_acumulado = self._construir_contexto(
+                        contexto_previo=contexto_acumulado,
+                        nombre_subagente="SITUATIONAL BRIEFING",
+                        analisis=resultado_nlp.get("analisis", "")
+                    )
+                    logger.info(
+                        f"✓ Subagente Situational Briefing completado en "
+                        f"{resultado_nlp.get('duracion_segundos', 0)}s"
+                    )
+                except Exception as exc_nlp:
+                    logger.warning(
+                        f"⚠ Subagente Situational Briefing falló (no-crítico, continuando): {exc_nlp}"
+                    )
+                    resultado_nlp = {
+                        "analisis": f"[SituationalBriefing no disponible: {exc_nlp}]",
+                        "tools_llamadas": [],
+                        "iteraciones": 0,
+                        "duracion_segundos": 0,
+                        "error": str(exc_nlp),
+                        "degradado": True,
+                    }
+                    resultados_subagentes["nlp"] = resultado_nlp
+                    contexto_acumulado = self._construir_contexto(
+                        contexto_previo=contexto_acumulado,
+                        nombre_subagente="SITUATIONAL BRIEFING",
+                        analisis="[No disponible — sin datos históricos de relatos]"
+                    )
+
+                # ─── Persistir cache S1-S4 si se solicitó ────────────────────
+                if generar_cache and cache_dir:
+                    try:
+                        guardar_cache(
+                            cache_dir=cache_dir,
+                            ubicacion=nombre_ubicacion,
+                            fecha_str=_fecha_str_cache,
+                            resultado_topo=resultado_topo,
+                            resultado_sat=resultado_sat,
+                            resultado_meteo=resultado_meteo,
+                            resultado_nlp=resultado_nlp,
+                            contexto_s4=contexto_acumulado,
+                        )
+                    except Exception as exc_cache:
+                        logger.warning(f"[Cache] Error guardando cache (no-crítico): {exc_cache}")
 
             # ─── Subagente 5: Integrador ──────────────────────────────────────
             logger.info("\n--- Subagente 5: Integrador EAWS ---")

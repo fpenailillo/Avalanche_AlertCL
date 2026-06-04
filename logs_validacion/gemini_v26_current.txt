@@ -1,0 +1,1 @@
+logs_validacion/gemini_v26_20260602_135004.log

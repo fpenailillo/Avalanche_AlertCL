@@ -1,11 +1,13 @@
 """
 BaseSubagente — Clase base para todos los subagentes del sistema multi-agente.
 
-Implementa el agentic loop con tool_use nativo de Anthropic.
-Cada subagente es una instancia independiente de Claude con su propio
+Implementa el agentic loop con tool_use multi-proveedor.
+Cada subagente es una instancia independiente del LLM con su propio
 historial de mensajes y conjunto de tools especializadas.
 
-Autenticación: usa CLAUDE_CODE_OAUTH_TOKEN del entorno.
+Proveedor activo: "databricks" (Qwen3-80B via AI Gateway) por defecto.
+Cambiar globalmente con env var SUBAGENTES_PROVEEDOR=gemini3|anthropic|gemini.
+Cambiar por subagente sobreescribiendo el atributo de clase PROVEEDOR.
 """
 
 import json
@@ -53,16 +55,19 @@ class BaseSubagente(ABC):
     """
 
     NOMBRE = "BaseSubagente"
-    MODELO = "qwen3-next-80b-a3b-instruct"
+    MODELO = "databricks-qwen3-next-80b-a3b-instruct"
     PROVEEDOR = "databricks"
     MAX_TOKENS = 4096
     MAX_ITERACIONES = 10
 
     def __init__(self):
         """Inicializa el subagente con el cliente LLM correspondiente al proveedor."""
-        self.cliente = crear_cliente(self.PROVEEDOR)
+        # SUBAGENTES_PROVEEDOR permite alternar proveedor global sin editar cada agente.py
+        # Ej: SUBAGENTES_PROVEEDOR=gemini3 activa Gemini Pro en todos los subagentes.
+        proveedor = os.environ.get("SUBAGENTES_PROVEEDOR", self.PROVEEDOR)
+        self.cliente = crear_cliente(proveedor)
         logger.debug(
-            f"{self.NOMBRE}: cliente inicializado — proveedor: {self.PROVEEDOR}"
+            f"{self.NOMBRE}: cliente inicializado — proveedor: {proveedor}"
         )
 
         self._tools_definicion = self._cargar_tools()
@@ -165,8 +170,14 @@ class BaseSubagente(ABC):
                 )
                 time.sleep(espera)
             except error_servidor as exc:
-                codigo = getattr(exc, "status_code", 0)
-                if codigo >= 500:
+                # google-genai usa .code; openai usa .status_code
+                codigo = (
+                    getattr(exc, "status_code", None)
+                    or getattr(exc, "code", None)
+                    or 0
+                )
+                # 429 = rate limit / RESOURCE_EXHAUSTED (Gemini quota, Databricks QPS)
+                if codigo >= 500 or codigo == 429:
                     ultimo_error = exc
                     espera = min(
                         ESPERA_BASE_SEGUNDOS * (2 ** intento),
@@ -241,13 +252,13 @@ class BaseSubagente(ABC):
                     ""
                 )
 
-                # Detectar <tool_call> crudos en el texto (quirk de Qwen3: emite
-                # el XML en lugar de hacer la llamada real al framework)
+                # Detectar <tool_call> crudos en el texto (algunos modelos emiten
+                # XML en lugar de hacer la llamada real al framework)
                 tool_calls_crudos = _extraer_tool_calls_texto(analisis_texto)
                 if tool_calls_crudos and iteracion < self.MAX_ITERACIONES:
                     logger.warning(
                         f"{self.NOMBRE}: {len(tool_calls_crudos)} <tool_call> "
-                        f"detectados en texto end_turn (Qwen3 quirk) — ejecutando"
+                        f"detectados en texto end_turn — ejecutando"
                     )
                     mensajes.append({
                         "role": "assistant",
@@ -268,7 +279,7 @@ class BaseSubagente(ABC):
                         else:
                             resultado = {"error": f"Tool no registrada: {nombre_tool}"}
                         duracion_tool = round(time.time() - inicio_tool, 2)
-                        tool_id = f"qwen3_fix_{iteracion}_{idx_tc}"
+                        tool_id = f"llm_fix_{iteracion}_{idx_tc}"
                         resultados_tools.append({
                             "type": "tool_result",
                             "tool_use_id": tool_id,

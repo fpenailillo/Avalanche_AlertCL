@@ -29,6 +29,9 @@ from agentes.subagentes.subagente_topografico.tools.tool_tagee_terreno import (
 from agentes.subagentes.subagente_topografico.tools.tool_alphaearth import (
     TOOL_ALPHAEARTH, ejecutar_analizar_embedding_alphaearth
 )
+from agentes.subagentes.subagente_meteorologico.tools.tool_pronostico_wn2_ventanas import (
+    TOOL_PRONOSTICO_WN2_VENTANAS, ejecutar_obtener_pronostico_wn2_ventanas
+)
 
 
 class SubagenteTopografico(BaseSubagente):
@@ -53,6 +56,7 @@ class SubagenteTopografico(BaseSubagente):
             TOOL_ANALIZAR_DEM,
             TOOL_TAGEE_TERRENO,
             TOOL_ALPHAEARTH,
+            TOOL_PRONOSTICO_WN2_VENTANAS,  # FIX-PINN-WN2: inyecta nieve_nueva_cm al PINN
             TOOL_CALCULAR_PINN,
             TOOL_ZONAS_RIESGO,
             TOOL_ESTABILIDAD_MANTO,
@@ -63,6 +67,7 @@ class SubagenteTopografico(BaseSubagente):
             "analizar_dem": ejecutar_analizar_dem,
             "analizar_terreno_tagee": ejecutar_analizar_terreno_tagee,
             "analizar_embedding_alphaearth": ejecutar_analizar_embedding_alphaearth,
+            "obtener_pronostico_wn2_ventanas": ejecutar_obtener_pronostico_wn2_ventanas,
             "calcular_pinn": ejecutar_calcular_pinn,
             "identificar_zonas_riesgo": ejecutar_identificar_zonas_riesgo,
             "evaluar_estabilidad_manto": ejecutar_evaluar_estabilidad_manto,

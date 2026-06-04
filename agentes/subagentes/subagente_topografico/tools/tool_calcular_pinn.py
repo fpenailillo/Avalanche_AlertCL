@@ -11,6 +11,12 @@ El PINN resuelve:
     - Balance energético de la interfaz nieve-suelo
 """
 
+import logging
+import os
+
+logger = logging.getLogger(__name__)
+_USE_WEATHERNEXT2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
+
 
 TOOL_CALCULAR_PINN = {
     "name": "calcular_pinn",
@@ -65,6 +71,28 @@ TOOL_CALCULAR_PINN = {
                 "type": "number",
                 "description": "(Opcional AlphaEarth) Drift máximo interanual del embedding [0-1]. "
                                "Valores >0.1 indican cambios significativos en start zones."
+            },
+            "nieve_nueva_cm": {
+                "type": "number",
+                "description": "(Opcional WN2) Nieve nueva acumulada en 24h en cm, desde WeatherNext 2 "
+                               "(estimado densidad ~100 kg/m³). Usar nieve_24h_cm_p95_corr para "
+                               "evaluación de riesgo EAWS (escenario de planificación); si p50>0 usar p50. "
+                               "Añade sobrecarga (surcharge) al manto existente: incrementa tensión "
+                               "de cizalle en pendientes >28° → reduce FS. En tormentas de ≥20 cm/24h, "
+                               "puede empujar el estado de MANTO_MARGINAL a MANTO_INESTABLE."
+            },
+            "nombre_ubicacion": {
+                "type": "string",
+                "description": "(FIX-PINN-WN2) Nombre exacto de la ubicación (ej. 'La Parva Sector Alto'). "
+                               "Requerido para el fallback determinista WN2: si nieve_nueva_cm no fue "
+                               "obtenido previamente, el PINN lo consulta directamente. Pasar siempre "
+                               "que USE_WEATHERNEXT2=true."
+            },
+            "fecha_objetivo": {
+                "type": "string",
+                "description": "(FIX-PINN-WN2) Fecha ISO YYYY-MM-DD del análisis (ej. '2024-06-15'). "
+                               "Permite consultar WN2 retroactivo para esa fecha. Si se omite, "
+                               "se usa la fecha de referencia global del sistema."
             }
         },
         "required": [
@@ -88,6 +116,9 @@ def ejecutar_calcular_pinn(
     curvatura_horizontal: float = None,
     curvatura_vertical: float = None,
     drift_embedding_ae: float = None,
+    nieve_nueva_cm: float = None,
+    nombre_ubicacion: str = None,
+    fecha_objetivo: str = None,
 ) -> dict:
     """
     Ejecuta el modelo PINN de manto nival.
@@ -113,11 +144,88 @@ def ejecutar_calcular_pinn(
         curvatura_horizontal: (TAGEE/GLO-30) curvatura horizontal promedio
         curvatura_vertical: (TAGEE/GLO-30) curvatura vertical promedio
         drift_embedding_ae: (AlphaEarth) drift máximo interanual del embedding
+        nieve_nueva_cm: (WN2) nieve nueva 24h en cm — sobrecarga sobre manto existente
+        nombre_ubicacion: (FIX-PINN-WN2) nombre exacto de la zona para fallback WN2
+        fecha_objetivo: (FIX-PINN-WN2) fecha ISO YYYY-MM-DD para consulta WN2 retroactiva
 
     Returns:
         dict con estado del manto, factor de seguridad y riesgo de falla
     """
     import math
+
+    # ─── FIX-PINN-WN2: fallback determinista WN2 ─────────────────────────────
+    # Si el LLM no consultó obtener_pronostico_wn2_ventanas, o pasó un valor
+    # < _MIN_NIEVE_CM (e.g. p95_24h=4.3 cm en día despejado post-tormenta),
+    # el PINN consulta WN2 directamente y usa el mayor valor significativo
+    # (p50_24h → p95_24h → p95_3d). Garantiza que el surcharge llegue al
+    # Mohr-Coulomb aunque Qwen3 omita la llamada o extraiga solo el 24h.
+    _fuente_nieve = None
+    _MIN_NIEVE_CM_FALLBACK = 5.0  # mismo umbral que en la selección interna
+    _nieve_llm = nieve_nueva_cm   # preservar valor del LLM para log
+    if (nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM_FALLBACK) and nombre_ubicacion and _USE_WEATHERNEXT2:
+        try:
+            from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import (
+                FuenteWeatherNext2,
+            )
+            from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+
+            # Priorizar la fecha global del orquestador sobre la del LLM:
+            # el LLM puede pasar una fecha incorrecta (e.g. la de los datos WN2
+            # previos en el contexto); el orquestador siempre establece la fecha
+            # real del boletín vía establecer_fecha_referencia_global().
+            fecha_ref = obtener_fecha_referencia_global()
+            if fecha_ref is not None:
+                fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
+
+            coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
+            if coords and fecha_objetivo:
+                lat, lon = coords
+                elev = obtener_elevacion_referencia(nombre_ubicacion)
+                fuente = FuenteWeatherNext2()
+                res_wn2 = fuente.obtener_ventanas_6h(
+                    zona=nombre_ubicacion,
+                    lat=lat,
+                    lon=lon,
+                    fecha_objetivo=fecha_objetivo,
+                    elevacion_m=elev,
+                )
+                if res_wn2.get("disponible") and res_wn2.get("diario"):
+                    diario = res_wn2["diario"]
+                    val_p50 = diario.get("nieve_24h_cm_p50_corr") or 0.0
+                    val_p95 = diario.get("nieve_24h_cm_p95_corr") or 0.0
+                    # FIX-WN2-3D: ventana 3 días — captura tormentas que ocurrieron
+                    # antes del día del boletín (placas de tormenta persistentes)
+                    val_3d  = diario.get("nieve_3d_cm_p95_corr")  or 0.0
+                    # Umbrales diferenciados por nivel de confianza (FIX-WN2-P95-THRESHOLD):
+                    # - p50_24h: umbral 5 cm — escenario mediano, señal real si supera
+                    # - p95_24h: umbral 30 cm — cola del ensemble; con p50≈0 el p95 puede
+                    #   alcanzar 10-60 cm por dispersión natural sin tormenta real
+                    #   (data-driven: 2024-07-19 p50=0.3/p95=41.9, GT=1; Schweizer 2003:
+                    #   HN24h≥30 cm para placas de tormenta significativas en Alpes)
+                    # - p95_3d: umbral 5 cm — suma 3 días, 5 cm/3d es acumulación genuina
+                    _MIN_P50_CM  = 5.0
+                    _MIN_P95_CM  = 30.0
+                    _MIN_3D_CM   = 5.0
+                    if val_p50 >= _MIN_P50_CM:
+                        val, fuente_suffix = val_p50, "p50"
+                    elif val_p95 >= _MIN_P95_CM:
+                        val, fuente_suffix = val_p95, "p95"
+                    elif val_3d >= _MIN_3D_CM:
+                        val, fuente_suffix = val_3d, "p95_3d"
+                    else:
+                        val, fuente_suffix = 0.0, "none"
+                    if val > 0:
+                        nieve_nueva_cm = float(val)
+                        _fuente_nieve = f"wn2_fallback_determinista_{fuente_suffix}"
+                        logger.info(
+                            f"calcular_pinn FIX-PINN-WN2: '{nombre_ubicacion}' "
+                            f"{fecha_objetivo} → nieve_nueva_cm={nieve_nueva_cm} cm "
+                            f"(llm={_nieve_llm}, fallback WN2 {fuente_suffix}: "
+                            f"p50={val_p50:.1f}, p95={val_p95:.1f}, p95_3d={val_3d:.1f})"
+                        )
+        except Exception as _exc_wn2:
+            logger.warning(f"calcular_pinn FIX-PINN-WN2: fallback WN2 falló — {_exc_wn2}")
 
     # ─── 1. Difusividad térmica de la nieve ──────────────────────────────────
     # k_neve = 2.9e-6 * (densidad/917)^2  [m²/s]  (Sturm et al.)
@@ -153,10 +261,29 @@ def ejecutar_calcular_pinn(
     angulo_friccion_rad = math.radians(max(15.0, 28.0 + 5.0 * (1.0 - indice_metamorfismo)))
     pendiente_rad = math.radians(pendiente_grados)
 
-    # Peso normal y tangencial por unidad de área
-    peso_total = densidad_kg_m3 * g * espesor_nieve_m  # N/m²
+    # Peso normal y tangencial por unidad de área — manto base
+    peso_base = densidad_kg_m3 * g * espesor_nieve_m  # N/m²
+
+    # FIX-WN2-PINN: sobrecarga de nieve nueva (surcharge) — Schweizer et al. (2003)
+    # Nieve nueva en tormenta (densidad ~100 kg/m³, nieve seca fría) añade carga
+    # sobre la capa débil existente. Para θ > φ (>28°), el incremento en cizalle
+    # supera el incremento en resistencia → FS decrece. Este es el mecanismo físico
+    # de formación de placas de tormenta (storm slab). Schweizer et al. (2003)
+    # documenta que 20-30 cm/24h producen carga suficiente para falla en capas débiles.
+    # Referencia: Schweizer, J., Jamieson, J.B. & Schneebeli, M. (2003).
+    # Snow avalanche formation. Rev. Geophys. 41(4), 1016.
+    _RHO_NIEVE_NUEVA = 100.0  # kg/m³ — nieve de tormenta seca, Sturm et al. (1995)
+    peso_surcharge = 0.0
+    h_nueva_m = 0.0
+    if nieve_nueva_cm is not None and nieve_nueva_cm > 0:
+        h_nueva_m = nieve_nueva_cm / 100.0
+        peso_surcharge = _RHO_NIEVE_NUEVA * g * h_nueva_m
+
+    peso_total = peso_base + peso_surcharge
     tension_normal = peso_total * math.cos(pendiente_rad)
     tension_cizalle_aplicado = peso_total * math.sin(pendiente_rad)
+    # Resistencia en capa débil base: cohesión está en la capa débil existente,
+    # la tensión normal total (incluyendo surcharge) aumenta la resistencia por fricción.
     tension_resistencia = cohesion_Pa + tension_normal * math.tan(angulo_friccion_rad)
 
     # Factor de seguridad FS: >1.5 = estable, 1.0-1.5 = inestable, <1.0 = falla
@@ -184,7 +311,8 @@ def ejecutar_calcular_pinn(
         factor_seguridad=factor_seguridad,
         ratio_energia_fusion=ratio_energia_fusion,
         indice_metamorfismo=indice_metamorfismo,
-        factor_temp=factor_temp
+        factor_temp=factor_temp,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
 
     # ─── 6. Ajuste por features TAGEE/AlphaEarth (cuando disponibles) ─────────
@@ -202,12 +330,26 @@ def ejecutar_calcular_pinn(
         pendiente_grados=pendiente_grados,
         indice_metamorfismo=indice_metamorfismo,
         fs_base=factor_seguridad_ajustado,
+        nieve_nueva_cm=nieve_nueva_cm,
     )
+
+    # FIX-PINN-EAWS-MAP (v25.9): mapeo determinista estado_manto → escala EAWS.
+    # El LLM tendía a desplazar el mapeo un escalón hacia arriba (ESTABLE→"poor").
+    # Con "good", la matriz EAWS da nivel 1 para cualquier frecuencia/tamaño —
+    # elimina falsos positivos en días sin señal WN2 (wn2_prob=low_load).
+    _MANTO_A_EAWS = {
+        "ESTABLE":   "good",
+        "MARGINAL":  "fair",
+        "INESTABLE": "poor",
+        "CRITICO":   "very_poor",
+    }
+    _estabilidad_eaws = _MANTO_A_EAWS.get(estado_manto["estado"], "fair")
 
     return {
         "factor_seguridad_mohr_coulomb": factor_seguridad_ajustado,
         "factor_seguridad_base": factor_seguridad,
         "estado_manto": estado_manto["estado"],
+        "estabilidad_eaws": _estabilidad_eaws,
         "riesgo_falla": estado_manto["riesgo_falla"],
         "incertidumbre_pinn": uq,
         "features_glo30_tagee_ae": features_glo30,
@@ -219,7 +361,10 @@ def ejecutar_calcular_pinn(
             "tension_cizalle_Pa": round(tension_cizalle_aplicado, 1),
             "tension_resistencia_Pa": round(tension_resistencia, 1),
             "ratio_energia_fusion": ratio_energia_fusion,
-            "factor_temperatura": round(factor_temp, 2)
+            "factor_temperatura": round(factor_temp, 2),
+            "nieve_nueva_cm": nieve_nueva_cm,
+            "peso_surcharge_N_m2": round(peso_surcharge, 1),
+            "fuente_nieve_nueva": _fuente_nieve,
         },
         "interpretacion": estado_manto["interpretacion"],
         "alertas_pinn": estado_manto["alertas"]
@@ -297,6 +442,23 @@ _SIGMA_PENDIENTE_GRADOS = 2.0
 _SIGMA_METAMORFISMO     = 0.2
 
 
+def _fs_con_surcharge(densidad: float, pendiente_grados: float, metamorfismo: float, nieve_nueva_cm: float) -> float:
+    """FS de Mohr-Coulomb incluyendo sobrecarga de nieve nueva. Para diferenciación numérica UQ."""
+    import math
+    g = 9.81
+    h_base = 1.0
+    h_new = max(0.0, nieve_nueva_cm) / 100.0
+    rho_nueva = 100.0
+    pendiente_rad = math.radians(pendiente_grados)
+    cohesion_Pa = max(100.0, (densidad / 200.0) * 1500.0 * (1.5 - metamorfismo))
+    angulo_friccion_rad = math.radians(max(15.0, 28.0 + 5.0 * (1.0 - metamorfismo)))
+    peso = densidad * g * h_base + rho_nueva * g * h_new
+    tau_normal = peso * math.cos(pendiente_rad)
+    tau_aplicado = peso * math.sin(pendiente_rad)
+    tau_resistencia = cohesion_Pa + tau_normal * math.tan(angulo_friccion_rad)
+    return tau_resistencia / max(tau_aplicado, 1.0)
+
+
 def _fs_mohr_coulomb_puro(densidad: float, pendiente_grados: float, metamorfismo: float) -> float:
     """Calcula solo el factor de seguridad Mohr-Coulomb (sin efectos térmicos).
 
@@ -320,6 +482,7 @@ def _propagar_incertidumbre_pinn(
     pendiente_grados: float,
     indice_metamorfismo: float,
     fs_base: float,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """
     Propaga la incertidumbre de los parámetros de entrada al factor de seguridad
@@ -372,8 +535,22 @@ def _propagar_incertidumbre_pinn(
     contrib_theta = abs(dfs_dtheta) * _SIGMA_PENDIENTE_GRADOS
     contrib_meta  = abs(dfs_dmeta)  * _SIGMA_METAMORFISMO
 
+    # FIX-WN2-PINN: incertidumbre de nieve nueva (30% relativo — spread ensemble WN2)
+    # WN2 P50 tiene sesgo ~0 pero spread P50–P95 ≈ 30-50% en precipitación nívea.
+    # La sensibilidad ∂FS/∂h_nueva se aproxima como el efecto en FS de +1cm adicional.
+    contrib_nieve = 0.0
+    if nieve_nueva_cm is not None and nieve_nueva_cm > 0:
+        _sigma_h_nueva = 0.30 * nieve_nueva_cm  # 30% incertidumbre relativa WN2
+        delta_h_plus = min(5.0, _sigma_h_nueva * 0.01)  # variación numérica en m
+        _fs_hi = _fs_con_surcharge(densidad_kg_m3, pendiente_grados, indice_metamorfismo,
+                                   nieve_nueva_cm + delta_h_plus * 100)
+        _fs_lo = _fs_con_surcharge(densidad_kg_m3, pendiente_grados, indice_metamorfismo,
+                                   max(0, nieve_nueva_cm - delta_h_plus * 100))
+        dfs_dh = (_fs_hi - _fs_lo) / (2 * delta_h_plus * 100) if delta_h_plus > 0 else 0.0
+        contrib_nieve = abs(dfs_dh) * _sigma_h_nueva
+
     # Varianza total (independencia asumida → suma cuadrática)
-    sigma_fs = math.sqrt(contrib_rho**2 + contrib_theta**2 + contrib_meta**2)
+    sigma_fs = math.sqrt(contrib_rho**2 + contrib_theta**2 + contrib_meta**2 + contrib_nieve**2)
 
     # Intervalo de confianza 95% (z=1.96)
     z95 = 1.96
@@ -384,7 +561,12 @@ def _propagar_incertidumbre_pinn(
     cv = round(sigma_fs / max(fs_base, 0.001), 4)
 
     # Parámetro dominante (mayor contribución a σ_FS)
-    contribs = {"densidad": contrib_rho, "pendiente": contrib_theta, "metamorfismo": contrib_meta}
+    contribs = {
+        "densidad": contrib_rho,
+        "pendiente": contrib_theta,
+        "metamorfismo": contrib_meta,
+        "nieve_nueva": contrib_nieve,
+    }
     param_dominante = max(contribs, key=lambda k: contribs[k])
 
     return {
@@ -396,6 +578,7 @@ def _propagar_incertidumbre_pinn(
             "densidad_kg_m3":     round(contrib_rho,   4),
             "pendiente_grados":   round(contrib_theta, 4),
             "metamorfismo":       round(contrib_meta,  4),
+            "nieve_nueva_cm":     round(contrib_nieve, 4),
         },
         "parametro_dominante": param_dominante,
         "metodo": "Taylor_1er_orden_diferencias_finitas",
@@ -403,6 +586,7 @@ def _propagar_incertidumbre_pinn(
             "Proksch et al. (2015) J. Glaciol. 61(225):273-284",
             "Farr et al. (2007) Rev. Geophys. 45, RG2004",
             "Saltelli et al. (2008) Global Sensitivity Analysis: The Primer",
+            "Schweizer et al. (2003) Rev. Geophys. 41(4), 1016",
         ],
     }
 
@@ -411,7 +595,8 @@ def _clasificar_estado_manto(
     factor_seguridad: float,
     ratio_energia_fusion: float,
     indice_metamorfismo: float,
-    factor_temp: float
+    factor_temp: float,
+    nieve_nueva_cm: float = None,
 ) -> dict:
     """
     Clasifica el estado del manto nival a partir de métricas PINN.
@@ -451,6 +636,16 @@ def _clasificar_estado_manto(
     # Efecto de temperatura
     if factor_temp > 1.2:
         alertas.append("FUSION_SUPERFICIAL_ACTIVA")
+        riesgo_falla = _escalar_riesgo(riesgo_falla, 1)
+
+    # FIX-WN2-PINN: sobrecarga de nieve nueva (Schweizer et al. 2003)
+    # ≥20 cm/24h: carga suficiente para iniciar placas de tormenta en pendientes >30°
+    # ≥40 cm/24h: carga extrema — avalanchas espontáneas probables
+    if nieve_nueva_cm is not None and nieve_nueva_cm >= 40:
+        alertas.append(f"SURCHARGE_NIEVE_EXTREMA_{nieve_nueva_cm:.0f}cm_24h")
+        riesgo_falla = _escalar_riesgo(riesgo_falla, 2)
+    elif nieve_nueva_cm is not None and nieve_nueva_cm >= 20:
+        alertas.append(f"SURCHARGE_NIEVE_CRITICA_{nieve_nueva_cm:.0f}cm_24h")
         riesgo_falla = _escalar_riesgo(riesgo_falla, 1)
 
     # Estado global

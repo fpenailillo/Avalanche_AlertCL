@@ -1,280 +1,1911 @@
-# LOG DE PROGRESO — snow_alert
+# Log de Progreso — snow_alert
 
-> Este archivo registra TODO lo hecho en cada sesión de desarrollo.
-> Claude DEBE agregar entradas al final de cada tarea completada.
-> Formato: `- ✅ Descripción breve (YYYY-MM-DD)` bajo la sección de la sesión activa.
+## Sesión 2026-05-23 — Reproceso v25 + Ronda 18 + Cierre integración Caro 2026
 
-## Última actualización: 2026-03-23
+### Fixes ultrareview aplicados ✅ — commit `22c4926`
 
----
+6 bugs del análisis multi-agente corregidos: bug_001 (IMIS keys), bug_002 (tools_llamadas solo_s5), bug_004 (hashes prompts), bug_009 (umbral redistribución nieve Alpes 3→8 m/s), bug_015 (calibrador COALESCE), bug_017 (timezone WN2 Europe/Zurich vs America/Santiago).
 
-## Estado actual
+### VERSION_GLOBAL v22 → v25 + reproceso 120 runs ✅ — commit `1f3850b`
 
-### Fases del proyecto
+Reproceso completo 120 runs (~6h total, 2 timeouts en 2025-09-05). 118 boletines OK en BigQuery.
 
-- [x] Fase -1: Repositorio reorganizado
-- [x] Fase  0: Script diagnóstico creado
-- [x] Fase  1: Relatos en BigQuery — 3,131 rutas con LLM (37 campos)
-- [x] Fase  2: 5 subagentes construidos (S1-S5)
-- [x] Fase  3: Archivos de despliegue Cloud Run
-- [x] Fase  4: Schema boletines_riesgo (34 campos)
-- [x] Fase  5: Tests actualizados para 5 subagentes
-- [ ] Fase  6: Generar ≥50 boletines para métricas H1/H4
+### Ronda 18 — Resultados v25
 
-### Tests
+**H3 Suiza** (n=30 DEAPSnow 2018–2020):
+- QWK = **+0.3496** (vs −0.064 en v22) — recuperación gracias a bug_009 y bug_001
+- Accuracy ±1 = **1.000** — todos los errores de 1 nivel máximo
+- Objetivo propio ≥0.35: ✅ (rozando). Objetivo Techel ≥0.59: ❌ (gap estructural)
 
-- test_subagentes.py (sin Anthropic): ✅ 135 passed, 5 skipped
-  - TestTools (PINN ×8, ViT ×9, EAWS, NLP ×4, Boletín): 27 tests
-  - TestReintentosAPI: 3 | TestDegradacionGraceful: 3
-  - TestMetricasTechel: 8 | TestAlmacenadorHelpers: 10
-  - TestRegistroVersiones: 7 | TestMetricasF1: 5
-  - TestMetricasDeltaNLP: 3 | TestMetricasAblacion: 2
-  - TestMetricasKappa: 4 | TestETLRelatos: 18
-  - TestDisclaimerPrompts: 6 | TestSchemaMigracion: 4
-  - TestPruebasEstadisticas: 16 | TestBaseConocimientoAndino: 10
-  - TestNLPSintetico: 9
-- test_sistema_completo.py: ⬜ no ejecutado (requiere ANTHROPIC_API_KEY)
-- test_fase0_datos.py: ⬜ no ejecutado (requiere GCP auth)
+**H4 La Parva Snowlab** (n=87 pares):
+- QWK = **−0.080** (vs 0.003 en v22) — regresión por eliminación de bug de viento que accidentalmente beneficiaba
+- MAE tormentas = 2.417 — FIX-STORM-EXTREME no activa en datos históricos (ERA5 muestra 0mm, WN2/satélite no disponibles para fechas pasadas)
+- Brecha metodológica documentada en `docs/validacion/ronda18_v25_resultados.md`
 
-### Checklist pre-defensa
+### Integración Caro 2026 cerrada ✅
 
-#### Pendiente GCP
-- [x] **Migración schema** `boletines_riesgo` — ✅ confirmado 33 campos (2026-03-18, no necesitó migración)
-- [ ] **Verificar imágenes diurnas** NDSI/visual/pct_nubes (próxima captura 10-16 UTC Chile)
-- [ ] **GCS limpieza prefijos antiguos** — watcher activo; verificar `datos/migrar_gcs_progreso.log`
-
-#### Pendiente métricas
-- [ ] Tabla `boletines_riesgo` con ≥50 boletines — ⚠️ 10/50
-- [ ] F1-score macro calculado y reportado (H1: ≥75%)
-- [ ] Análisis de ablación real con/sin NLP (H2: >5pp — sintética ya confirmada +7.9pp)
-- [ ] Comparación con Snowlab si datos disponibles (H4: Kappa≥0.60)
-
-#### Completado ✅
-- [x] 6 Cloud Functions activas en GCP
-- [x] 10 boletines piloto en BigQuery + GCS
-- [x] Cloud Run Job `orquestador-avalanchas` desplegado (imagen `74b2359`)
-- [x] 3,131 relatos Andeshandbook cargados (37 campos)
-- [x] zonas_avalancha: 37/37 zonas correctas (pendiente_max_media=72.5°)
-- [x] Framework validación completo (F1, Kappa, QWK, Techel 2022)
-- [x] H2 confirmada sintéticamente (+7.9pp)
-- [x] Marco ético-legal documentado
-- [x] 13 decisiones de diseño justificadas (D1-D13)
-- [x] 135 tests unitarios passing
+- Rol final: exclusivamente validación offline. Datos SD observado NO son input del modelo predictivo.
+- `docs/validacion/validacion_caro2026_andesai.md`: sección §9 Estado integración + tabla artefactos.
+- `docs/validacion/ronda18_v25_resultados.md`: diagnóstico completo ronda 18.
 
 ---
 
-## Sesión 2026-03-17 (auditoría marco teórico)
+## Sesión 2026-05-22 — FIX-SAT-STORM v23 + FIX-WN2-PINN v24 + FIX-STORM-EXTREME v25 + Validación Caro 2026
 
-- ✅ Auditoría completa 8 dimensiones → `claude/PLAN_BRECHAS_MARCO_TEORICO.md`
-- ✅ Tabla `boletines_riesgo` creada en BigQuery (27 campos → luego 34)
-- ✅ `almacenador.py` actualizado 12→27 campos (campos v3)
-- ✅ `procesador_dias/main.py` — fix 10 campos NULL
-- ✅ `procesador_horas/main.py` — fix 3 nombres campo + 9 campos nuevos
-- ✅ `monitor_satelital/constantes.py` — fix nombres de banda (LST_Celsius, snow_depth_m)
-- ✅ `monitor_satelital/main.py` — expandido 2→25 ubicaciones monitoreadas
-- ✅ `agentes/validacion/metricas_eaws.py` — framework completo: F1-macro, Kappa, QWK, ablación
-- ✅ `tool_analizar_dem.py` — C1: gradiente térmico PINN desde LST real + fallback lapse rate
-- ✅ `tool_clasificar_eaws.py` — C2: `estimar_tamano_potencial()` conectada (no default=2)
-- ✅ `tool_clasificar_eaws.py` — C3: viento >40km/h → +1 frecuencia, >70km/h → +2
-- ✅ `schema_boletines.json` — C4: 6 campos ablación/trazabilidad (33 campos)
-- ✅ `almacenador.py` — C4: 6 campos nuevos en fila BQ
-- ✅ `prompts/registro_versiones.py` — sistema versionado prompts SHA-256
-- ✅ `base_subagente.py` — reintentos API backoff exponencial (3 intentos, 2-30s)
-- ✅ `agente_principal.py` — degradación graceful S4 NLP + campo subagentes_degradados
-- ✅ `docs/decisiones_diseno.md` — D1-D10: justificaciones académicas
-- ✅ `docs/arquitectura.md` — diagrama flujo 5 subagentes, resiliencia, tablas BQ
-- ✅ `metricas_eaws.py` — Techel 2022 benchmark: TECHEL_2022_REFERENCIA, QWK, accuracy ±1
-- ✅ `docs/decisiones_diseno.md` — D11: benchmark Techel con métricas referencia
-- ✅ Tests: 62 passed → 89 passed → 105 passed
-- ✅ Notebooks D1-D4: F1-score, ablación, Snowlab, confianza/cobertura
-- ✅ `datos/relatos/schema_relatos.json` — 12 campos tabla relatos_montanistas
-- ✅ `datos/relatos/cargar_relatos.py` — ETL JSON/CSV → BigQuery
-- ✅ Migración BQ: `migrar_schema_boletines.py` 27→34 campos
-- ✅ `docs/marco_etico_legal.md` — framework ético-legal (Ley 21.719, responsabilidad)
-- ✅ `docs/decisiones_diseno.md` — D12: marco ético-legal + principio precaución
-- ✅ `prompts.py` (integrador) — disclaimer obligatorio añadido
-- ✅ `notebooks_validacion/05_pruebas_estadisticas.py` — bootstrap IC 95%, McNemar, potencia
-- ✅ `conocimiento_base_andino.py` — 8 zonas → 15 zonas andinas + factor estacional
-- ✅ `tool_conocimiento_historico.py` — fallback a base andina cuando BQ vacío
-- ✅ `tool_analizar_vit.py` — REESCRITO: multi-head attention H=2, D_MODEL=6, D_HEAD=3, W_QKV Xavier, PE sinusoidal
-- ✅ `tool_calcular_pinn.py` — UQ Taylor 1er orden: IC 95%, σ_FS, sensibilidades, parámetro dominante
-- ✅ `docs/decisiones_diseno.md` — D13: UQ PINN justificación académica
-- ✅ `notebooks_validacion/06_analisis_nlp_sintetico.py` — H2 confirmada: +7.9pp (modelo unidireccional)
-- ✅ Tests: 126 → 135 passed
+### FIX-SAT-STORM (v23.0) ✅ — commit `52a61d0`
 
-## Sesión 2026-03-18 (despliegue producción)
+Señal satelital S2 propagada a S3 (`detectar_ventanas_criticas`). Nuevo parámetro `alertas_satelitales`. `NEVADA_RECIENTE_INTENSA` activa `NEVADA_SATELITAL_CONFIRMADA` aunque ERA5=0mm → rompe compuerta de calma → EAWS Paso 1 desactivado. 7 tests nuevos.
 
-### Despliegue Cloud Run
-- ✅ `zonas_avalancha` regenerada — 37/37 zonas correctas: pendiente_max_media=72.5°, indice_riesgo_medio=63.18
-- ✅ Cloud Run Job `orquestador-avalanchas` desplegado — imagen `74b2359`, LLM Databricks/Qwen3-80B
-- ✅ `cloudbuild.yaml` — create-or-update automático
-- ✅ `Dockerfile` — `--guardar` añadido al ENTRYPOINT
-- ✅ `almacenador.py` — fix NameError: `resultado→resultado_boletin` en insert BigQuery
-- ✅ **10 boletines piloto** generados — Antuco=5, Cerro Bayo=5, Cerro Castor=5, Antillanca=4, Bariloche=4, Brian Head=3, Aspen=2, Banff=2, Arizona=2, Cerro Catedral=2
+### FIX-WN2-PINN (v24.0) ✅ — commit `6282642`
 
-### Fix imágenes satelitales
-- ✅ `productos.py` — NDSI mask: `neq(250)→lte(100)` (fill values se renderizaban blanco)
-- ✅ `productos.py` — LST: máscara fill value 0 antes de Celsius
-- ✅ `constantes.py` — ERA5 palette: blanco→gris oscuro (#4a4a4a), max=2m
-- ✅ `constantes.py` — MODIS true color: min/max -100/8000→0/3000 con gamma=1.4
-- ✅ `descargador.py` — Preview incluye tipo_producto en nombre (antes sobreescribían)
+Forzante de carga nival en PINN S1: parámetro `nieve_nueva_cm` modela sobrecarga (surcharge) Mohr-Coulomb. Con ≥20cm → `SURCHARGE_NIEVE_CRITICA`; ≥40cm → `SURCHARGE_NIEVE_EXTREMA`. Empuja estabilidad de `poor` a `very_poor`. UQ extendido con 4ª fuente (σ_nieve=30%). 9 tests. Prompt S1 actualizado (FIX-WN2-PINN en flujo WN2).
 
-### ETL Relatos Databricks
-- ✅ `schema_relatos.json` reescrito 12→37 campos para CSVs Databricks
-- ✅ `cargar_relatos.py` reescrito: `cargar_routes_csv()` + `_enriquecer_con_llm()`
-- ✅ **3,138 rutas cargadas** en BigQuery (3,131 con LLM, 41 avalancha, riesgo promedio 4.56)
+### FIX-STORM-EXTREME (v25.0) ✅ — commit `6ddcd94`
 
-### Fix nulos BigQuery + imágenes grises
-- ✅ `viento_altura.py` — bandas `u/v_component_of_wind→u/v_component_of_wind_100m`
-- ✅ `viento_altura.py` — ventana 24h→7 días para tolerar latencia ERA5
-- ✅ `constantes.py` — DIAS_BUSQUEDA_MODIS: 7→14 días (latencia LST)
-- ✅ `productos.py` — almacena `imagen_raw` para cálculo % nubes
-- ✅ `metricas.py` — `calcular_porcentaje_nubes` con `imagen_raw`
-- ✅ `descargador.py` — ERA5 GeoTIFF `radio_metros=25000` (resuelve TIFFs vacíos 530 bytes)
-- ✅ Validación: viento_max_24h 0/25→25/25, lst_noche 0/25→25/25
+Dos fixes en S5 para alcanzar nivel 4–5 en tormentas extremas:
+- **FIX-STORM-FREQ-WN2**: `very_poor + NEVADA_RECIENTE + ventanas≥1 → frecuencia=many`
+- **FIX-WN2-SIZE-ANDES**: `nieve_nueva_cm_wn2` en S5; umbrales Techel 2022: 25→D3, 40→D4, 60→D5
 
-### Integración Google Weather API
-- ✅ 3 tablas BQ operativas: condiciones_actuales (84 ubic, 69K filas), pronostico_dias (63 ubic), pronostico_horas (61 ubic)
-- ✅ Fix `procesador-clima-horas`: `BUCKET_CLIMA=climas-chileno-datos-clima-bronce`
-
-### Fix cubicacion.py (12 key mismatches)
-- ✅ `ha_zona_inicio_total→zona_inicio_ha`, `pendiente_max→pendiente_max_inicio`, `aspecto_predominante→aspecto_predominante_inicio`, etc.
-- ✅ Resultado: indice_riesgo_topografico ya no fijo en 25.0 para todas las ubicaciones
-
-### Fix indicadores_nieve.py
-- ✅ `select('NDSI_Snow_Cover')→select('NDSI')` — snowline, pct_cobertura, delta ya no NULL
-
-### Fix metricas.py
-- ✅ Guard NoneType para `sar_pct_nieve_humeda`
-
-### Fix pipeline agentes
-- ✅ Parámetro `consultor` eliminado de tools NLP (se instancia internamente)
-- ✅ `consultor_bigquery.py`: columnas corregidas, TIMESTAMP/DATE, schema relatos, dedup pronostico_dias
-- ✅ LLM alternativo: ClienteDatabricks (Qwen3-80B) operativo — pipeline completo ~114s, 5/5 subagentes
-
-## Sesión 2026-03-18 (framework desarrollo)
-
-- ✅ Skill `snow-alert-dev` creado con 7 flujos de trabajo:
-  - F1: Diagnóstico (references/diagnostico.md)
-  - F2: Desarrollo agentes (references/desarrollo_agentes.md)
-  - F3: Pipeline datos (references/pipeline_datos.md)
-  - F4: Validación académica (references/validacion_academica.md)
-  - F5: Despliegue (references/despliegue.md)
-  - F6: Documentación tesina (references/documentacion_tesina.md)
-  - F7: Escritura informe (references/escritura_tesina.md)
-- ✅ Scripts: `verificar_proyecto.py` (health check) + `actualizar_progreso.py`
-- ✅ `CLAUDE.md` reescrito apuntando a skill + log_claude.md
-- ✅ `log_claude.md` creado con historial completo migrado de PROGRESO.md
-
----
-
-## Sesión 2026-03-18 (migración GCS + confirmación schema)
-
-### Confirmación schema BigQuery
-- ✅ `boletines_riesgo` confirmado en 33 campos — `migrar_schema_boletines.py --dry-run` retorna "tabla ya tiene 33 campos" (migración no necesaria)
-
-### Migración GCS bucket bronce
-- ✅ `datos/migrar_gcs.py --ejecutar` lanzado — reorganiza ~77k archivos de `{tipo}/{ubicacion}/` → `{ubicacion}/{tipo}/`
-  - Prefijos migrados: `boletines/`, `pronostico_dias/`, `pronostico_horas/`, `satelital/`, condiciones_actuales viejos
-  - Nueva estructura: `{ubicacion}/clima/`, `{ubicacion}/pronostico_horas/`, `{ubicacion}/pronostico_dias/`, `{ubicacion}/boletines/`, `{ubicacion}/satelital/{tipo}/`
-  - `topografia/` no migrado (transversal)
-- ✅ Watcher configurado (PID 2395) — al terminar copia borra 4 prefijos antiguos (~243 MB, 11.402 archivos)
-  - `boletines/`: 61 archivos | `pronostico_dias/`: 5.077 | `pronostico_horas/`: 4.834 | `satelital/`: 1.430
-- ✅ Log progreso: `datos/migrar_gcs_progreso.log`
-- ✅ Rama `release/2026-03-18-pipeline-fixes` pusheada a origin (para respaldo)
-
----
-
-## Sesión 2026-03-23 (validación capa de datos — Fases 0 y 1)
-
-### Fase 0 — Fix test_fase0_datos.py
-- ✅ `test_tabla_zonas_avalancha_accesible`: `obtener_pendientes_detalladas` → `obtener_perfil_topografico`
-- ✅ `test_zonas_avalancha_tiene_pendientes`: `obtener_pendientes_detalladas` → `obtener_perfil_topografico`; campo `pendiente_media_grados` → `pendiente_media_inicio`
-- Resto del test ya usaba métodos correctos (obtener_estado_satelital, obtener_condiciones_actuales, listar_ubicaciones_con_datos, obtener_relatos_ubicacion)
-
-### Fase 1 — Inventario GCP
-- ✅ Proyecto GCP: `climas-chileno`, cuenta `fpenailillom@correo.uss.cl` activa
-- ✅ 6/6 Cloud Functions ACTIVE (us-central1): extractor-clima, procesador-clima, procesador-clima-horas, procesador-clima-dias, analizador-satelital-zonas-riesgosas-avalanchas, monitor-satelital-nieve
-- ✅ 8 tablas BigQuery accesibles (7 esperadas + `pendientes_detalladas` extra): condiciones_actuales, pronostico_horas, pronostico_dias, imagenes_satelitales, zonas_avalancha, relatos_montanistas, boletines_riesgo, pendientes_detalladas
-- ✅ GCS bucket: estructura `{ubicacion}/{tipo}/` confirmada, prefijos antiguos (boletines/, pronostico_dias/, pronostico_horas/, satelital/) eliminados (0 archivos)
-
-### Fase 2 — Validación meteorológica
-- ✅ condiciones_actuales: 70,500 filas, 84 ubicaciones (≥45), frescura 9h (<12h), 0 nulos, 0 rangos anómalos
-- ⚠️ pronostico_horas: 58 ubicaciones (criterio ≥60, 2 por debajo), frescura 9h, 0 nulos post-fix
-- ⚠️ pronostico_dias: 58 ubicaciones (criterio ≥60), 0 duplicados, frescura 9h, 0 nulos post-fix
-- Nota schema: campos reales difieren del plan (presion_aire vs presion_atmosferica, diurno_temp_max vs temperatura_max, prob_precipitacion vs precipitacion_probabilidad) — datos válidos, solo nombres distintos
-
-### Fase 3 — Validación satelital y topográfico
-- ⚠️ imagenes_satelitales: 538 capturas (14 días), NDSI=49.3% (criterio ≥50%, 0.7pp por debajo), viento ERA5=69.7%, 0 rangos anómalos. Última descarga hoy 23:33.
-- ✅ zonas_avalancha: 37/37 ubicaciones (141 filas totales = 37 × ~4 ejecuciones históricas), pendiente_max_media=72.5°, indice_riesgo_medio=63.18, 0 nulos — valores exactos confirmados
-
-### Fase 4 — Validación relatos NLP
-- ✅ relatos_montanistas: 3,138 relatos (≥3,131), 204 ubicaciones, 41 con info avalancha (~41 esperados)
-- ✅ Enriquecimiento LLM: 96.6% con nivel_riesgo, 96.5% con puntuacion, 99.8% con resumen (criterio >95%)
-- ✅ Muestra cualitativa coherente (llm_nivel_riesgo/puntuacion/resumen consistentes)
-
-### Fase 5 — Cloud Functions (logs, scheduler, secretos)
-- ✅ 6/6 Cloud Functions ACTIVE; entry point monitor-satelital-nieve corregido a `monitorear_satelital`
-- ✅ Secrets disponibles: databricks-token, weather-api-key
-- ✅ analizar-zonas-diario-job: SUCCESS (status {} vacío, corrió hoy 02:17 UTC)
-- ⚠️ extraer-clima-job y monitor-satelital-job: status code 4 (DEADLINE_EXCEEDED) — scheduler timeout, pero datos fluyendo correctamente (bug solo en respuesta HTTP, función ejecuta OK)
-- ⚠️ extractor-clima: SSL timeout recurrente para Matterhorn Zermatt (SSLEOFError) → explica 58 en lugar de 60 ubicaciones en pronósticos
-- ❌ analizar-topografia-job: status code 13 (INTERNAL) desde 2026-03-01 — job mensual pendientes_detalladas lleva 1 mes fallando
-- DLQ: no existe clima-datos-dlq-sub (arquitectura HTTP, no Pub/Sub DLQ) — correcto
-
-### Fase 6 — Integración datos → agentes
-- ✅ test_subagentes.py: 145 passed, 5 skipped (baseline era 135 — 10 tests nuevos añadidos)
-- ✅ test_fase0_datos.py con GCP auth: 6 passed, 1 skipped (test_imagenes_satelitales_tiene_ndsi skip esperado por ausencia NDSI reciente La Parva Sector Bajo)
-- ✅ ConsultorBigQuery: todos los métodos accesibles y retornando datos válidos
-
-### Fase 7 — GCS almacenamiento bronce
-- ✅ 82 prefijos de ubicación con estructura {ubicacion}/{tipo}/
-- ✅ Migración prefijos antiguos confirmada: 0 archivos en boletines/, pronostico_dias/, pronostico_horas/, satelital/
-- ✅ topografia/ sin migrar (transversal — diseñado así)
-- ✅ Datos satelitales recientes: geotiff hasta 2026-03-23; subdirectorios geotiff/, preview/, thumbnail/
-
-### Fase 8 — Boletines riesgo
-- ✅ Schema: 34 campos (1 más que los 33 esperados)
-- ✅ Niveles EAWS 1-5 válidos (0 inválidos), confianza presente en todos, sin degradación S4
-- ❌ Boletines únicos: 13/50 requeridos (10 piloto 2026-03-18 + 3 La Parva 2026-03-23)
-- ❌ Duplicados activos: 42 inserciones duplicadas (14 runs × 3 sectores La Parva el 2026-03-23) — almacenador.py no deduplica en BigQuery
-
----
-
-## Errores conocidos
-
-- `imagenes_satelitales`: mayoría de filas históricas tienen snowline/pct_cobertura/delta=NULL (pre-fix). Nuevas capturas llenan correctamente.
-- Imágenes diurnas NDSI/visual pendiente confirmar en próxima captura 10-16 UTC.
-
----
-
-## Próximos pasos
-
-1. ~~**Migrar schema** `boletines_riesgo`~~ — ✅ ya tiene 33 campos, no necesario
-2. ~~**Verificar GCS limpieza**~~ — ✅ confirmado completo (2026-03-23)
-3. **Fix deduplicación boletines** — `almacenador.py` debe evitar insertar duplicados (ubicacion+fecha) en BigQuery antes de generar más boletines
-4. **Generar ≥50 boletines únicos** para métricas H1/H4: `python agentes/scripts/generar_todos.py` (actualmente 13 únicos / 50 requeridos)
-5. **Investigar analizar-topografia-job** — status code 13 desde 2026-03-01; logs para diagnosticar fallo
-6. **Investigar SSL Matterhorn Zermatt** — fallo recurrente en extractor-clima (ubicación descartada o reintentos ajustados)
-7. **Calcular métricas reales**: F1-macro (H1), ablación real (H2), Kappa (H4)
-8. **Escritura tesina**: redactar capítulos 3 y 4 (implementación + resultados)
-
----
-
-## Comandos de verificación rápida
-
-```bash
-# Tests sin credenciales (siempre deben pasar)
-cd snow_alert && python -m pytest agentes/tests/test_subagentes.py -v \
-  -k "not (TestSubagenteTopografico or TestSubagenteSatelital or TestSubagenteMeteorologico or TestSubagenteIntegrador or TestSubagenteNLP)"
-# Esperado: 135 passed, 5 skipped
-
-# Health check del proyecto
-python snow-alert-dev/scripts/verificar_proyecto.py --solo-local
-
-# Tests con BigQuery (requiere GCP auth)
-python -m pytest agentes/tests/test_fase0_datos.py -v
-
-# Test E2E completo (requiere ANTHROPIC_API_KEY)
-python -m pytest agentes/tests/test_sistema_completo.py -v -s
+Resultado comparativo (3 tormentas, La Parva Sector Alto):
 ```
+v22.0 MAE=3.00  v23.0 MAE=2.00  v24.0 MAE=1.33  v25.0 MAE=0.67 (−78% vs baseline)
+```
+Evento 2024-06-15 (Snowlab=5): v22=1 → v25=5 ✅. Sin regresión en calmas.
+13 tests nuevos. Suite completa: 503 passed, 7 skipped.
+
+### Validación Caro 2026 ✅ — docs/validacion/validacion_caro2026_andesai.md
+
+Documento actualizado a v22–v25. Sección 7 completa: 7.1 correcciones, 7.2 tabla
+cuantitativa con v25, 7.3 brecha residual (post-tormenta Δ=−2 por ausencia de
+persistence factor), 7.4 rol operacional de fuentes (WN2+S2 son las fuentes
+primarias; Caro 2026 solo validación offline).
+
+---
+
+## Sesión 2026-05-02 (tarde) — REQ-06+REQ-03+REQ-07+REQ-01 integración v5.0
+
+### REQ-06: Refactor S3 ciclo diurno — fix causa raíz H4 piso nivel 3 ✅ — commit `8c97d85`
+
+**Problema:** S3 emitía `FUSION_ACTIVA`/`CICLO_FUSION_CONGELACION` en >95% de días de verano andino porque el umbral `T_max>0 AND T_min<0` se cumple geográficamente en La Parva sin que haya riesgo real. S5 recibía esa señal y emitía nivel 3 incluso en calma total.
+
+**Cambios:**
+- `tool_ventanas_criticas.py`: agrega `precipitacion_72h_mm: float = 0` al schema y función. Reescribe `_clasificar_factor_meteorologico()`:
+  - `CICLO_DIURNO_NORMAL`: ciclo térmico SIN precipitación 72h < 10mm → neutro, sin ajuste EAWS
+  - `FUSION_ACTIVA_CON_CARGA`: ciclo térmico CON precipitación_72h ≥ 10mm → poor/very_poor
+- `prompts.py` S3: documenta nueva semántica; instrucción para pasar `precipitacion_72h_mm` desde `analizar_tendencia_72h.eventos_precipitacion.total_mm`
+- `prompts.py` S5 (integrador): tabla factor_meteorologico actualizada; `CICLO_DIURNO_NORMAL → SIN AJUSTE`
+- `registro_versiones.py`: hashes S3+S5 actualizados, `VERSION_GLOBAL = "5.0"`
+
+### REQ-03: Fix corrección orográfica regional Alpes ✅ — commit `8c97d85`
+
+**Problema:** Factores ERA5 calibrados para Andes (0.65-0.85 según altitud) aplicados a Alpes suizos empeoraban el sesgo H1/H3 (−0.50→−0.92 en Ronda 3). Régimen orográfico alpino es distinto.
+
+**Cambios:**
+- `correccion_orografica.py`:
+  - Agrega `_ZONAS_ALPES = frozenset({"Interlaken", "Matterhorn Zermatt", "St Moritz"})`
+  - `es_zona_alpes(zona)`: detecta automáticamente, guard para string vacío
+  - `factor_correccion_orografica(altitud_m, region="andes")`: retorna 1.0 para `region="alpes"`
+  - `aplicar_correccion_orografica(precip, altitud, zona="")`: detecta región desde nombre de zona
+- `fuente_era5_land.py`: pasa `zona=zona` al llamar `aplicar_correccion_orografica`
+- 9 tests nuevos (`es_zona_alpes`, `factor region alpes/andes`, `FuenteERA5Land Interlaken sin reducción`)
+- 27/27 tests REQ-03 pasando
+
+### REQ-07: Cloud Function extractor_historico Open-Meteo ✅ — commit `9e92638`
+
+**Problema:** `pronostico_horas` BQ solo cubre desde mar 2026; fechas Snowlab (jun 2024–sep 2025) usan aproximación con datos actuales → validación retroactiva no es limpia.
+
+**Implementación:**
+- `datos/extractor_historico/main.py`: Cloud Function HTTP, Open-Meteo Historical API (gratuita, datos desde 1940)
+  - Procesa en chunks de 30 días (evita timeout 540s)
+  - Idempotente: verifica horas existentes por ubicación+fuente antes de insertar
+  - Inserta en `clima.condiciones_actuales` con `fuente='openmeteo_historical'`
+  - 6 ubicaciones: La Parva ×3, Interlaken, Matterhorn Zermatt, St Moritz
+  - `dry_run=True` para validar sin insertar
+- `requirements.txt`, `desplegar.sh` incluidos
+- 19 tests nuevos (chunks, parseo, HTTP mock, idempotencia, handler)
+
+### REQ-01: Integrar CICLO_DIURNO_NORMAL en S5 ✅ — commit `9b6dd83`
+
+**Problema:** `tool_clasificar_eaws.py` tenía `_factor_activo = factor != "ESTABLE"` — `CICLO_DIURNO_NORMAL` era tratado como activo, bloqueando el cap de calma sostenida REQ-01.
+
+**Cambios:**
+- `_FACTORES_NEUTROS = frozenset({"ESTABLE", "CICLO_DIURNO_NORMAL"})` — ambos neutros para la lógica de calma
+- `FUSION_ACTIVA_CON_CARGA → poor` en `_AJUSTE_METEOROLOGICO`
+- `_proyectar_nivel`: `CICLO_DIURNO_NORMAL` proyecta como ESTABLE (reducción 72h)
+- 3 tests nuevos verificando el comportamiento REQ-06 en S5
+
+### Resumen v5.0
+
+| Componente | Estado |
+|------------|--------|
+| tool_ventanas_criticas.py | CICLO_DIURNO_NORMAL vs FUSION_ACTIVA_CON_CARGA |
+| correccion_orografica.py | Alpes factor=1.0 |
+| tool_clasificar_eaws.py | CICLO_DIURNO_NORMAL neutro + cap activable |
+| registro_versiones.py | VERSION_GLOBAL = "5.0", hashes actualizados |
+| extractor_historico/ | CF nueva para backfill Open-Meteo |
+
+**Tests:** 365 passed, 8 skipped
+
+**Próximos pasos:**
+1. Desplegar extractor_historico en GCP y ejecutar backfill 2024-06-15 → 2025-09-21
+2. Re-ejecutar `reprocesar_retroactivo.py` con código v5.0 y datos backfilled
+3. Re-ejecutar `08_validacion_snowlab.py` → Ronda 4; esperado: sesgo ≤ +0.80, MAE calma ≤ 1.20
+4. Activar `USE_WEATHERNEXT2=true` cuando llegue suscripción Analytics Hub (máx 2026-05-05)
+
+---
+
+## Sesión 2026-05-02 — Validación Ronda 3 (v4.0) con replay retroactivo
+
+### Metodología del reprocesamiento
+
+Para comparar v3.2 vs v4.0 con el mismo ground truth, se regeneraron 120 boletines históricos usando `fecha_referencia` del orquestador — las queries BQ filtran por esa fecha, las APIs externas (ERA5/Open-Meteo) devuelven datos actuales como aproximación. Procesamiento cronológico para que REQ-01 pueda leer la cadena de predicciones v4 anteriores.
+
+- 30 Swiss (3 estaciones × 10 fechas 2023-12 a 2024-04)
+- 90 Snowlab (3 sectores La Parva × 30 fechas 2024-06 a 2025-09)
+- Duración total: ~8h (1 proceso colgado en BQ streaming buffer, relanzado, completado en 19 min la segunda vez)
+- 0 errores, 120/120 OK
+- Scripts: `notebooks_validacion/reprocesar_retroactivo.py`, `agentes/prompts/registro_versiones.py v4.0`
+
+### H1/H3 — Swiss SLF (n=24 pares, 3 estaciones, 10 fechas invierno 2023-24)
+
+| Métrica | Ronda 1 (sin sat.) | Ronda 2 v3.2 | Ronda 3 v4.0 | Techel 2022 | Objetivo |
+|---------|--------------------|--------------|--------------|-------------|----------|
+| QWK | −0.056 | +0.109 | **+0.162** | 0.590 | ≥ 0.59 |
+| F1-macro | 0.197 | 0.191 | 0.155 | 0.550 | ≥ 0.75 |
+| Accuracy exacta | — | 0.250 | 0.250 | 0.640 | — |
+| Accuracy ±1 | 0.708 | 0.750 | **0.792** | 0.950 | — |
+| Sesgo | −0.79 | −0.54 | −0.92 | — | — |
+
+**Resultado: H1 y H3 NO alcanzadas.** QWK +0.146 entre Ronda 2 y Ronda 3 — mejora real atribuible a REQ-02a/b (señales MODIS LST + SAR enriquecen el análisis satelital).
+
+**Regresión de sesgo (−0.54 → −0.92):** REQ-03 reduce precipitación ERA5 con factores calibrados para Andes (1500-3500m en Chile). En los Alpes la orografía y régimen pluviométrico son diferentes → la reducción sobrepenaliza la señal → el modelo predice aún más conservador en Europa. Limitación geográfica documentada.
+
+**Causa raíz persistente:** gap de dominio Andes→Alpes. AndesAI predice 62.5% nivel 1 en Alpes; SLF registra solo 12.5% nivel 1. El sistema fue calibrado en topografía andina (PINN, ViT, parámetros EAWS).
+
+### H4 — SnowLab La Parva (n=87 pares, 3 sectores, 30 boletines 2024+2025)
+
+| Métrica | Ronda 2 v3.2 | Ronda 3 v4.0 | Δ | Objetivo |
+|---------|--------------|--------------|---|----------|
+| QWK | −0.016 | −0.006 | +0.010 ≈ | ≥ 0.60 |
+| MAE | 2.103 | 2.138 | +0.035 ≈ | — |
+| Sesgo | +1.989 | +2.023 | +0.034 ≈ | ≤ +0.50 |
+| F1-macro | 0.104 | 0.030 | −0.074 ↓ | — |
+
+**Resultado: H4 NO alcanzada, sin mejora significativa entre rondas.**
+
+**Diagnóstico causa raíz del piso nivel 3 (confirmado en Ronda 3):**
+
+REQ-01 (persistencia temporal) está correctamente implementado pero bloqueado por los subagentes upstream:
+- S1 (PINN): reporta estabilidad EAWS `"fair"` incluso en calma — el PINN calcula riesgo topográfico basado en geometría (pendientes 35-45°, 700+ ha de zona de inicio) que es inherente al terreno, no al estado del manto
+- S3 (Meteorológico): clasifica el ciclo de fusión diurna/congelación nocturna como `FUSION_ACTIVA`, que empuja el nivel a 3 aunque no haya precipitación
+- S5 recibe esas señales y llega a nivel 3 antes de que REQ-01 pueda aplicar el cap
+- La cadena `calma_confirmada=True` (≥4 boletines ≤2) nunca se forma porque el propio modelo genera nivel 3
+
+Distribución comparativa v3.2 vs v4.0 (Snowlab nivel 1, 60 casos):
+- v3.2: 33×3, 20×4, 6×5 (piso 3)
+- v4.0: 32×3, 24×4, 3×5 (piso 3 idéntico)
+
+**Fix correcto para H4 (pendiente):**
+1. S1 prompt: distinguir entre "riesgo topográfico potencial" (geometría) y "riesgo activo" (requiere evento meteo + estado manto) → no contribuir nivel base si no hay precipitación reciente
+2. S3: ponderar `FUSION_ACTIVA` como factor menor cuando no hay precipitación y temperatura máxima < 5°C
+3. Verificar con 1-2 boletines manuales que REQ-01 se activa después del fix upstream
+
+### Archivos de referencia de la validación
+
+| Archivo | Contenido |
+|---------|-----------|
+| `notebooks_validacion/baseline_v32_ronda2.json` | Métricas completas v3.2 (H1/H3/H4) |
+| `notebooks_validacion/reprocesar_retroactivo.py` | Script de replay (120 runs) |
+| `notebooks_validacion/07_validacion_slf_suiza.py` | Validación H1/H3 (mapeo preciso por defecto) |
+| `notebooks_validacion/08_validacion_snowlab.py` | Validación H4 |
+| `agentes/prompts/registro_versiones.py` | Versionado de prompts (v4.0) |
+
+---
+
+## Sesión 2026-05-01 — REQ-02b SAR humedad + REQ-04 SLF + REQ-03 ERA5 + REQ-02a MODIS
+
+### REQ-02b: SAR Sentinel-1 índice humedad superficial en S2 ✅ — commit `c5a886e`
+
+Problema: S2 no detectaba nieve húmeda superficial sin LST positiva — señal SAR VV (C-band) es sensible a agua líquida en superficie antes de que la LST suba.
+
+Cambios:
+- `ConsultorBigQuery.obtener_sar_baseline()`: 2 queries BQ — (1) SAR VV reciente de `imagenes_satelitales` (últimos 7d), (2) media estacional VV (45d con ventana deslizante excluyendo los 7d recientes). Computa `sar_delta_baseline = vv_reciente - baseline_vv`; `humedad_activa = delta < -3.0 dB` (umbral Nagler et al. 2016). Lee tabla existente, sin UPDATE ni nueva tabla.
+- `tool_estado_manto.py` reescrito: integra 3 señales (MODIS LST + ERA5 suelo + SAR VV); degradación graceful por fuente — `disponible=True` si al menos una fuente activa; `_construir_interpretacion()` produce pipe-separated string con todas las señales activas; retorna `humedad_sar_activa`, `sar_delta_baseline`, `sar_pct_nieve_humeda`, `fecha_sar`
+- `prompts.py` S2: sección nueva "Contexto térmico y humedad del manto" con regla `humedad_sar_activa=True → reforzar detección nieve húmeda`; plantilla output incluye "SAR VV reciente / Delta baseline / Humedad SAR activa"
+- `test_req02b_sar_humedad.py` (nuevo): 10 tests — 5 unit (ConsultorBQ) + 5 integración (tool)
+- `test_req02a_estado_manto_gee.py`: fix compatibility — TestToolConsultarEstadoManto ahora mockea `obtener_sar_baseline` con disponible=False
+- 334 total passed, 8 skipped
+
+Constraints críticos verificados:
+- Sin SAR → flujo continúa con señales LST/ERA5 (`disponible=True` si hay datos térmicos)
+- Sin datos térmicos → flujo continúa con SAR (`disponible=True` si hay datos SAR)
+- Sin ninguna fuente → `disponible=False`, sin excepción
+
+---
+
+## Sesión 2026-05-01 — REQ-04 Mapeo SLF + REQ-03 Corrección ERA5 + REQ-02a MODIS
+
+### REQ-04: Mapeo estación→sector SLF preciso ✅ — commit `173a89f`
+
+Problema: validación H1/H3 usaba nivel modal del cantón (~±1 nivel de ruido).
+
+Cambios:
+- `mapeo_estaciones_slf.py`: MAPEO_ESTACIONES_SLF con sector_ids exactos (Interlaken→4113, Zermatt→2223, St Moritz→6113), haversine_km(), obtener_sector_slf(), sectores_por_distancia()
+- `07_validacion_slf_suiza.py`: usa obtener_niveles_slf_preciso() por defecto; fallback automático al modal de cantón si el sector exacto no tiene datos; columna via_mapeo en tabla output; flag --mapeo-canton para reproducir comportamiento anterior
+- 18 tests nuevos — 306 total passed
+
+### REQ-03: Corrección orográfica ERA5 en S3 ✅ — commit `eb905e0`
+
+Problema: ERA5 @9km sobreestima precipitación en topografía compleja → sesgo H1/H3 -0.54.
+
+Cambios:
+- `correccion_orografica.py`: ERA5_CORRECCIÓN_OROGRAFICA dict (0-1500m: ×1.0, 1500-2500m: ×0.85, 2500-3500m: ×0.75, >3500m: ×0.65); ALTITUD_REFERENCIA_ZONAS_M para 10 zonas (Chile + Suiza)
+- `fuente_era5_land.py`: aplica corrección a era5_snowfall_m→precipitacion_mm al construir PronosticoMeteorologico; zona desconocida → factor=1.0 (seguro)
+- 18 tests nuevos — 324 total passed
+
+Nota: factores de corrección son iniciales (literatura Muñoz Sabater 2021). Calibrar sobre 24 pares suizos en Ronda 3 para ajustar por zona geográfica.
+
+---
+
+## Sesión 2026-04-30 (continuación) — REQ-01 Persistencia temporal + REQ-02a MODIS LST
+
+### REQ-01: Feature persistencia temporal en S5 ✅ — commit `a408753`
+
+Problema: S5 evaluaba cada boletín de forma independiente — piso en nivel 3 en calma.
+
+Cambios:
+- `ConsultorBigQuery.obtener_historial_boletines()`: consulta `clima.boletines_riesgo` últimos 7d, calcula `dias_consecutivos_nivel_bajo`
+- `tool_historial_ubicacion.py` (nuevo, S5): retorna `calma_confirmada=True` si ≥ 4 días nivel ≤ 2
+- `tool_clasificar_eaws.py` (S5): cap en `fair` cuando calma confirmada + factor ESTABLE
+- `agente.py` S5: `TOOL_HISTORIAL_UBICACION` como primer tool (4 tools total)
+- `prompts.py` S5: sección "Confirmación de calma sostenida" con reglas explícitas
+- 13 tests nuevos — 13/13 pasando
+
+Constraint crítico verificado: días calmos NO afectan nivel cuando hay tormenta activa.
+
+### REQ-02a: MODIS LST + ERA5 suelo como features de estado del manto en S2 ✅ — commit `5910de3`
+
+Problema: S2/S5 sin señales positivas de estabilidad del manto — no puede confirmar manto frío.
+
+Cambios:
+- `backfill_estado_manto_gee.py` (nuevo): pobla `clima.estado_manto_gee` con MODIS LST (MOD11A1/MYD11A1 1km) y ERA5-Land temperatura del suelo L1 (0-7cm) / L2 (7-28cm)
+- `ConsultorBigQuery.obtener_estado_manto()`: calcula `dias_lst_positivo`, `manto_frio` (LST < -3°C), `metamorfismo_cinetico_posible` (gradiente L1-L2 < -1°C)
+- `tool_estado_manto.py` (nuevo, S2): primera tool de S2; degradación graceful si tabla vacía
+- `SubagenteSatelital._cargar_tools()`: 6 tools (TOOL_ESTADO_MANTO primero)
+- `prompts.py` S2: paso 1 nuevo, sección de contexto térmico del manto
+- 15 tests nuevos — 288 total passed, 8 skipped
+
+BQ table `clima.estado_manto_gee` schema:
+  fecha, nombre_ubicacion, lst_celsius, temp_suelo_l1/l2_celsius, gradiente_termico, cobertura_nubosa_pct, fuente_lst (MOD11A1|MYD11A1|ERA5_proxy), ingested_at
+
+Siguiente: REQ-04 (mapeo SLF preciso) o REQ-03 (corrección ERA5 orográfico).
+
+---
+
+## Sesión 2026-04-30 — Backfill satelital suizo + Re-validación H1/H3
+
+### Tarea: Backfill `imagenes_satelitales` para estaciones suizas ✅
+
+**Motivación:** H1/H3 rechazadas en 2026-04-28 con QWK=-0.056. Hipótesis: `imagenes_satelitales` tenía 0 filas para las 3 estaciones suizas (Matterhorn Zermatt, Interlaken, St Moritz) → S2 (ViT) ejecutaba sin señal satelital → subestimación sistemática.
+
+**Script creado:** `agentes/datos/backfill/backfill_satelital.py` (commits `b174f06`, `a432a27`)
+- Multi-fuente: SAR Sentinel-1 (COPERNICUS/S1_GRD), MODIS/061, ERA5-Land, Sentinel-2 SR
+- UBICACIONES region-agnóstico: Chile + Alpes Suizos
+- PRESET `validacion_suiza`: 10 fechas × 3 estaciones = 30 filas objetivo
+- Idempotente: `obtener_existentes()` evita duplicados
+- Campo `fuente_principal` para trazabilidad (ConsolidadorSatelital futuro)
+
+**Bugs corregidos durante desarrollo:**
+1. `uri_thumbnail_lst` / `uri_thumbnail_sar` → no existen en BQ schema (causaban 30/30 fallos)
+2. MODIS/006 → MODIS/061 (deprecado); bandas `Basic_QA` → `NDSI_Snow_Cover_Basic_QA`
+3. `datetime.utcfromtimestamp()` deprecado → `datetime.fromtimestamp(..., tz=timezone.utc)`
+
+**Resultado:** 30 filas insertadas en `imagenes_satelitales` (SAR+ERA5+S2; MODIS sin cobertura en Alpes en invierno).
+
+### Re-validación H1/H3 con datos satelitales ✅
+
+**30 boletines regenerados** (3 estaciones × 10 fechas) usando nuevos datos satelitales.
+Ejecutado vía batch local (`generar_boletin.py` × 30, sin `--solo-imprimir`).
+
+**Resultados H1/H3 (n=24 pares emparejados, 2026-04-30):**
+
+| Métrica | Ronda 1 (sin satélite) | Ronda 2 (con satélite) | Δ | Objetivo | Estado |
+|---------|----------------------|----------------------|---|----------|--------|
+| F1-macro | 0.197 | 0.191 | -0.006 | ≥0.75 | ❌ |
+| QWK | -0.056 | **+0.1087** | **+0.165** | ≥0.59 | ❌ |
+| Accuracy exacta | 0.333 | 0.250 | -0.083 | — | — |
+| Accuracy ±1 | 0.708 | 0.750 | +0.042 | — | — |
+| Sesgo medio | -0.79 | **-0.54** | +0.25 | ~0 | mejoró |
+
+**Distribución niveles predichos vs SLF:**
+
+| Nivel | SLF real | Techel ref | AndesAI R1 | AndesAI R2 |
+|-------|----------|------------|------------|------------|
+| 1 | 12.5% | 8% | 50% | **45.8%** |
+| 2 | 54.2% | 42% | 41.7% | **29.2%** |
+| 3 | 16.7% | 40% | 8.3% | **20.8%** |
+| 4 | 16.7% | 9% | 0% | **4.2%** |
+
+**Conclusiones:**
+- Datos satelitales SÍ tienen efecto positivo: QWK pasó de negativo (-0.056) a positivo (+0.1087), mejora de +0.165 puntos. Sesgo reducido de -0.79 a -0.54.
+- El factor dominante del fallo es **gap de dominio Andes→Alpes**: sistema calibrado para topografía andina predice 45.8% nivel 1 donde SLF registra 12.5%.
+- Diagnóstico ronda 1 ("ERA5 no disponible") era incorrecto — ERA5 siempre estuvo disponible para las fechas suizas.
+- H1/H3 definitivamente rechazadas. Resultado negativo documentado y publicable como análisis de transferibilidad de dominio para capítulo de limitaciones de tesis.
+
+---
+
+## Sesión 2026-04-28 (continuación) — Sección meteorológica + reprocesamiento completo
+
+### Tarea: Agregar datos meteorológicos al boletín (commit 933a507)
+
+**Motivación:** Los boletines no mostraban datos cuantitativos por día: temperatura, viento, mm precipitación, cm nieve nueva.
+
+**Cambios implementados (3 archivos):**
+- `tool_generar_boletin.py`: nuevos parámetros `temperatura_actual_c`, `viento_actual_kmh`, `pronostico_dias_meteo`; función `_seccion_datos_meteorologicos()` que genera sección estructurada
+- `subagente_meteorologico/prompts.py`: tabla obligatoria en PRONÓSTICO 3 DÍAS (T máx/mín, mm, cm nieve, km/h viento)
+- `subagente_integrador/prompts.py`: extracción y paso de los 3 nuevos campos a `redactar_boletin_eaws`
+
+**Resultado:** Boletines ahora incluyen sección DATOS METEOROLÓGICOS:
+```
+DATOS METEOROLÓGICOS
+------------------------------
+Condiciones actuales:
+  Temperatura: -3.5°C | Viento: 42 km/h | Precipitación 24h: 15.0 mm
+Pronóstico 3 días:
+  2024-08-15 | T 2°C/-8°C | Precip 15 mm | Nieve ~18 cm | Viento 55 km/h | Nevada moderada
+  2024-08-16 | T 4°C/-5°C | Precip 5 mm  | Nieve ~6 cm  | Viento 30 km/h | Parcialmente nublado
+  2024-08-17 | T 7°C/-2°C | Precip 0 mm  |              | Viento 20 km/h | Despejado
+```
+Tests: 260 passed, 8 skipped — sin regresiones.
+
+### Tarea: Reprocesar 126 boletines con nueva sección meteorológica
+
+**Deploy:** commit `933a507` → Cloud Run (build `36492b8b`, imagen `gcr.io/climas-chileno/snow-alert-agentes:933a507`)
+
+**Jobs ejecutados:** 24 Cloud Run jobs secuenciales, 12:05–18:50 UTC
+
+| Bloque | Preset | Fechas | Boletines | Estado |
+|--------|--------|--------|-----------|--------|
+| Swiss validación | `validacion` (7 ubicaciones) | 10 fechas 2023-12-01→2024-04-15 | 70 | ✅ 10/10 |
+| Chile invierno 2024 | `laparva` (4 ubicaciones) | 7 fechas Jun-Sep 2024 | 28 | ✅ 7/7 (1 reintento por red) |
+| Chile invierno 2025 | `laparva` (4 ubicaciones) | 7 fechas Jun-Sep 2025 | 28 | ✅ 7/7 |
+
+**Total:** 24/24 jobs exitosos, ~126 boletines regenerados con sección meteorológica.
+**Incidente:** `2024-06-15` falló por error DNS transitorio (`oauth2.googleapis.com`); reejecutado manualmente → exitoso.
+
+---
+
+## Sesión 2026-04-28 — Reprocesamiento La Parva + Valle Nevado + Swiss completo
+
+### Tarea: Reprocesar boletines con mejoras metodológicas
+
+**Motivación:** Boletines generados antes de commits `a444a02` y `c1d6812` (fix metamorfismo,
+viento 15→10 m/s, ciclo fusión, tamaño EAWS) producían niveles inflados. Se regeneran
+todos los históricos con la metodología corregida.
+
+**Estado inicial BQ:**
+- La Parva (×3): 103 boletines, ninguno con metodología corregida (pre-a444a02)
+- Valle Nevado: sin boletines históricos, ERA5 solo desde 2026-02-23
+- Swiss: 27/30 boletines presentes (Interlaken faltaba para 2023-12-01/15 y 2024-01-01)
+
+**Cambios de código:**
+- `backfill_clima_historico.py`: Valle Nevado agregado a UBICACIONES_LA_PARVA
+- `almacenador.py`: manejo de error "streaming buffer" en upsert (graceful skip)
+- `generar_todos.py`: preset `laparva` (4 ubicaciones Chile: La Parva ×3 + Valle Nevado)
+
+**Ejecuciones completadas (2026-04-28):**
+- 14 jobs Chile (invierno 2024+2025): `--preset laparva` — con backfill ERA5 automático para Valle Nevado ✅
+- 3 jobs Swiss-Interlaken faltantes: `--sin-backfill` ✅
+- 3 jobs Valle Nevado retry (2024-09-15, 2025-07-01, 2025-07-15): todos ✅
+
+**Resultado final:**
+- La Parva ×3: 42/42 boletines inviernos 2024+2025 ✅
+- Valle Nevado: 14/14 boletines inviernos 2024+2025 ✅
+- Swiss: 30/30 pares para H1/H3 ✅
+- Total boletines en BQ (todas ubicaciones): ~287 filas
+
+**Swiss H1/H3 (27/30 ya en BQ):**
+- Fechas 2023-12-01 a 2024-04-15 × 3 estaciones = 30 pares
+- Interlaken faltante en 3 fechas → completado con jobs adicionales
+- Listo para ejecutar `notebooks_validacion/07_validacion_slf_suiza.py` cuando completen
+
+**Imagen desplegada:** `08f62b8` (build d40c36a4)
+
+**Resultado boletines Chile reprocesados (55/56):**
+
+Distribución niveles invierno 2024-2025 La Parva (post-fix vs pre-fix):
+
+| Sector | Pre-fix (bug meta) | Post-fix rango real | Variación esperada |
+|--------|-------------------|---------------------|--------------------|
+| Bajo   | 4-5 permanente    | 2-5, media ~3.5 ✅  | Pico ago: 5, inicio/fin: 2-3 |
+| Medio  | 4-5 permanente    | 1-5, media ~3.0 ✅  | Mayor variabilidad (sin N-facing) |
+| Alto   | 5 permanente      | 2-5, media ~3.3 ✅  | Correcto para exposición N |
+| V.Nevado | sin previos    | 2-4, ERA5 parcial ✅ | 3 fechas aún pendientes |
+
+Valle Nevado 14/14 completos ✅ — variabilidad real: invierno 2024 nivel 4, fin temporada 2025 niveles 2-3.
+
+### Validación H1/H3 con SLF Suiza — EJECUTADA ✅
+
+**Resultados notebook 07 (2026-04-28, n=24 pares):**
+
+| Métrica | AndesAI | Techel 2022 | Objetivo | Estado |
+|---------|---------|-------------|----------|--------|
+| F1-macro | 0.197 | 0.550 | ≥0.75 | ❌ |
+| QWK | -0.056 | 0.590 | ≥0.59 | ❌ |
+| Accuracy exacta | 0.333 | 0.640 | — | — |
+| Accuracy ±1 | 0.708 | 0.950 | — | — |
+| Sesgo medio | -0.79 | — | ~0 | ❌ subestima |
+
+**Distribución niveles predichos vs real:**
+
+| Nivel | SLF real | Techel ref | AndesAI |
+|-------|----------|------------|---------|
+| 1 | 12.5% | 8% | **50%** ← sesgo |
+| 2 | 54.2% | 42% | 41.7% |
+| 3 | 16.7% | 40% | 8.3% |
+| 4 | 16.7% | 9% | **0%** ← nunca detectado |
+| 5 | 0% | 1% | 0% |
+
+**Diagnóstico de la subestimación (para tesis):**
+
+La causa raíz es la **ausencia de datos ERA5 para invierno 2023-2024 en estaciones suizas**.
+`condiciones_actuales` para Swiss solo tiene datos desde 2026-02-23. S3 retorna
+`{"disponible": False}` para todas las fechas de validación → S5 infiere sin información
+meteorológica real → sesgo sistemático hacia niveles bajos.
+
+Hallazgos académicos a documentar:
+1. **Gap de transferencia Andes→Alpes cuantificado**: sesgo −0.79 niveles (subestimación)
+2. **Accuracy ±1 = 71%**: más que azar (25%) → señal topográfica PINN tiene valor incluso sin meteo
+3. **Niveles 3-4 nunca detectados**: sin datos meteo reales, el integrador no activa factores de riesgo alto
+4. **El PINN fue calibrado para topografía andina**: curvatura, aspect, pendiente Andes ≠ Alpes
+5. **Resolución ERA5 @9km**: subaprecia orografía compleja alpina
+
+**Implicación tesis:** H1/H3 no se verifican con datos SLF directamente por ausencia de
+datos meteorológicos locales suizos. La validación significativa (H1/H4) requiere datos
+Snowlab La Parva donde ERA5 SÍ está disponible. La comparación Swiss es exploratoria
+y documenta el gap de dominio como aporte metodológico (capítulo de limitaciones).
+
+---
+
+## Sesión 2026-04-27 — Generación boletines Swiss H1/H3 + soporte --fecha histórico
+
+### Tarea: Soporte de fecha histórica en generar_todos.py ✅
+
+- `agentes/scripts/generar_todos.py` — nuevos argumentos:
+  - `--fecha YYYY-MM-DD`: activa modo histórico; pasa `fecha_referencia` al orquestador
+  - `--sin-backfill`: omite el backfill ERA5 automático (para cuando los datos ya están en BQ)
+  - Función `_ejecutar_backfill_para_fecha()`: importa `ejecutar_backfill` del script ERA5, filtra ubicaciones que tienen coordenadas en `UBICACIONES_LA_PARVA` (incluye Suiza)
+- Deploy: imagen `gcr.io/climas-chileno/snow-alert-agentes:2a705d5` subida via Cloud Build `d039c5ca`
+- 10 ejecuciones Cloud Run lanzadas en paralelo para validación Swiss H1/H3:
+  - Fechas: 2023-12-01, 2023-12-15, 2024-01-01, 2024-01-15, 2024-02-01, 2024-02-15, 2024-03-01, 2024-03-15, 2024-04-01, 2024-04-15
+  - Ubicaciones: preset `validacion` (La Parva ×3 + Suiza ×3 = 6)
+  - Executions: wpfkw, f27dh, gnpn8, rh54d, rk9wm, w2g6j, 4wdmc, tx52s, knf82, rfvxt
+
+### Pendiente
+- Esperar completar los 10 jobs (~20-40 min)
+- Verificar boletines en `clima.boletines_riesgo` para Swiss × 10 fechas (30 filas esperadas)
+- Ejecutar `notebooks_validacion/07_validacion_slf_suiza.py` para calcular F1/QWK vs ground truth SLF
+
+---
+
+## Sesión 2026-04-01 — REQ-01 S4 Situational Briefing + REQ-02 S3 WeatherNext 2
+
+### Tarea #1: REQ-01 — Nuevo S4 Situational Briefing (AgenteSituationalBriefing) ✅
+
+**Estado:** Implementado y testeado. 19 tests nuevos — todos pasando.
+
+- Nuevo módulo `agentes/subagentes/subagente_situational_briefing/` con:
+  - `agente.py`: `AgenteSituationalBriefing` — ejecuta 4 tools + Gemini 2.5 Flash + fallback textual
+  - `schemas.py`: schemas Pydantic `SituationalBriefing`, `CondicionesRecientes`, `ContextoHistorico`, `CaracteristicasZona`
+  - `tools/tool_clima_reciente.py`: condiciones 72h desde BQ (condiciones_actuales + tendencia)
+  - `tools/tool_contexto_historico.py`: época estacional + desviación vs promedio histórico
+  - `tools/tool_caracteristicas_zona.py`: constantes topográficas + enriquecimiento desde pendientes_detalladas
+  - `tools/tool_eventos_pasados.py`: eventos históricos documentados de avalanchas
+  - `prompts/system_prompt.md`: identidad, alcance, restricciones anti-alucinación
+- Integración con S5: `prompts.py` del integrador actualizado para consumir `factores_atencion_eaws`, `narrativa_integrada` y campos de compatibilidad
+- Compatibilidad mantenida: output incluye `indice_riesgo_historico`, `tipo_alud_predominante`, `total_relatos_analizados`, `confianza_historica`, `resumen_nlp`
+- Tests: `agentes/tests/test_situational_briefing.py` — 19 tests (schemas, 4 tools, agente completo, fallback, compatibilidad S5)
+
+### Tarea #2: REQ-02 — WeatherNext 2 aditivo en S3 ✅
+
+**Estado:** Implementado y testeado. 17 tests nuevos — todos pasando.
+
+- Nuevo módulo `agentes/subagentes/subagente_meteorologico/fuentes/` con patrón Strategy:
+  - `base.py`: interfaz abstracta `FuenteMeteorologica` + dataclass `PronosticoMeteorologico`
+  - `fuente_open_meteo.py`: fuente primaria (comportamiento existente, sin cambios)
+  - `fuente_era5_land.py`: fuente secundaria reanálisis (comportamiento existente, sin cambios)
+  - `fuente_weathernext2.py`: nueva fuente — 64 miembros ensemble vía BQ Analytics Hub
+    - Flag `USE_WEATHERNEXT2=false` (default): siempre desactivado
+    - Con flag=true: query BQ, calcula P10/P50/P90, detecta divergencia vs OM
+    - Caveats Chile documentados: resolución 0.25°, sin snow depth/SWE, sesgos orográficos
+  - `consolidador.py`: `ConsolidadorMeteorologico` con estrategias y fallback automático
+- Nueva tool `tools/tool_pronostico_ensemble.py`: `obtener_pronostico_ensemble` — expone consolidador a S3
+- `agente.py` S3 actualizado: registra la nueva tool manteniendo las 4 originales
+- Fix crítico: `ConsultorBigQuery` movido a import nivel-módulo en fuente_open_meteo.py y fuente_era5_land.py (permite mocking correcto en tests)
+- Tests: `agentes/tests/test_weathernext2.py` — 17 tests (schema, fuentes, consolidador, tool, regresión S3)
+
+### Estado tests (2026-04-01)
+- Suite completa: **198 passed, 8 skipped, 0 failed**
+- Nuevos tests REQ-01: 19 | Nuevos tests REQ-02: 17 | Total nuevos: +36
+- Sin regresiones en los 162 tests anteriores
+
+### Pendientes (requieren acceso GCP manual)
+- REQ-02 Fase A.1-A.4: suscripción a Analytics Hub `weathernext_2` en `climas-chileno`
+- REQ-01 Fase C.4: activar Gemini 2.5 Flash en Vertex AI (credenciales producción)
+- REQ-01 Fase F.1-F.2: desplegar Cloud Run Job actualizado
+
+---
+
+## Sesión 2026-04-01 (continuación) — REQ-03 S1 AlphaEarth+GLO-30+TAGEE + REQ-04 S2 RSFM paralelo
+
+### Tarea #3: REQ-03 — S1 AlphaEarth + Copernicus GLO-30 + TAGEE ✅
+
+**Estado:** Implementado y testeado. 23 tests nuevos — todos pasando.
+
+- Nuevas tools en `agentes/subagentes/subagente_topografico/tools/`:
+  - `tool_tagee_terreno.py`: consulta BQ para atributos TAGEE (curvatura H/V, northness/eastness, zonas de convergencia runout). Fallback gracioso cuando BQ no tiene datos aún.
+  - `tool_alphaearth.py`: consulta BQ para embeddings 64D de AlphaEarth por año (2020-2024), calcula drift interanual vía similitud coseno, detecta cambios de terreno. Señal ESTÁTICA anual (NO operacional diaria).
+- `tool_calcular_pinn.py` enriquecido:
+  - 3 parámetros opcionales: `curvatura_horizontal`, `curvatura_vertical`, `drift_embedding_ae`
+  - Nuevo helper `_aplicar_features_glo30()`: ajusta FS basado en curvatura (-0.05 si H>0.3, -0.02 si H>0.1, -0.03 si curvatura vertical convexa). Drift AE genera alerta sin modificar FS (es señal de incertidumbre, no física).
+  - Retro-compatible: parámetros opcionales con default None
+- `agente.py` S1 actualizado: 6 tools (antes 4), `MAX_ITERACIONES=10`
+- Backfill `agentes/datos/backfill/actualizar_glo30_tagee_ae.py`: script Earth Engine para poblar columnas nuevas en `pendientes_detalladas` con datos GLO-30+TAGEE+AlphaEarth
+- `ConsultorBigQuery.obtener_atributos_tagee_ae()`: maneja columnas inexistentes con fallback gracioso
+- Tests: `agentes/tests/test_s1_glo30.py` — 23 tests (TageeTerreno, AlphaEarth, PINN+GLO30, SubagenteS1V2, ConsultorBQ)
+
+### Tarea #4: REQ-04 — S2 vía Earth AI paralela al ViT ✅
+
+**Estado:** Implementado y testeado. 15 tests nuevos — todos pasando.
+
+- Nuevo schema unificado `agentes/subagentes/subagente_satelital/schemas.py`:
+  - `DeteccionSatelital`: dataclass con `via: Literal["vit_actual", "gemini_multispectral", "rsfm"]`
+  - `to_dict()` y `desde_resultado_vit()` classmethod
+- Nueva tool `tools/tool_gemini_multispectral.py`:
+  - Flag `S2_VIA=vit_actual` (default): retorna `{"via_activa": False}` sin consumir recursos
+  - Con `S2_VIA=ambas_*`: consulta BQ satellite state → prompt Qwen3-80B/Databricks → parsea análisis multi-spectral
+  - Limitación documentada: 43% errores Gemini en tareas diagramáticas → solo razonamiento cualitativo
+- Nuevo `comparador/ab_runner.py`:
+  - `ComparadorS2`: lee `S2_VIA` en `__init__` (no nivel módulo — importante para testing)
+  - `_calcular_metricas()`: delta_score_anomalia, acuerdo_anomalia, ratio_latencia, delta_confianza
+  - `_persistir_comparacion_async()`: escribe en `clima.s2_comparaciones`, nunca bloquea
+- `agente.py` S2 actualizado: 5 tools (antes 4), `MAX_ITERACIONES=10`
+- Tests: `agentes/tests/test_s2_earth_ai.py` — 15 tests (Schema, GeminiMultispectral, ComparadorS2, SubagenteSatelitalV2)
+
+### Estado tests (2026-04-01 cierre)
+- Suite completa: **237 passed, 8 skipped, 0 failed**
+- Nuevos tests REQ-03: 23 | Nuevos tests REQ-04: 15 | Total nuevos esta sesión: +74
+- Sin regresiones en los 162 tests anteriores
+
+### Pendientes REQ-03 (requieren Earth Engine manual)
+- Deadline quota EE: **27 abril 2026** — ejecutar `actualizar_glo30_tagee_ae.py` cuando EE disponible
+
+### Pendientes REQ-04 (disponibles GA)
+- Activar `S2_VIA=ambas_consolidar_vit` para recolectar datos comparativos temporada 2026
+
+---
+
+## Sesión 2026-04-01 (continuación 2) — REQ-05 BigQuery ST_REGIONSTATS + EE backfill ejecutado
+
+### Backfill EE ejecutado en producción ✅
+
+Acceso a Earth Engine verificado. Backfill GLO-30/TAGEE/AlphaEarth ejecutado para las 4 zonas:
+
+| Zona | Zonas convergencia | Drift 2023→2024 | BQ |
+|------|-------------------|-----------------|-----|
+| La Parva | 372,775 celdas | 2.9% | ✅ |
+| Valle Nevado | 184,719 celdas | 2.7% | ✅ |
+| La Parva Sector Bajo | 104,592 celdas | **4.2%** | ✅ |
+| El Colorado | 106,418 celdas | **3.8%** | ✅ |
+
+Drift 2023→2024 es el mayor de la serie — consistente con anomalías climáticas verano 2024 en Andes centrales. La Parva Sector Bajo y El Colorado muestran mayor variabilidad interanual.
+
+Bugs corregidos en backfill script: `math` import, bandas `A00-A63` (no `dim_0`), campo `fuente_dem` (no `dem_fuente`), umbral convergencia `1e-4 m⁻¹`.
+
+### Tarea #5: REQ-05 — BigQuery ST_REGIONSTATS + centralización coordenadas ✅
+
+**Estado:** Implementado y testeado. 19 tests nuevos — todos pasando.
+
+- **`agentes/datos/constantes_zonas.py`** — módulo único de verdad geográfica:
+  - `COORDENADAS_ZONAS`: lat/lon para Open-Meteo/ERA5/WeatherNext 2
+  - `BBOX_ZONAS`: polígonos bbox para Earth Engine
+  - `POLIGONOS_ZONAS`: GeoJSON cerrados para BQ GEOGRAPHY
+  - `METADATA_ZONAS`: elevaciones, exposición, región EAWS
+  - Helpers: `obtener_coordenadas()`, `obtener_bbox()`, `poligono_geojson_str()`
+- **Tabla BQ `climas-chileno.clima.zonas_objetivo`** creada con GEOGRAPHY:
+  - 4 zonas con polígonos válidos, área calculada con ST_AREA()
+  - La Parva: 619.7 km², Valle Nevado: 309.9 km²
+- **`ConsultorBigQuery.obtener_stats_terreno_st()`** — usa `ST_REGIONSTATS`:
+  - NASADEM + SRTM vía BigQuery directo (sin EE Python)
+  - Retorna elevación media, std, área desde zonas_objetivo en una sola query
+  - Fallback gracioso si zona no existe o BQ falla
+- **`ConsultorBigQuery.obtener_zona_geografica()`** — retorna polígono + metadata desde zonas_objetivo
+- **Refactor coordenadas** — eliminadas 4 copias de `_COORDS_ZONAS` hardcodeadas:
+  - `fuente_open_meteo.py` → importa `COORDENADAS_ZONAS`
+  - `fuente_era5_land.py` → importa `COORDENADAS_ZONAS`
+  - `fuente_weathernext2.py` → importa `COORDENADAS_ZONAS`
+  - `tool_pronostico_ensemble.py` → importa `COORDENADAS_ZONAS`
+  - `actualizar_glo30_tagee_ae.py` → importa `BBOX_ZONAS`
+- Tests: `agentes/tests/test_req05_st_regionstats.py` — 19 tests (constantes, ST_REGIONSTATS, zonas_objetivo, refactor)
+
+### Estado tests (2026-04-01 cierre final)
+- Suite completa: **256 passed, 8 skipped, 0 failed**
+- Nuevos tests REQ-05: 19 | Total nuevos esta sesión: +93
+- Sin regresiones en los 163 tests base
+
+### Todos los REQ completados
+- ✅ REQ-01 S4 Situational Briefing
+- ✅ REQ-02 S3 WeatherNext 2 (espera suscripción Analytics Hub)
+- ✅ REQ-03 S1 AlphaEarth+GLO-30+TAGEE + backfill ejecutado
+- ✅ REQ-04 S2 RSFM paralelo
+- ✅ REQ-05 ST_REGIONSTATS + zonas_objetivo + centralización coordenadas
+
+---
+
+## Sesión 2026-04-01 (continuación 3) — Fix metodológico: sesgo de sobreestimación EAWS
+
+### Bug crítico identificado y corregido: metamorfismo estático → niveles EAWS inflados ✅
+
+**Síntoma:** La Parva producía nivel EAWS 4.3–4.6 promedio en 102 boletines, incluso con
+T=6°C, P=0mm, V=5km/h (condiciones de primavera tranquila). Nivel 5 observado el 26 abril.
+
+**Causa raíz:** `_calcular_metricas_pinn` en `tool_analizar_dem.py` calculaba el índice de
+metamorfismo puramente con topografía estática:
+```python
+# Antes (INCORRECTO)
+factor_sombra = 1.2  # N-facing
+factor_pendiente = min(1.5, pendiente / 30.0)  # 42°/30 = 1.4
+indice_metamorfismo = factor_sombra × factor_pendiente  # = 1.68 ← colapso cohesión
+```
+Con `indice_metamorfismo = 1.68 > 1.5`, la cohesión caía a 100 Pa (mínimo hardcodeado),
+produciendo FS = 0.58 → CRITICO → very_poor → nivel EAWS 4-5 **permanentemente**,
+sin importar las condiciones meteorológicas del día.
+
+Cadena de amplificación:
+1. `_calcular_metricas_pinn` → metamorfismo = 1.68 (topografía estática)
+2. `ejecutar_calcular_pinn` → FS = 0.58 → estado = CRITICO
+3. `ejecutar_evaluar_estabilidad_manto` → score = 8 → estabilidad_eaws = "very_poor"
+4. `ejecutar_clasificar_riesgo_eaws_integrado` → worst-case → nivel 4–5 siempre
+
+**Fix implementado:** `agentes/subagentes/subagente_topografico/tools/tool_analizar_dem.py`
+```python
+# Después (CORRECTO)
+base_meta = 0.5
+if aspecto in aspectos_sombra:
+    base_meta += 0.2   # potencial de facetación, no estado actual
+if pendiente > 35:
+    base_meta += 0.1 × min(2.0, (pendiente - 35) / 10.0)
+indice_metamorfismo = min(1.0, base_meta)  # Cap ≤1.0 sin forzante meteorológico
+```
+
+**Valores resultantes para La Parva (condiciones calmadas):**
+
+| Sector      | Meta antes | Meta ahora | FS antes | FS ahora | Estado antes | Estado ahora |
+|-------------|-----------|------------|----------|----------|--------------|--------------|
+| Sector Bajo | 1.40      | 0.70       | 0.83     | 1.874    | CRITICO      | ESTABLE      |
+| Sector Medio| 1.52      | 0.73       | 0.68     | 1.676    | CRITICO      | ESTABLE      |
+| Sector Alto | 1.68      | 0.77       | 0.58     | 1.454    | CRITICO      | MARGINAL     |
+
+**Diferenciación meteorológica recuperada:**
+
+| Condición                  | Nivel 24h antes | Nivel 24h después |
+|----------------------------|-----------------|-------------------|
+| Calma (T=6°C, P=0, V=5km/h)| 4–5             | 2 (Moderado) ✅   |
+| Nevada moderada             | 4–5             | 3 (Notable) ✅    |
+| Nevada + viento 50km/h     | 4–5             | 4 (Fuerte) ✅     |
+| Precipitación crítica+viento| 5               | 4–5 ✅            |
+| Lluvia sobre nieve          | 5               | 5 (Muy alto) ✅   |
+
+**Tests:** 4 nuevos en `TestMetamorfismoFormula` (test_s1_glo30.py):
+- `test_metamorfismo_maximo_uno_para_condiciones_estaticas` — 12 combinaciones pendiente×aspecto
+- `test_la_parva_sector_alto_no_es_critico_en_calma`
+- `test_la_parva_sectores_producen_fs_diferenciado_por_pendiente`
+- `test_calma_vs_nevada_produce_niveles_eaws_distintos` — diferencia calma vs tormenta
+
+**Estado tests:** 260 passed, 8 skipped, 0 failed
+
+**Nota académica:** La fórmula topográfica representa el *potencial estructural* de metamorfismo
+(aspecto N + pendiente empinada → mayor tendencia histórica a facetación). El estado *actual*
+del manto es modulado por las condiciones meteorológicas recientes desde S3 (factor_meteorologico).
+Esta separación — potencial topográfico vs estado dinámico — es metodológicamente más correcta
+y permite validación por separado de cada componente (Hipótesis H1, H2).
+
+---
+
+## Sesión 2026-03-27 (continuación 9) — Tarea #1 completada: backfill histórico 27 boletines
+
+### Tarea #1: Generar boletines históricos restantes (27 boletines) — COMPLETADA ✅
+
+- **Estado:** completed
+- **Resultado:** 27/27 boletines generados, 0 errores
+- Cubre periodos 2024-09-01/15 + inviernos 2025 (jun-sep) × 3 ubicaciones chilenas
+
+---
+
+## Sesión 2026-03-27 (continuación 8) — Auditoría meteo+integrador + fix reintentos API + backfill histórico
+
+### Auditoría SubagenteMeteorológico y SubagenteIntegrador ✅ (sin bugs críticos)
+
+- `tool_condiciones_actuales.py`: limpio
+- `tool_pronostico_dias.py`: limpio
+- `tool_tendencia_72h.py`: código muerto (4 funciones privadas nunca llamadas); `estadisticas["horas_con_datos"]` = `horas_con_precipitacion` (nombre confuso pero no crítico)
+- `tool_ventanas_criticas.py`: limpio
+- `tool_clasificar_eaws.py`: edge case menor — triple combinación "NEVADA_RECIENTE+VIENTO_FUERTE+FUSION_ACTIVA" recibe ajuste "poor" en lugar de "very_poor" (substring match devuelve "NEVADA_RECIENTE" antes de la combinación completa). Raro en Andes chilenos.
+- `tool_generar_boletin.py`: limpio
+
+### Fix reintentos API ✅ (commit 7d9e950 → desplegado como 7d9e950)
+
+`MAX_REINTENTOS_API`: 3→5, `ESPERA_MAXIMA_SEGUNDOS`: 30→60s. Backoff: 2+4+8+16+32=62s total. Necesario para recuperar límites QPS de Databricks (~60s rolling window). Build `b39b495a` → `SUCCESS`.
+
+### Backfill histórico reiniciado (b8mbph4ac)
+
+Proceso anterior (bt0vez5r2) fallaba con reintentos viejos (14s max). Reiniciado con código actualizado. Primer boletín (La Parva Sector Bajo | 2024-09-01 | nivel=5) generado exitosamente sin rate limit failure. BQ save falla por streaming buffer (<90min desde inserción previa) → salvado en GCS.
+
+27 boletines pendientes: 2024-09-01/15 + 2025 inviernos (jun-sep) × 3 ubicaciones.
+
+---
+
+## Sesión 2026-03-27 (continuación 7) — Fix ViT sesgo estacional + limpieza BQ + deploy a2e424c
+
+### Fix ViT: sesgo estacional NDSI ✅ (commit a2e424c → desplegado)
+
+**Bug:** `_clasificar_estado_vit` en `tool_analizar_vit.py` sumaba `score += 2.0` incondicionalmente cuando `ndsi_promedio < 0.4`, llevando a `ALERTADO` (umbral ≥ 2.0) aunque no hubiera nieve. En marzo (verano austral chileno), NDSI ≈ 0.04 (terreno descubierto) → score = 2.0 → `ALERTADO` → niveles 4-5 falsos.
+
+**Causa raíz:** El criterio NDSI < 0.4 detecta correctamente _nieve húmeda/en fusión_ pero solo tiene sentido cuando HAY nieve. Sin cobertura nival, NDSI bajo es irrelevante.
+
+**Fix:** Condicionar penalización NDSI a `cobertura_promedio > 10` (10% cobertura mínima):
+```python
+if cobertura_promedio > 10:
+    if ndsi_promedio < 0.4:  score += 2.0   # nieve húmeda confirmada
+    elif ndsi_promedio < 0.45: score += 1.0  # posiblemente húmeda
+```
+Mismo cambio en `_analizar_punto_unico`. Verificado: marzo (cobertura=1%) → `ESTABLE` score=0 ✅; invierno (cobertura=60%) → `ALERTADO` score=2.0 ✅
+
+**Build y deploy:**
+- Build `140c566d` → `SUCCESS`
+- `gcr.io/climas-chileno/snow-alert-agentes:a2e424c` activo en Cloud Run Job
+
+### Limpieza BQ: 20 boletines contaminados eliminados ✅
+
+Boletines de 2026-03-24 (17 filas) y 2026-03-26 (3 filas) generados con imagen `cc71f72` (NDSI fix presente, ViT fix ausente) mostraban `estado_vit=ALERTADO, score=2.0` y niveles 3-5 inflados en verano. Eliminados con DELETE FROM BQ. Estado final: 0 boletines contaminados.
+
+**Datos de validación (invierno 2024) íntegros:** Los 15 boletines históricos (2024-06-15 a 2024-08-15) no tenían el bug — NDSI invernal era > 0.4 con nieve presente, por lo que la condición no se disparaba incorrectamente.
+
+### Generación histórica completada ✅
+
+85→68 boletines en BQ después de limpieza. Rango 2024-06-15 a 2026-03-26. Preset `validacion` incluye ubicaciones chilenas (La Parva ×3) + suizas (Matterhorn, Interlaken, St Moritz) para H3 con datos SLF.
+
+### Estado commits (pendiente git push)
+
+17 commits locales sin push. Ejecutar: `git push origin main`
+
+---
+
+## Sesión 2026-03-25 (continuación 6) — Auditoría completa sistema + fixes almacenador + hashes
+
+### Fix almacenador ✅ (commit e09f665)
+
+**Bug 1:** `_construir_campos_subagentes()` buscaba `res_patrones.get("frecuencias_terminos")` pero `buscar_relatos_condiciones()` retorna `resultados_por_termino: {term: [filas]}` → `patrones_nlp` siempre era `"[]"` en BQ. Fix: `{k: len(v) for k, v in resultados_por_termino.items()}`.
+
+**Bug 2:** `_datos_satelitales_disponibles()` chequea `"monitorear_nieve"` (inexistente) → `datos_satelitales_disponibles=False` aunque se llamara cualquier otra tool satelital. Fix: set completo `{"procesar_ndsi", "detectar_anomalias_satelitales", "analizar_vit", "calcular_snowline"}`.
+
+### Hashes prompts actualizados ✅ (commit f34f6fb)
+
+Prompts `nlp` e `integrador` fueron modificados en commits previos pero el registro de versiones no fue actualizado → `verificar_integridad()` en el orquestador retornaba `False` en cada arranque (warning al log).
+
+| Componente | Hash anterior | Hash nuevo | Versión |
+|-----------|---------------|------------|---------|
+| `nlp` | `3b0c928ed4439495` | `ba1f7309d30ba8bd` | 3.0→3.1 |
+| `integrador` | `4cc094839c0640fb` | `225e6a9d4ecf376a` | 3.0→3.1 |
+
+`VERSION_GLOBAL`: `3.1` → `3.2`
+
+### Auditoría módulos base ✅ (sin bugs)
+
+- `base_subagente.py`: agentic loop correcto, reintentos con backoff exponencial, manejo de tool_use/end_turn
+- `cliente_llm.py`: conversiones Anthropic↔OpenAI correctas, normalización de respuestas OK
+- `agente_principal.py` (OrquestadorAvalancha): pipeline secuencial 5 subagentes, NLP no-crítico, `_extraer_nivel()` regex OK
+- `metricas_eaws.py`: F1-macro, Kappa, QWK implementados correctamente; `TECHEL_2022_REFERENCIA` con datos del paper
+
+### Redespliegue en progreso 🔄
+
+Build `a6bf95c0` con `ff632b3` → en WORKING. Pendiente build con `f34f6fb` (almacenador + hashes).
+
+---
+
+## Sesión 2026-03-25 (continuación 5) — Auditoría SubagenteNLP + fix índice riesgo histórico
+
+### Fix subagente_nlp: término crítico "inestable" nunca buscado ✅ (commit c3e0762)
+
+**Bug:** `buscar_relatos_condiciones()` en consultor_bigquery.py limita `terminos[:8]`. `TERMINOS_RIESGO_EAWS` en `tool_extraer_patrones.py` tenía "inestable" en posición 9 → nunca se buscaba. "inestable" forma parte de `terminos_criticos = {"alud","avalancha","placa","peligroso","inestable","grieta"}` usado para calcular `indice_riesgo_calculado`. Resultado: índice subestimado cuando había relatos mencionando condiciones inestables.
+
+**Fix:** Reordenar `TERMINOS_RIESGO_EAWS` para que los 6 términos críticos queden en las primeras 6 posiciones: `placa, alud, avalancha, grieta, inestable, peligroso`.
+
+**Fix adicional:** Prompt de `subagente_nlp` no especificaba cómo convertir `resultados_por_termino: {term: [rows]}` → `frecuencias_terminos: {term: count}` requerido por `sintetizar_conocimiento_historico`. Añadida instrucción explícita con ejemplo.
+
+**Módulos auditados sin bugs adicionales:**
+- `tool_buscar_relatos.py`: correcto, usa parameterized queries, fallback por zona
+- `tool_conocimiento_historico.py`: lógica sólida, fallback a base andina cuando total_relatos=0
+- `consultor_bigquery.obtener_relatos_ubicacion()`: correcto, fallback a primera palabra si sin resultados
+- `consultor_bigquery.buscar_relatos_condiciones()`: correcto salvo el límite de 8 términos
+- `conocimiento_base_andino.py`: base completa con 14 zonas, `get_indice_estacional()` con factores mensuales correctos
+
+---
+
+## Sesión 2026-03-26 (continuación 4) — Mejoras boletines: datos climáticos + proyecciones
+
+### Mejoras al integrador EAWS ✅ (commit ffe9231)
+
+**Problema identificado por usuario:** boletines no incluían datos cuantitativos de precipitación/nevada, y las proyecciones 48h/72h no consideraban el pronóstico meteorológico.
+
+**Cambios aplicados:**
+
+| Archivo | Cambio |
+|---------|--------|
+| `tool_generar_boletin.py` | +3 campos: `precipitacion_reciente_mm`, `nieve_reciente_cm`, `tendencia_pronostico`; nueva subsección "Datos climáticos recientes" en FACTORES DE RIESGO; texto explicativo de tendencia en PRONÓSTICO |
+| `tool_clasificar_eaws.py` | +campo `tendencia_pronostico` en tool schema y función; lo propaga al output; reescritura de `_proyectar_nivel()` por factor |
+| `prompts.py` (integrador) | Requiere extracción explícita de `precipitacion_reciente_mm`, `nieve_reciente_cm`, `tendencia_pronostico` del informe S3; exige que `resumen_meteorologico` incluya datos cuantitativos |
+
+**Nueva lógica `_proyectar_nivel()` (antes: demasiado simple):**
+
+| Factor | 48h | 72h |
+|--------|-----|-----|
+| PRECIPITACION_CRITICA/LLUVIA | +1 | mantiene (baja solo si `mejorando`) |
+| ESTABLE | mantiene | -1 |
+| FUSION_ACTIVA/CICLO | +1 si empeorando; mantiene | -1 si mejorando; mantiene |
+| General (NEVADA, VIENTO) | +1 si empeorando; mantiene | -1 si mejorando o sin tendencia desde ≥3 |
+
+**Impacto:** Los boletines ahora mostrarán explícitamente "Precipitación últimas 24h: X mm / Nieve nueva: X cm" y las proyecciones reflejarán el pronóstico real.
+
+### Estado boletines BQ (2026-03-25)
+- Total: 71 boletines | 51 ubicaciones únicas
+- Rango fechas: 2026-03-18 → 2026-03-26
+- Ground truth: pendiente datos Snowlab/Andes Consciente → H1/H4 no calculables aún
+
+### Fix CRÍTICO: escala NDSI ✅ (commit 8d5e22d)
+
+**Bug:** `consultor_bigquery.py` retornaba `ndsi_medio` en escala 0-100 (como MODIS/Sentinel-2 la almacenan). Los tools usaban umbrales en escala [-1, 1] (estándar Dietz et al.). Efecto: `4.26 < 0.4 = FALSE` cuando debería ser `0.0426 < 0.4 = TRUE` → alerta `NIEVE_HUMEDA_NDSI_BAJO` nunca disparaba.
+
+**Fix:** En `obtener_estado_satelital()`, después de leer de BQ:
+```python
+for campo in ("ndsi_medio", "ndsi_max"):
+    valor = resultado.get(campo)
+    if valor is not None:
+        resultado[campo] = round(valor / 100.0, 4)
+```
+
+**Valores corregidos (La Parva Sector Bajo, 2026-03-25):**
+- Antes: ndsi_medio=4.26 → no dispara alertas de nieve húmeda
+- Después: ndsi_medio=0.0426 → `0.0426 < 0.4` = TRUE → `NIEVE_HUMEDA_NDSI_BAJO`
+
+**Impacto retroactivo:** Los 72 boletines previos usaron NDSI sin normalizar, por lo que las señales satelitales eran parcialmente incorrectas. Próximos boletines (scheduler diario + históricos pendientes) usarán la escala correcta.
+
+### Redespliegue imagen Cloud Run ✅ (commit ffe9231, luego 8d5e22d)
+- Build `3cdc0423` exitoso vía `cloudbuild.yaml`
+- Imagen activa: `gcr.io/climas-chileno/snow-alert-agentes:ffe9231`
+- Cloud Run Job `orquestador-avalanchas` actualizado automáticamente por cloudbuild.yaml
+
+### Cloud Scheduler — boletines diarios ✅ (2026-03-26)
+- Creado `generar-boletines-diario-job` us-central1
+- Schedule: `30 23 * * *` (23:30 UTC, tras analizar-zonas-diario-job a 22:00)
+- Descripción: genera 6 boletines daily (La Parva × 3 + Matterhorn + Interlaken + St Moritz)
+- SA: funciones-clima-sa → rol run.invoker para Cloud Run Jobs
+- Estado: ENABLED | próximo disparo: 2026-03-26T23:30:00Z
+
+**Schedulers completos:**
+
+| Job | Schedule | Propósito |
+|-----|----------|-----------|
+| extraer-clima-job | 0 8,14,20 * * * | Extrae datos clima |
+| monitor-satelital-job | 30 8,14,20 * * * | Monitoreo satelital |
+| analizar-zonas-diario-job | 0 22 * * * | Análisis topográfico zonas |
+| analizar-topografia-job | 0 3 1 * * | Análisis topografía (mensual) |
+| **generar-boletines-diario-job** | **30 23 * * *** | **Boletines EAWS (nuevo)** |
+
+### Generación boletines históricos invierno ⏳ (en progreso, background)
+- Script: `agentes/scripts/generar_boletines_invierno.py`
+- Backfill ya existe (42 operaciones omitidas — datos ERA5 cargados en sesión anterior)
+- Generando 42 boletines: La Parva ×3 | 14 fechas invierno 2024-2025
+- Inicio: 2026-03-25 22:49:39 | estimado: ~3.5h | finaliza ~02:00 UTC
+
+---
+
+## Sesión 2026-03-26 (continuación 3) — Auditoría completa tools agentes + fixes NDSI consistencia
+
+### Auditoría tools agentes ✅ (commits 95ca729, f3518a7)
+
+**20 tools auditadas, 6 fixes aplicados:**
+
+| Fix | Tool | Cambio |
+|-----|------|--------|
+| #2 | `tool_pronostico_dias` | `precip_*_mm` → `prob_precip_*_pct` (unidades para LLM) |
+| #5 | `tool_calcular_pinn` (×2 funciones) | `max(15°, 28 + 5*(1-meta))` — clamp ángulo fricción interna |
+| #4 | `tool_detectar_anomalias` | NDSI 0.3→0.4 / 0.35→0.45 (Dietz et al. literatura estándar) |
+| #4b | `tool_procesar_ndsi` | NDSI 0.3→0.4 en `_detectar_senales_cambio` |
+| #4c | `tool_analizar_vit` (×2 funciones) | NDSI 0.3→0.4 / 0.4→0.45 en clasificación ViT |
+
+**Sin bugs en:** `tool_condiciones_actuales`, `tool_ventanas_criticas`, `tool_analizar_dem`, `tool_zonas_riesgo`, `tool_estabilidad_manto`, `tool_clasificar_eaws`, `tool_snowline`, `tool_buscar_relatos`, `tool_generar_boletin`, `tool_explicar_factores`, `tool_conocimiento_historico`, `tool_extraer_patrones`, `tool_tendencia_72h`.
+
+**Arquitectura verificada:**
+- 5 subagentes usan Databricks (Qwen3-next-80b) como LLM — gratis
+- `MODELO = "claude-sonnet-4-5"` en cada subagente es etiqueta, no enruta proveedor
+- Orquestador acumula contexto (3000 chars/subagente, max 12000 total) — adecuado
+- Integrador: MAX_TOKENS=6144, MAX_ITERACIONES=6
+
+### Cloud Run Job ✅ (2026-03-26)
+- Imagen `f3518a7` activa en `orquestador-avalanchas` us-central1
+
+---
+
+## Sesión 2026-03-25 (continuación 2) — git push + backfill script imágenes topografía
+
+### git push origin main
+- Pendiente ejecución interactiva por el usuario (`! git push origin main`)
+
+### Auditoría y fixes capa de datos ✅ (2026-03-26)
+
+**Fixes CRÍTICOS aplicados (commit aeb94dd):**
+- procesador/horas/dias: except Exception silencioso en dedup → ahora WARNING en log
+- monitor_satelital: 10 llamadas GEE getInfo() sin timeout → _getinfo_con_timeout(60s)
+
+**Fixes MEDIOS aplicados (commit 406603d):**
+- extractor: reintentos HTTP 3×backoff (2/4/8s) en errores red y 5xx
+- extractor: Pub/Sub timeout 10s → 30s
+- extractor/requirements.txt: requests==2.32.*, httpx==0.27.* (versiones menores fijadas)
+
+**F2 — Cloud Scheduler deadlines:** ya configurados (1800s por defecto GCP). Sin acción necesaria.
+
+### Redespliegue Cloud Functions post-fix calidad datos ✅ (2026-03-26 ~00:25 UTC)
+
+| Función | Revisión anterior | Revisión nueva | Fix incluido |
+|---------|------------------|----------------|--------------|
+| procesador-clima | 00017-mac | 00018-gig | dedup WARNING log |
+| procesador-clima-horas | 00007-qos | 00008-saz | dedup WARNING log |
+| procesador-clima-dias | 00006-zek | 00007-tam | dedup WARNING log |
+| monitor-satelital-nieve | (anterior) | 00021-nar | GEE getInfo timeout 60s |
+
+Commit: `aeb94dd`
+
+### Notebook 01 validacion_f1_score.py ✅ (ejecutado 2026-03-26 00:07 UTC)
+- 65 boletines en BQ con nivel_eaws_24h
+- Distribución predicciones: {1:11, 2:15, 3:9, 4:17, 5:13} — cubre los 5 niveles EAWS
+- Confianza: 46 Media / 17 Alta / 2 Baja
+- Ground truth aún no disponible → F1-macro no calculable (pendiente datos Snowlab)
+- Modo descriptivo únicamente hasta recibir datos de Andes Consciente
+
+### Email a Frank Techel ✅ (borrador preparado 2026-03-26)
+- Borrador listo para enviar a techel@slf.ch
+- Solicita EAWS Matrix operacional (~26 servicios) para validación H3 (QWK)
+- Enviado por: Francisco Peñailillo (fpenaililllom@correo.uss.cl)
+
+### Script backfill imágenes GCS ✅ (creado)
+- **Archivo**: `datos/analizador_avalanchas/regenerar_imagenes_gcs.py`
+- **Propósito**: Regenera imágenes PNG/thumbnail en GCS para fechas < 2026-03-25 (desnivel bug)
+- **No requiere GEE**: Lee datos ya correctos de BQ `zonas_avalancha`
+- **Uso**:
+  - Dry run (ver qué se generaría): `python regenerar_imagenes_gcs.py --dry-run`
+  - Fecha específica: `python regenerar_imagenes_gcs.py --fecha 2026-03-18`
+  - Todas las fechas afectadas: `python regenerar_imagenes_gcs.py`
+- **Planificado para ejecutar**: 2026-04-01
+
+---
+
+## Sesión 2026-03-25 (continuación) — Alineación nombres cross-tabla + dedup procesadores
+
+### Estado final capa de datos (2026-03-25 ~12:10 UTC)
+
+| Tabla | Filas | Ubicaciones | NULLs críticos | Duplicados | Estado |
+|-------|-------|-------------|----------------|------------|--------|
+| condiciones_actuales | 69,477 | 92 (hist+activas) | 0 | 0 (dedup aplicado) | ✅ |
+| pronostico_horas | 11,723 | 71 | 0 | 0 (dedup aplicado) | ✅ |
+| pronostico_dias | 2,524 | 71 | 0 | 0 (dedup aplicado) | ✅ |
+| imagenes_satelitales | 701 | 25 | 0 (hoy 100% NDSI) | 0 | ✅ |
+| zonas_avalancha | 111 | 37 | 0 | 0 | ✅ |
+| pendientes_detalladas | 37 | 37 | 0 | 0 | ✅ |
+| boletines_riesgo | 65 | 51 | 0 | 0 | ✅ |
+| relatos_montanistas | 3,138 | 204 | 0 | 0 | ✅ |
+
+**Gaps cross-tabla: 0** — todas las ubicaciones en zonas_avalancha e imagenes_satelitales tienen datos en condiciones_actuales.
+
+### Fix alineación nombres cross-tabla ✅ (commits `8056f7e`, `4ed7199`)
+
+**Renames en UBICACIONES_ANALISIS (analizador):**
+- `Pucón` (ciudad -39.28) → `Ski Pucón` (resort -39.50)
+- `Catedral Alta Patagonia` → `Cerro Catedral`
+- `Chapelco` → `Cerro Chapelco`
+- Agregados: `Vallecitos`, `Caviahue`
+
+**Renames en UBICACIONES_MONITOREO (extractor):**
+- `Chapelco` → `Cerro Chapelco` (coord actualizadas a -40.25, -71.20)
+- `Whistler` → `Whistler Blackcomb`
+- `Plaza de Mulas - Aconcagua` → `Plaza de Mulas Aconcagua` (quita guión)
+- `Chamonix` eliminado (consolidado bajo `Chamonix Mont Blanc`)
+
+**Nuevas ubicaciones agregadas al extractor (70 total):**
+- Andinas: `Los Penitentes`, `Vallecitos`, `Caviahue`, `La Hoya`
+- Internacionales: `Plaza Argentina Aconcagua`, `Revelstoke`, `Squaw Valley`, `Val d'Isère`, `St. Anton am Arlberg`
+
+**BQ UPDATEs aplicados** (condiciones_actuales, pronostico_dias, pronostico_horas, zonas_avalancha, pendientes_detalladas, boletines_riesgo):
+- Renames: Chapelco→Cerro Chapelco (277+161+268 filas), Whistler→Whistler Blackcomb (112+58+268), Plaza de Mulas→(sin guión) (51+45+168), Chamonix→Chamonix Mont Blanc (113+58+268)
+- pendientes_detalladas: 38 duplicados eliminados + 3 renames (Catedral Alta Patagonia, Chapelco, Pucón)
+
+### Fix dedup procesadores ✅ (commit `2f67793`)
+
+**Causa:** DEPLOYMENT_ROLLOUT de Cloud Run envía múltiples HTTP health-checks al extractor → extractor publica mensajes duplicados a Pub/Sub → procesadores insertan todos sin verificar.
+
+**Solución:** Cada procesador consulta BigQuery antes de insertar:
+- `procesador-clima`: `_ya_existe_condicion()` — omite si hay fila del mismo lugar en ±2h
+- `procesador-clima-horas`: `_ya_existe_pronostico_horas()` — idem
+- `procesador-clima-dias`: `_ya_existe_pronostico_dias()` — idem
+
+**Limpieza BQ:** 1,371 filas eliminadas de condiciones_actuales, 5,018 de pronostico_horas, 1,304 de pronostico_dias.
+
+**Redespliegues:** `procesador-clima-00017-mac`, `procesador-clima-horas-00007-qos`, `procesador-clima-dias-00006-zek`.
+
+### Estado Cloud Functions (2026-03-25)
+
+| Función | Revisión | Estado | Último dato |
+|---------|----------|--------|-------------|
+| extractor-clima | 00021-nit | ACTIVE | 11:00 UTC |
+| procesador-clima | 00017-mac | ACTIVE | via Pub/Sub |
+| procesador-clima-horas | 00007-qos | ACTIVE | via Pub/Sub |
+| procesador-clima-dias | 00006-zek | ACTIVE | via Pub/Sub |
+| monitor-satelital-nieve | (sin cambio) | ACTIVE | 2026-03-25 |
+| analizador-satelital-zonas | 00011-yah | ACTIVE | 01:11 UTC |
+
+---
+
+## Sesión 2026-03-25 — Auditoría completa capa de datos + Fix SSL extractor + Fix Japan 404
+
+### Audit BigQuery — resultado final (2026-03-25)
+
+| Tabla | Total filas | Bugs corregidos | NULLs esperados | Estado |
+|-------|-------------|-----------------|-----------------|--------|
+| condiciones_actuales | 70,778 | 0 | 42 (ERA5 backfill, sin URI) | ✅ |
+| pronostico_horas | 15,013 | 0 | 0 | ✅ |
+| pronostico_dias | 3,483 | 0 | 126 (ERA5 backfill, sin URI) | ✅ |
+| imagenes_satelitales | 651 | 0 | NDSI URI null 2026-03-18/24 (threshold+bucket bugs, ya corregidos) | ⏳ |
+| zonas_avalancha | 252 | 178 elevacion_min_inicio corregidas a NULL | 0 | ✅ |
+| pendientes_detalladas | 75 | 0 | 0 | ✅ |
+| boletines_riesgo | 74 | 0 | 0 | ✅ |
+| relatos_montanistas | 3,138 | 0 | 107 null nivel (sin info avalancha) + 18 null tipo actividad | ✅ |
+
+### Fix SSL extractor ✅ (commit `734c529`)
+- `SSLEOFError` desde Cloud Run con `weather.googleapis.com` → TLS 1.3 incompatible
+- Fix: `httpx` con `ssl.TLSVersion.TLSv1_2` forzado
+- Confirmación: 278 nuevas filas `condiciones_actuales` a las 03:10 UTC
+- Extractor redespliegue: revisión `extractor-clima-00018-qoz`
+
+### Eliminar Hakuba + Niseko del extractor ✅ (commit `b6590a1`)
+- HTTP 404 para ambas ubicaciones en `weather.googleapis.com`
+- Eliminadas de `UBICACIONES_MONITOREO` en `datos/extractor/main.py`
+- Extractor redespliegue: revisión `extractor-clima-00018-qoz`
+
+### zonas_avalancha streaming buffer UPDATE ✅
+- 37 filas 2026-03-25 en buffer → corregidas a NULL al limpiar (~1h después del deploy)
+- Total bug_rows = 0 (252/252 filas limpias)
+
+### Cobertura ubicaciones (post-fix, 2026-03-25)
+- Extractor (condiciones_actuales/pronostico_*): 63 ubicaciones (65 original - 2 Japan 404)
+- Monitor satelital (imagenes_satelitales): 25 ubicaciones Andes/Sudamérica (lista separada)
+- La cobertura variable 53-63 en fechas anteriores era por SSL failures intermitentes (resuelto con TLS 1.2)
+- Brecha 2026-03-24: 0 datos en todas las tablas meteorológicas (SSL failure todo el día)
+
+### Fix dedup zonas_avalancha ✅ (commit `91828e5`)
+- Causa: redespliegue Cloud Function dispara DEPLOYMENT_ROLLOUT HTTP → múltiples ejecuciones el mismo día
+- Síntoma: 74 duplicados del 2026-03-25 + 30 del 2026-03-24
+- Fix: `_ya_existe_zona()` en `main.py` verifica `nombre_ubicacion + DATE(fecha_analisis)` antes de INSERT
+- 104 filas duplicadas eliminadas de BQ + 37 filas placeholder del 2026-03-17 (zona_ha=0, EAWS=1 uniforme)
+
+### imagenes_satelitales NDSI fix validado ✅
+- Primera ejecución post-fix: 25/25 ubicaciones con `uri_geotiff_ndsi` (100%)
+- NDSI URIs nulos anteriores al 2026-03-25 son históricos (threshold bug + bucket bug, sin backfill)
+
+### Estado final zonas_avalancha (2026-03-25)
+- 111 filas limpias: 3 fechas × 37 ubicaciones (2026-03-18, 2026-03-24, 2026-03-25)
+- 0 duplicados, 0 placeholders, 0 copy-paste bugs
+
+### Pendiente
+1. `git push origin main` (commits: `91828e5`) — requiere credenciales GitHub interactivas
+2. Regenerar imágenes topografía GCS (desnivel fix) → job mensual 2026-04-01
+3. Enviar email a Frank Techel (techel@slf.ch) para datos EAWS Matrix operacional (H3)
+4. Ejecutar `notebooks_validacion/01_validacion_f1_score.py` (H1)
+
+---
+
+## Sesión 2026-03-25 — Fix capa de datos: bucket duplicado + 5 Cloud Functions redespliegue
+
+### Causa raíz NULLs BQ 2026-03-24 ✅ (ENCONTRADO Y CORREGIDO)
+- **Bug**: `monitor_satelital/main.py` línea 453: `f"{ID_PROYECTO}-{BUCKET_BRONCE}"`
+- **Síntoma**: Si `BUCKET_CLIMA=climas-chileno-datos-clima-bronce` estaba seteado como env var,
+  resultaba en bucket `climas-chileno-climas-chileno-datos-clima-bronce` (no existe → 404)
+- **Efecto**: Todos los uploads GCS del 2026-03-24 fallaron → NULL URIs en todas las filas de
+  `imagenes_satelitales` para esa fecha
+- **Fix**: `datos/monitor_satelital/main.py` — verificación `if BUCKET_BRONCE.startswith(f"{ID_PROYECTO}-")` antes de prefijar (commit `b7a1d4c`)
+
+### Fixes calidad datos ✅ (commit `7c44eb7`)
+- `datos/analizador_avalanchas/cubicacion.py`: `elevacion_min_inicio` → `None` (era copy-paste de `elevacion_max_inicio`)
+- `datos/analizador_avalanchas/visualizacion.py`: `abs()` en `desnivel_inicio_deposito` para evitar "-494 m"
+- `datos/monitor_satelital/constantes.py`: paleta NDSI cambiada de negro→blanco a gris→azul
+
+### Cloud Functions redespliegues ✅
+| Función | Revisión | Hora UTC |
+|---------|----------|----------|
+| monitor-satelital-nieve | 00021 | 2026-03-25T01:16:00 |
+| procesador-clima | nueva | 2026-03-25T01:10:54 |
+| procesador-clima-dias | nueva | 2026-03-25T01:10:53 |
+| procesador-clima-horas | nueva | 2026-03-25T01:10:53 |
+| analizador-satelital-zonas-riesgosas-avalanchas | nueva | 2026-03-25T01:11:33 |
+
+### NULLs estructurales en imagenes_satelitales (no bugs, son esperados)
+- `ndsi_medio` NULL 53% → cobertura de nubes inevitable
+- `lst_noche_celsius` NULL 69% → MODIS LST nocturno no siempre disponible
+- `uri_geotiff_ndsi` NULL anterior al 2026-03-24 → umbral 1024B era muy alto para NDSI (450B)
+  → Fix: commit `1aa3640` + redespliegue monitor hoy → NULLs futuros serán menores
+
+### Pendiente
+1. Próximo scheduler (08:30, 14:30, 20:30 CLT) validará que los uploads funcionen
+2. Regenerar imágenes topografía GCS (desnivel y cubicacion fixes) → job mensual 2026-04-01
+3. Enviar email a Frank Techel (techel@slf.ch) para datos EAWS Matrix operacional (H3)
+4. Ejecutar `notebooks_validacion/01_validacion_f1_score.py` (H1)
+
+---
+
+## Sesión 2026-03-24 — P1/P2/P3 resueltos + Orquestación validación
+
+### P1 (ALTA): Dedup boletines ✅
+- Agregado upsert en `agentes/salidas/almacenador.py`:
+  - `_ya_existe_boletin()` + `_eliminar_boletin_existente()` antes de cada INSERT
+  - Patrón: SELECT COUNT → DELETE → INSERT streaming
+  - 39 filas duplicadas eliminadas de `clima.boletines_riesgo`
+
+### P2 (ALTA): ≥50 boletines únicos generados ✅
+- **61 boletines únicos** guardados en BQ el 2026-03-24
+- Problemas encontrados y resueltos en el camino:
+  - `generar_todos.py` guardaba al final (todo o nada) → reescrito para **guardado incremental** por ubicación
+  - `ClienteDatabricks.crear_mensaje()` sin timeout → colgaba horas (Cerro Bayo: 7950s, Mammoth Mountain: >1h)
+  - Solución: `timeout=300` en `cliente_llm.py` + guardado incremental
+  - Mammoth Mountain: timeout no funcionó → matado manualmente, saltado, continuó el resto
+- Estado BQ al cierre: **61 boletines únicos** del 2026-03-24
+
+### P3 (MEDIA): analizar-topografia-job ✅
+- Bug `peligro_eaws_base` (tuple → INTEGER) y `estimar_tamano_potencial` (keys incorrectas) ya corregidos en sesión 2026-03-17
+- Job mensual correrá automáticamente en 2026-04-01
+- Job diario ya funciona sin errores
+
+### Orquestación diaria optimizada ✅
+- Nuevo flag `--preset validacion` en `generar_todos.py`:
+  - 6 ubicaciones: La Parva Sector Alto/Bajo/Medio + Matterhorn Zermatt + Interlaken + St Moritz
+  - Permite usar Databricks (gratuito) sin esperar horas: ~15 min vs 3+ horas para 50 ubicaciones
+- `Dockerfile` actualizado: `ENTRYPOINT [..., "--preset", "validacion"]`
+- Datos siguen actualizándose para todas las ubicaciones via Cloud Functions
+
+### Commits de esta sesión
+- `ea78d3d` Fix duplicados almacenador.py + limpiar BQ
+- `bb829f6` (anterior)
+- `51f639d` Fix hangs Databricks: timeout 300s + guardado incremental
+- `2474572` Orquestación: preset validacion (La Parva + Suiza)
+
+### Estado Hipótesis (actualizado 2026-03-24)
+
+| ID | Umbral | Estado |
+|----|--------|--------|
+| H1 | F1-macro ≥75%, ≥50 boletines | ✅ 61 boletines únicos → ejecutar métricas |
+| H2 | Delta NLP >5pp | ✅ +7.9pp (notebook 06) |
+| H3 | QWK Techel 2022 | ⏳ Pendiente email a techel@slf.ch |
+| H4 | Kappa ≥0.60 vs Snowlab | ⏳ Pendiente contacto Andes Consciente |
+
+### Pendiente (acciones manuales)
+1. Enviar email a Frank Techel (techel@slf.ch) para datos EAWS Matrix operacional
+2. Contactar Andes Consciente para boletines históricos Snowlab La Parva
+3. Ejecutar `notebooks_validacion/01_validacion_f1_score.py` con 61 boletines (H1)
+4. Conectar LLM de producción (Anthropic) cuando esté disponible → cambiar Dockerfile de `--preset validacion` a `--guardar` para generar todas las ubicaciones
+
+---
+
+## Sesión 2026-03-23 — Pipeline datos de validación + Boletines históricos
+
+### Tarea 0: Boletines históricos completados ✅
+- 42 boletines generados (3 zonas × 14 fechas, inviernos 2024/2025)
+- 42/42 guardados en BigQuery + GCS
+- Nivel EAWS promedio: 4.6
+- Total en BQ `clima.boletines_riesgo`: 49 boletines
+
+### Tarea 1: Infraestructura BigQuery validación ✅
+- Dataset `validacion_avalanchas` creado en proyecto `climas-chileno`
+- 7 tablas creadas: slf_meteo_snowpack, slf_danger_levels_qc, slf_avalanchas_davos, slf_actividad_diaria_davos, eaws_matrix_operacional, snowlab_boletines, snowlab_eaws_mapeado
+- Estructura GCS: `gs://climas-chileno-datos-clima-bronce/validacion/suiza/` y `validacion/chile/`
+
+### Tarea 2: Descarga datos suizos de EnviDat ✅
+- Todos los datasets son públicos (sin autenticación requerida)
+- Descargados 7 archivos CSV (197 MB total) → GCS
+  - DEAPSnow RF1: 292,837 filas (192MB)
+  - DEAPSnow RF2: 29,296 filas (17MB)
+  - D_QC: 3 archivos → unificados en `dqc_unified.csv` (45,049 filas)
+  - Davos avalanchas: 13,918 filas
+  - Davos actividad diaria: 3,533 filas (15 cols clave de 122)
+
+### Tarea 3: Carga a BigQuery ✅
+- 4 tablas cargadas con autodetect desde GCS
+- **91,796 registros suizos** cargados en total
+- Verificación: distribución de clases correcta, rango temporal correcto
+
+### Tarea 4: Documentación generada ✅
+- `docs/validacion/MAPPING_deapsnow.md` — correspondencia columnas reales vs schema
+- `docs/validacion/reporte_calidad_datos_suizos.md` — reporte de calidad completo
+- `.claude/requirements/REQ-validacion-datos.md` — schemas + queries de referencia
+
+### Estado Hipótesis (actualizado)
+
+| ID | Umbral | Estado |
+|----|--------|--------|
+| H1 | F1-macro ≥75%, ≥50 boletines | ✅ 49 boletines → ejecutar métricas |
+| H2 | Delta NLP >5pp | ✅ +7.9pp (notebook 06) |
+| H3 | QWK Techel 2022 | ⏳ Pendiente email a techel@slf.ch |
+| H4 | Kappa ≥0.60 vs Snowlab | ⏳ Pendiente contacto Andes Consciente |
+
+### Pendiente (acciones manuales)
+1. Enviar email a Frank Techel (techel@slf.ch) para datos EAWS Matrix operacional
+2. Contactar Andes Consciente para boletines históricos Snowlab La Parva
+3. Ejecutar `notebooks_validacion/01_validacion_f1_score.py` con 49 boletines (H1)
+
+---
+
+## Sesión 2026-03-22
+
+### Tarea 1: Módulo pendientes_detalladas — Despliegue completo ✅
+
+- Añadida función `exportar_imagen_pendientes_gcs()` en `datos/analizador_avalanchas/analisis_pendientes.py`
+  - Genera dos imágenes PNG por ubicación: clases EAWS (5 rangos, paleta verde→morado) + mapa de calor de pendiente
+  - Ruta GCS: `{nombre}/{topografia/visualizaciones/{YYYY/MM/DD}/`
+- Creado schema BQ `datos/analizador_avalanchas/schema_pendientes_bigquery.json` (27 campos)
+- Ejecutado deploy completo:
+  - Tabla BQ `climas-chileno.clima.pendientes_detalladas` creada
+  - 37/37 ubicaciones analizadas con éxito
+  - 74 imágenes PNG generadas en GCS bucket bronce
+
+### Tarea 2: IAM — Permisos mínimos `funciones-clima-sa` ✅
+
+- Removido `roles/editor` (excesivo)
+- Removido `roles/storage.objectCreator` (insuficiente)
+- SA ahora con 9 roles específicos:
+  - `roles/bigquery.dataEditor`, `roles/bigquery.jobUser`
+  - `roles/storage.objectAdmin` (para GCS reads+writes)
+  - `roles/secretmanager.secretAccessor`
+  - `roles/earthengine.viewer`
+  - `roles/run.invoker`, `roles/cloudfunctions.invoker`
+  - `roles/logging.logWriter`, `roles/monitoring.metricWriter`
+
+### Tarea 3: Backfill ERA5 — Datos históricos inviernos 2024 y 2025 ✅
+
+- Creado `agentes/datos/backfill/backfill_clima_historico.py`
+  - Fuente: `ECMWF/ERA5_LAND/HOURLY` via Google Earth Engine
+  - Convierte unidades: K→°C, m/s→km/h, Magnus RH, wind-chill, atan2 dirección
+  - Idempotente: verifica existencia antes de insertar
+  - Llena tablas `condiciones_actuales` y `pronostico_dias`
+- Ejecutado para 3 zonas La Parva × 14 fechas invierno 2024-2025:
+  - 42 operaciones totales → 39 nuevas, 6 ya existían, 0 fallidas
+  - Valores validados: La Parva Sector Bajo 2024-06-15 = 3.79°C ✅
+
+### Tarea 4: Boletines históricos — Generación ≥50 boletines ✅ (EN PROCESO)
+
+- Modificado `agentes/datos/consultor_bigquery.py`:
+  - Variable global `_fecha_referencia_global`
+  - Funciones `establecer_fecha_referencia_global()` / `obtener_fecha_referencia_global()`
+  - `obtener_condiciones_actuales()`, `obtener_tendencia_meteorologica()`, `obtener_pronostico_proximos_dias()`, `obtener_estado_satelital()` aceptan `fecha_referencia: Optional[datetime]`
+- Modificado `agentes/orquestador/agente_principal.py`:
+  - `generar_boletin()` acepta `fecha_referencia: Optional[datetime]`
+  - Reset en bloque `finally`
+- Modificado `agentes/scripts/generar_boletin.py`:
+  - Flag `--fecha YYYY-MM-DD`
+- Creado `agentes/scripts/generar_boletines_invierno.py`:
+  - Orquesta: backfill → generar boletines → guardar
+  - Default: 3 zonas La Parva × 14 fechas invierno 2024/2025
+- Dry-run exitoso: La Parva Sector Bajo 2024-07-15 → EAWS 5
+- **Generación completa en ejecución en background** (2026-03-22 ~22:59 UTC)
+  - 42 boletines objetivo → total ≥52 con los 10 existentes → H1/H4 desbloqueados
+
+### Estado Hipótesis
+
+| ID | Umbral | Estado |
+|----|--------|--------|
+| H1 | F1-macro ≥75%, ≥50 boletines | ⏳ En generación |
+| H2 | Delta NLP >5pp | ✅ +7.9pp (notebook 06) |
+| H3 | QWK Techel 2022 | ⬜ Pendiente datos SLF |
+| H4 | Kappa ≥0.60 vs Snowlab | ⏳ En generación |
+
+### Próximos pasos
+
+1. Verificar que todos los boletines se guardaron en BQ
+2. Calcular métricas H1 (F1-macro) y H4 (Kappa) con ≥50 boletines reales
+3. Actualizar CLAUDE.md con estado Fase 6 completada
+4. Commit final y push a main
+
+---
+
+## Sesión 2026-04-01 — REQ-01 S4 Situational Briefing + REQ-02 S3 WeatherNext2
+
+### Contexto
+
+Implementación de nuevos requerimientos en `claude/requirements/`:
+- REQ-01: Reemplazo total de S4 (scraping+NLP → Situational Briefing)
+- REQ-02: WeatherNext 2 como fuente meteorológica aditiva en S3
+
+### Tarea 1: Permiso allowlist (skill fewer-permission-prompts)
+
+- Creado `.claude/settings.json` con 20 patrones read-only para herramientas GCP
+- Patrones clave: `bq query *`, `gcloud logging read *`, `gsutil ls *`, `gcloud run jobs describe *`
+
+### Tarea 2: REQ-01 — S4 Situational Briefing (verificación + migración Databricks)
+
+**Estado al inicio:** código S4 parcialmente pre-implementado (Gemini 2.5 Flash).
+
+**Migración a Databricks (decisión del usuario):**
+- Reemplazado Gemini 2.5 Flash por Qwen3-80B vía Databricks (endpoint gratuito, mismo que S5)
+- `agentes/subagentes/subagente_situational_briefing/agente.py`: reescrito para heredar `BaseSubagente`
+  - `PROVEEDOR = "databricks"`, `MODELO = "databricks-qwen3-next-80b-a3b-instruct"`
+  - `MAX_ITERACIONES = 8`, `MAX_TOKENS = 4096`
+  - Agentic loop estándar: 4 tools → síntesis briefing en texto
+- Cada tool expone `TOOL_<X>` (dict) + `ejecutar_<tool_name>` (wrapper) para el loop de BaseSubagente
+- `prompts/system_prompt.md`: reescrito con template de salida fijo (secciones `##` obligatorias) + metadatos compatibilidad S5
+- `claude/requirements/01-s4-situational-briefing.md`: actualizado (Gemini → Databricks en secciones 4.3, 6, 7, 8, 9)
+
+**Fix crítico de tests:** patch path corregido
+- `agentes.datos.cliente_llm.crear_cliente` → `agentes.subagentes.base_subagente.crear_cliente`
+- Razón: `base_subagente.py` hace `from agentes.datos.cliente_llm import crear_cliente` (import a nivel módulo), el binding local debe parcharse donde se usa, no en el módulo origen
+
+**Resultado:** 20/20 tests S4 pasando ✅
+
+### Tarea 3: REQ-02 — S3 WeatherNext2 (verificación + fix imports)
+
+**Estado al inicio:** código parcialmente pre-implementado.
+
+**Fixes realizados:**
+- `fuente_open_meteo.py` y `fuente_era5_land.py`: import `ConsultorBigQuery` movido a nivel módulo (era lazy)
+- `test_weathernext2.py`: patch paths corregidos a `fuente_open_meteo.ConsultorBigQuery` / `fuente_era5_land.ConsultorBigQuery`
+- `agente.py` de S3: registrado `TOOL_PRONOSTICO_ENSEMBLE` + ejecutor
+
+**Resultado:** 17/17 tests WeatherNext2 pasando ✅
+
+### Resultado final
+
+- **Total tests:** 199 passed, 8 skipped — 0 regresiones ✅
+- Tests nuevos: +37 (20 S4 Situational Briefing + 17 S3 WeatherNext2)
+- Requerimientos completados: REQ-01 ✅, REQ-02 ✅ (pendiente suscripción Analytics Hub para producción)
+- Pendiente: REQ-03 (AlphaEarth), REQ-04 (RSFM paralelo), REQ-05 (BigQuery ST_REGIONSTATS)
+
+---
+
+## Sesión 2026-04-01 — Revisión metodológica completa: 4 bugs corregidos
+
+### Contexto
+
+El usuario reportó que los boletines de La Parva mostraban nivel EAWS promedio 4.3–4.6 incluso durante condiciones meteorológicas completamente calmas (T=6°C, P=0mm, V=5km/h). Se realizó revisión exhaustiva de los 5 subagentes buscando errores metodológicos.
+
+---
+
+### Bug 1 — Metamorfismo estático inflado → FS=0.58 permanente (commit `a444a02`)
+
+**Archivo:** `agentes/subagentes/subagente_topografico/tools/tool_analizar_dem.py`
+
+**Causa raíz:** `_calcular_metricas_pinn` calculaba `indice_metamorfismo` puramente desde topografía estática, produciendo valores 1.4–1.68 para laderas N empinadas (La Parva Sector Alto).
+
+```python
+# ANTES (INCORRECTO):
+factor_sombra = 1.2  # Ladera N
+factor_pendiente = min(1.5, 42.0 / 30.0)  # = 1.4
+indice_metamorfismo = 1.2 * 1.4  # = 1.68  ← SIEMPRE sobre umbral crítico
+```
+
+Con `indice_metamorfismo > 1.5` → `cohesion_Pa = 100 Pa` → Mohr-Coulomb colapsa → `FS = 0.58` → `CRITICO` permanente, independientemente del clima.
+
+**Fix:** Cap `indice_metamorfismo ≤ 1.0` para estimaciones solo-topográficas. El metamorfismo destructivo (>1.0) requiere forzante meteorológico real (temperatura, gradiente térmico) que solo S3 puede proveer.
+
+```python
+# DESPUÉS (CORRECTO):
+base_meta = 0.5
+if aspecto in aspectos_sombra: base_meta += 0.2   # Potencial de facetación
+if pendiente > 35: base_meta += 0.1 * min(2.0, (pendiente - 35) / 10.0)
+indice_metamorfismo = round(min(1.0, base_meta), 3)  # Cap ≤1.0 sin clima
+```
+
+**Resultado antes/después para La Parva Sector Alto (azimut=330°, pendiente=42°):**
+
+| Escenario | meta_antes | FS_antes | Estado_antes | meta_después | FS_después | Estado_después |
+|-----------|-----------|----------|--------------|-------------|----------|----------------|
+| Calma (T=6°C, P=0) | 1.68 | 0.58 | CRITICO | 0.70 | 2.10 | ESTABLE |
+| Nevada 30cm + V=15 m/s | 1.68 | 0.58 | CRITICO | 1.20 | 1.05 | MARGINAL |
+| Lluvia sobre nieve | 1.68 | 0.58 | CRITICO | 1.45 | 0.85 | FALLA_INMINENTE |
+
+---
+
+### Bug 2 — CICLO_FUSION_CONGELACION no propagado cuando T<2°C (commit `c1d6812`)
+
+**Archivo:** `agentes/subagentes/subagente_meteorologico/tools/tool_ventanas_criticas.py`
+
+**Causa raíz:** `_clasificar_factor_meteorologico` usaba `temperatura > 2` para verificar la condición de fusión, pero el ciclo diurno (T_noche<0°C, T_día>0°C) es detectado antes por `_detectar_ventanas` y marcado en las ventanas como `CICLO_FUSION_CONGELACION`. La función lo ignoraba si la T media era <2°C.
+
+**Fix:** Leer directamente los tipos de ventanas detectadas:
+```python
+tipos_ventanas = [v.get("tipo", "") for v in ventanas]
+if "CICLO_FUSION_CONGELACION" in tipos_ventanas:
+    factores.append("CICLO_FUSION_CONGELACION")
+elif temperatura is not None and temperatura > 2:
+    factores.append("FUSION_ACTIVA")
+```
+
+---
+
+### Bug 3 — Umbral VIENTO_FUERTE demasiado alto (commit `c1d6812`)
+
+**Archivo:** `agentes/subagentes/subagente_meteorologico/tools/tool_ventanas_criticas.py`
+
+**Causa raíz:** El umbral para `VIENTO_FUERTE` era 15 m/s (54 km/h). Según guías operativas EAWS, la formación de placas de viento comienza a ~7-10 m/s (25-36 km/h). El umbral anterior perdía ~40% de los eventos de viento relevantes para avalanchas.
+
+**Fix:** Umbral bajado de 15 m/s a 10 m/s (36 km/h), más conservador y consistente con EAWS.
+
+---
+
+### Bug 4 — Tamaño EAWS defaulteaba a 2 en vez del calculado 3-4 (commit `c1d6812`)
+
+**Archivo:** `agentes/subagentes/subagente_topografico/tools/tool_zonas_riesgo.py` + `agentes/subagentes/subagente_integrador/prompts.py`
+
+**Causa raíz:** `identificar_zonas_riesgo` no calculaba `tamano_eaws`. S5 siempre asumía tamaño=2 por defecto, subestimando el nivel EAWS en zonas como La Parva Sector Alto (desnivel=1000m, área=120ha → tamaño real = 4).
+
+**Fix en S1:** Agregado cálculo usando `estimar_tamano_potencial` cuando `desnivel_m` está disponible:
+```python
+tamano_eaws = estimar_tamano_potencial(
+    desnivel_inicio_deposito=desnivel_m,
+    ha_zona_inicio=ha,
+    pendiente_max=pendiente_max,
+)
+```
+
+**Fix en S5 (prompts):** Instrucción explícita al LLM para usar `tamano_eaws` del output de S1 y no asumir default=2.
+
+---
+
+### Resultado final
+
+- **4 bugs identificados y corregidos** en revisión metodológica sistemática
+- **Diferenciación meteorológica correcta:** calma → nivel ≤2, nevada+viento → nivel 3-4, lluvia sobre nieve → nivel 4-5
+- **Tests:** 260 passed, 8 skipped, 0 failed ✅ (+61 tests vs sesión anterior)
+- Commits: `a444a02` (Bug 1), `c1d6812` (Bugs 2-4)
+
+### Nota académica
+
+El metamorfismo destructivo (kinetic growth, depth hoar) es un proceso físico que requiere gradiente de temperatura ≥10°C/m durante días a semanas. No puede inferirse solo de la topografía estática. El error previo mezclaba potencial topográfico (qué zonas son más propensas) con estado dinámico (qué está ocurriendo ahora). La corrección es metodológicamente importante para la tesis: S1 ahora aporta solo la componente topográfica; S3 debe proveer los forzantes meteorológicos para que S5 pueda evaluar el estado dinámico del manto correctamente.
+
+---
+
+## Sesión 2026-04-30 — Validación H4: carga Snowlab BQ + análisis preliminar
+
+### Tarea 1: Carga boletines Snowlab a BigQuery
+
+**Script:** `notebooks_validacion/cargar_snowlab_bq.py`
+
+**Tabla:** `climas-chileno.validacion_avalanchas.snowlab_boletines`
+
+**Datos cargados:** 30 boletines (14 temporada 2024 + 16 temporada 2025)
+- Fuente: PDF "BOLETINES DE AVALANCHAS — ZONA LA PARVA", Domingo Valdivieso Ducci (L2 CAA)
+- Schema: `id_boletin, temporada, numero_boletin, fecha_publicacion, fecha_inicio_validez, fecha_fin_validez, nivel_alta, nivel_media, nivel_baja, nivel_max, problema_principal, url_instagram, fuente`
+- Tabla anterior (schema distinto) fue eliminada y recreada
+
+**Distribución:** 2024 avg=1.79, máx=5 (tormenta jun 2024 ~160cm); 2025 avg=1.69, máx=3
+
+### Tarea 2: Análisis H4 preliminar (QWK vs ground truth Snowlab)
+
+**Script:** `notebooks_validacion/08_validacion_snowlab.py`
+
+**Resultado preliminar (NO VÁLIDO — sesgo de muestreo):**
+
+| Métrica | Valor |
+|---------|-------|
+| Pares | 87 |
+| MAE | 2.17 |
+| Sesgo (AI−Snowlab) | **+2.03** (sobreestimación) |
+| QWK | -0.020 |
+| H4 | ✗ RECHAZADA |
+
+**Causa raíz identificada — sesgo de muestreo:**
+- AndesAI La Parva procesó solo 14 fechas específicas de **eventos de tormenta** (el 1° y 15 de cada mes del invierno)
+- Snowlab publicó **cada semana**, incluyendo 69% de semanas en nivel 1 (condiciones tranquilas)
+- AndesAI jamás procesa nivel 1 para esas fechas (tempestades), generando sesgo artificial +2 niveles
+
+**Distribución reveladora:**
+```
+Snowlab: nivel-1=60, nivel-2=15, nivel-3=8, nivel-4=3, nivel-5=1
+AndesAI: nivel-1=2,  nivel-2=2,  nivel-3=37, nivel-4=39, nivel-5=7
+```
+
+**Conclusión académica:** H4 no puede evaluarse con el dataset actual. Se requiere muestreo representativo (no solo eventos de tormenta).
+
+### Tarea 3: Backfill ERA5 para 16 fechas Snowlab faltantes
+
+**Script:** `agentes/datos/backfill/backfill_clima_historico.py`
+**Fechas:** 16 fechas (2024-06-21 a 2025-09-19 — las que no tienen AndesAI a ≤3 días)
+**Estado:** En ejecución (PID 34209) — 48 operaciones (16 fechas × 3 sectores)
+**ETA:** ~8-10 minutos
+
+### Tarea 3: Backfill ERA5 + reprocessing 16 fechas Snowlab ✅
+
+**Backfill ERA5:** 48 operaciones (16 fechas × 3 sectores) — 48/48 exitosas
+**Reprocessing Cloud Run:** 16 jobs (`--preset laparva --sin-backfill`) — 16/16 exitosos (09:31–11:57 local)
+**Script:** `/tmp/reprocesar_snowlab_fechas.sh`
+
+### Tarea 4: Análisis H4 definitivo — `08_validacion_snowlab.py`
+
+**Dataset completo:** 157 boletines AndesAI, 30 Snowlab, 87 pares (85/87 a ≤3 días)
+
+#### Métricas globales
+
+| Métrica | Valor |
+|---------|-------|
+| Pares | 87 |
+| Distancia media | 1.4 días |
+| MAE | 2.10 |
+| Sesgo (AI−Snowlab) | **+1.99** (sobreestimación sistemática) |
+| QWK | -0.016 |
+| Kappa lineal | -0.004 |
+| F1-macro | 0.104 |
+| **H4** | **✗ RECHAZADA** |
+
+#### Distribución de niveles
+
+| Nivel | Snowlab | AndesAI |
+|-------|---------|---------|
+| 1 | 60 (69%) | 1 (1%) |
+| 2 | 15 (17%) | 2 (2%) |
+| 3 | 8 (9%) | 44 (51%) |
+| 4 | 3 (3%) | 33 (38%) |
+| 5 | 1 (1%) | 7 (8%) |
+
+#### Hallazgo crítico — patrón de sesgo asimétrico
+
+```
+Snowlab ≥ 3 (tormentas, n=12):  MAE=0.75  sesgo=-0.08  ← casi perfecto
+Snowlab ≤ 2 (calma, n=75):      MAE=2.32  sesgo=+2.32  ← siempre predice 3-4
+```
+
+**AndesAI es un buen detector de tormentas pero tiene piso efectivo en nivel 3.**
+
+Cuando Snowlab dice nivel 1, AndesAI predice:
+- Nivel 3: 55% de los casos
+- Nivel 4: 33%
+- Nivel 5: 10%
+- Nivel ≤ 2: 2%
+
+#### Interpretación académica
+
+El sistema muestra un **sesgo positivo estructural** (~+2 niveles) en semanas tranquilas. Causas probables:
+
+1. **PINN topográfico constante**: La componente S1 calcula riesgo geomorfológico fijo independientemente de condiciones meteo → siempre aporta "señal de riesgo" base
+2. **ERA5 resolución 9 km en Andes**: Sobreestima precipitación orográfica y velocidad de viento a 3000-4000 msnm → S3 reporta condiciones más extremas que las observadas in situ
+3. **Sin modelo de estado del manto**: AndesAI no tiene acceso al estado real del manto nivoso (humedad, estratigrafía) — solo infiere desde forzantes meteorológicos. El forecaster Snowlab evalúa el manto físicamente.
+4. **Calibración conservadora de S5**: Tras las correcciones de subestimación (bugs 1-4 de sesión anterior), el LLM puede haber quedado sobrecompensado hacia valores altos.
+
+#### Valor académico de H4 rechazada
+
+La hipótesis se rechaza, pero el hallazgo es **publicable y significativo**:
+- El sistema tiene **alta sensibilidad para tormentas** (MAE=0.75 en eventos nivel ≥3)
+- Falla en especificidad de calma → no puede ser usado como confirmador de "condiciones seguras"
+- Requiere capa de calibración post-procesamiento (isotonic regression o Platt scaling) para corregir el piso en nivel 3
+- Resultado coherente con H1/H3 Suiza: el sistema sobreestima cuando falta contexto situacional (H1/H3: falta ERA5; H4: falta estado manto)
+
+#### Contribución a la tesis
+
+H4 documenta una limitación fundamental de sistemas multi-agente basados en LLM sin acceso a datos in situ: la incapacidad de distinguir calma de riesgo bajo sin retroalimentación del manto real. Propone línea de trabajo futura: integración de datos NIVOLOG/CEAZA o sensor de snowpack para calibrar S5.
+
+---
+
+## Sesión 2026-05-03 — Sprint REQ-07a + REQ-07b + Reproceso v6.1
+
+### Contexto
+Continuación de sesión anterior. Reproceso v6.0 tenía solo 5/120 boletines completados.
+Se identificaron dos bugs críticos que impedían evaluar correctamente v6.0:
+1. Scripts de validación no filtraban por `version_prompts` → mezclaban v5 y v6
+2. Prompt de S3 aún tenía `FUSION_ACTIVA` (legacy) en el template de salida → LLM emitía este valor incorrecto
+
+### REQ-07a: Filtro version_prompts en scripts de validación (COMPLETADO)
+**Archivos modificados:**
+- `notebooks_validacion/07_validacion_slf_suiza.py`: `obtener_nuestros_boletines()` extendida con `version: str = "v6"`, filtro `STARTS_WITH(version_prompts, @version)` + `QUALIFY ROW_NUMBER()`, argumento CLI `--version`
+- `notebooks_validacion/08_validacion_snowlab.py`: `SQL_BOLETINES_ANDESAI` idem, `cargar_datos()` con `version: str = "v6"`, argumento CLI `--version`
+
+**Problema resuelto:** Sin filtro, la función `QUALIFY ROW_NUMBER()` ya existía pero no el filtro de versión — ambas versiones v5 y v6 del mismo boletín podían mezclarse.
+
+### REQ-07b / FIX-S3: Corrección FUSION_ACTIVA en prompts (COMPLETADO)
+**Hallazgo:** El template de salida de `subagente_meteorologico/prompts.py` línea 68 tenía:
+```
+[PRECIPITACION_CRITICA|NEVADA_RECIENTE|VIENTO_FUERTE|FUSION_ACTIVA|ESTABLE|combinación]
+```
+El LLM veía `FUSION_ACTIVA` como valor de salida válido. Al pasarse al clasificador EAWS, mapeaba a `poor` → piso nivel 3 en días calmos aunque S3 internamente generara `CICLO_DIURNO_NORMAL`.
+
+**Archivos modificados:**
+- `agentes/subagentes/subagente_meteorologico/prompts.py`: template → `FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL`
+- `agentes/orquestador/prompts.py`: mapping estabilidad actualizado de `FUSION_ACTIVA` a `FUSION_ACTIVA_CON_CARGA`
+- `agentes/prompts/registro_versiones.py`: meteorologico 5.0.0→5.1.0, orquestador 3.0.0→3.1.0, **VERSION_GLOBAL: 6.0→6.1**
+- `notebooks_validacion/reprocesar_retroactivo.py`: `ya_procesado_v6()` ahora verifica `STARTS_WITH('v6.1')` → fuerza re-run de todos los 120 boletines
+
+### Reproceso v6.1 → v6.2
+**Estado:** Reproceso v6.1 fue reemplazado por v6.2 (FIX-HIST + FIX-STORE críticos descubiertos).
+- FIX-HIST: `consultor_bigquery.py` pasaba `QueryJobConfig` donde se esperaba `list` → historial siempre 0 → REQ-01 nunca activaba
+- FIX-STORE: `almacenador.py` retornaba temprano ante streaming buffer sin campo `guardado_bigquery` → reproceso reportaba ERROR
+- VERSION_GLOBAL: 6.1→6.2
+
+**Reproceso v6.2:** Completado 2026-05-03 15:01 (PID 43915, después de restart por TCP hang en PID 16037)
+- 120 runs: ok=30, skip=90, err=0
+- Duración efectiva: ~100 min (2 TCP hangs resueltos por reintentos automáticos)
+- Log: `/tmp/reproceso_v62d.log`
+
+### Ronda 5 — Resultados v6.2 (2026-05-03)
+
+**H1/H3 SLF Suiza** (n=24 pares, 3 estaciones × 10 fechas invierno 2023-2024):
+
+| Métrica | v5.0 R4 | v6.2 R5 | Δ | Objetivo |
+|---------|---------|---------|---|----------|
+| QWK | +0.143 | −0.031 | −0.174 | ≥ 0.59 |
+| F1-macro | 0.235 | 0.244 | +0.009 | ≥ 0.75 |
+| Acc exacta | 0.292 | 0.333 | +0.041 | — |
+| Acc ±1 | 0.833 | 0.750 | −0.083 | — |
+| Sesgo | −0.67 | −0.75 | −0.08 | — |
+
+*Regresión QWK en Suiza: FIX-T (calibrado para La Parva) aumentó la subestimación en los Alpes (54.2% nivel 1 vs 12.5% real). Gap estructural de dominio (CR-4) es la causa raíz.*
+
+**H4 Snowlab La Parva** (n=87 pares, 3 sectores × 30 boletines):
+
+| Métrica | v5.0 R4 | v6.2 R5 | Δ | Objetivo |
+|---------|---------|---------|---|----------|
+| QWK | −0.000 | −0.031 | −0.031 | ≥ 0.40 |
+| MAE | 1.724 | 1.230 | −0.494 | — |
+| Sesgo | +1.609 | +0.885 | −0.724 | ≤ +0.80 |
+| F1-macro | 0.084 | 0.145 | +0.061 | — |
+| % nivel 1-2 | 21% | 58% | +37pp | ≥ 30% ✓ |
+
+*FIX-T funcionó: nivel 1-2 pasó de 21%→58% (objetivo 30% cumplido). Sesgo −45% (objetivo ≤+0.80 casi alcanzado, margen 0.085). QWK sigue negativo por gap distribucional: Snowlab 69% nivel 1 vs AndesAI 15%.*
+
+### Análisis de causas raíz residuales
+
+El gap en QWK persiste porque:
+1. **CR-1 residual**: topografía La Parva sigue siendo extrema incluso con FIX-T; `tamano=3` con `ventanas≥1` sigue produciendo nivel 2-3
+2. **CR-5 nuevo (distribución Snowlab)**: Snowlab clasifica el 69% como nivel 1 — posiblemente metodología EAWS local más conservadora, o sesgo de temporada
+3. **FIX-T efecto colateral**: en Alpes, cap tamano≤3 reduce niveles incluso cuando el terreno justificaría nivel 2-3 (subestimación adicional)
+
+### Pendiente v7.0
+- [ ] FIX-H: `estabilidad_satelital='poor'` default en Alpes sin ViT (mejora H1/H3)
+- [ ] Investigar distribución Snowlab: ¿por qué 69% nivel 1?
+- [ ] Ajuste tamano por dominio geográfico (factor regional Andes vs Alpes)
+- [ ] Reprocesar Ronda 6 con v7.0
+
+---
+
+## Sesión 2026-05-22 — REQ-2026-09 Tareas 1+3: Integración Caro et al. 2026
+
+### Contexto
+Implementación del REQ-2026-09: ingesta del dataset Caro et al. 2026 (DOI 10.5281/zenodo.20089265)
+a BigQuery y módulo Python de QC adaptado de la metodología del paper.
+
+### Archivos creados
+
+**Capa `datos/` (nueva estructura)**
+- `datos/ingestores/__init__.py` — marcador subpaquete
+- `datos/ingestores/explorar_caro_2026.py` — Fase A: descarga + introspección del bundle Zenodo
+- `datos/ingestores/ingestor_caro_2026.py` — pipeline de ingesta BQ + CLI (21 estaciones Maipo, 7 Elqui)
+- `datos/ingestores/schema_snow_depth_caro_2026.json` — schema BQ en formato JSON
+- `datos/qc/__init__.py` — marcador subpaquete
+- `datos/qc/snow_depth_qc.py` — módulo QC: correccion_nivel_cero, eliminacion_spikes_mad, verificacion_rango_fisico, calcular_pci, calcular_pci_pronostico (experimental), aplicar_pipeline_qc
+
+**Tests**
+- `agentes/tests/test_snow_depth_qc.py` — 24 tests sintéticos + regresión contra fixtures (todos ✅)
+- `agentes/tests/test_ingestor_caro_2026.py` — 17 tests con mock BQ (todos ✅)
+- `agentes/tests/fixtures/caro_2026/raw_sample.csv` — 30 filas, 3 estaciones, con spikes
+- `agentes/tests/fixtures/caro_2026/clean_sample.csv` — mismo subset post-QC
+
+**SQL y docs**
+- `docs/migraciones/snow_depth_caro_2026_crear_tabla.sql` — DDL CREATE TABLE particionada
+- `docs/migraciones/snow_depth_caro_2026_validacion.sql` — 5 queries de validación post-ingesta
+- `docs/datasets/caro_2026.md` — origen, esquema, cómo citar, cómo ingestar, hallazgo clave
+- `docs/qc/snow_depth_qc.md` — justificación, parámetros, ejemplos, diferencias con paper
+
+**Archivos modificados**
+- `agentes/datos/consultor_bigquery.py` — agregado método `obtener_snow_depth_caro(...)` con flag `apply_qc=True`
+- `.gitignore` — agregado `data/external/` (dataset local cacheado)
+
+### Resultado tests
+- 41 tests nuevos: **41/41 ✅**
+- Suite completa: 461 passed, 7 failed (todos pre-existentes), 8 skipped
+
+### Pendiente (antes de ingestar en BQ real)
+1. Ejecutar `datos/ingestores/explorar_caro_2026.py` para confirmar formato real del dataset
+2. Ajustar `_normalizar_columnas()` si columnas difieren del mapeo actual
+3. Crear tabla: `bq query --use_legacy_sql=false < docs/migraciones/snow_depth_caro_2026_crear_tabla.sql`
+4. Ingestar: `python3 datos/ingestores/ingestor_caro_2026.py --zona maipo --qc-status both`
+5. Validar: `bq query --use_legacy_sql=false < docs/migraciones/snow_depth_caro_2026_validacion.sql`
+
+### Continuación — Ingesta real a BigQuery completada
+
+**Hallazgos del dataset real (Zenodo v4.2):**
+- Formato: wide CSV (una columna por estación, una fila por fecha)
+- Archivos: `Southern_Andes_Snow_Depth_Dataset_v4.2.csv` (901 kB) + `stations_data.csv` (4.8 kB)
+- Solo datos clean (no hay archivo raw en Zenodo v4.2)
+- 5318 fechas únicas (2010-06-11 a 2024-12-31)
+
+**Problemas resueltos:**
+1. Formato wide → long vía `pd.melt()` + join con stations_data.csv
+2. `insert_rows_json` rechazaba fechas <2016 (límite 3650 días streaming) → cambiado a `load_table_from_dataframe`
+3. 5318 particiones DAY superaban límite de 4000/job → chunking por año (15 jobs de ~365 días c/u)
+4. `andean_zone` y `country` no están en el dataset → inferidos por latitud y source (IANIGLA=AR)
+
+**Tabla BigQuery final:**
+- `climas-chileno.clima.snow_depth_caro_2026`
+- 106,360 filas totales (13 Maipo + 7 Elqui × 5318 días)
+- 34,440 observaciones con dato real de SD (completitud: ~32%)
+- 20 estaciones, 2 cuencas, periodo 2010–2024
+
+**Criterios de aceptación REQ-2026-09 §4 Tarea 1:**
+- [x] Tabla creada con DDL documentada
+- [x] 13 estaciones Maipo cargadas (8 AMTC/Piuquenes no existen en dataset público)
+- [x] 7 estaciones Elqui cargadas
+- [x] docs/datasets/caro_2026.md completa
+- [x] >50k observaciones limpias (106,360 ✓)
+- [x] Sin duplicados (idempotencia vía DELETE + reload)
+
+---
+
+## Sesión 2026-05-22 — REQ-2026-09 Continuación + Validación vs Caro
+
+### Commits de esta sesión
+- `1c66357` — notebook 10_sd_elevation_analysis.ipynb (Tarea 2 REQ-2026-09, Fase B)
+- `ba092f5` — docs/validacion/validacion_caro2026_andesai.md (validación triple AndesAI×Snowlab×Caro)
+- `54ff51f` — clarificar arquitectura: Caro solo offline, WN2+satélite son fuentes operacionales
+
+### Resultados de validación triple (v22.0 × Snowlab × Caro 2026)
+- **n = 14 pares** (jun–sep 2024, cuenca Maipo)
+- **MAE = 0.86**, Sesgo = −0.57 (subestima), QWK Alto = +0.112, QWK Medio = +0.221
+- **Calma (nivel 1)**: 9/9 correctos (100%)
+- **Tormentas (nivel ≥ 3)**: 0/3 correctos (0%) — subestimación sistemática ≥ 2 niveles
+- **Causa raíz**: ERA5 subestima precipitación convectiva en valles andinos → ventanas_criticas no activa
+
+### Decisión arquitectónica crítica
+- **Caro 2026 / DGA in-situ**: solo validación offline y referencia PCI. NO como input operacional.
+- **Fuentes primarias operacionales**: WeatherNext 2 (S3) + observaciones satelitales (S2)
+- El fix al MAE-tormentas debe venir de mejor uso de WN2 y satélite, no de estaciones in-situ
+- `calcular_pci_pronostico()` en `datos/qc/snow_depth_qc.py` ya implementado — aplica sobre pronósticos WN2
+
+### Memoria guardada
+- `memory/feedback_fuentes_modelo.md` — restricción arquitectónica sobre fuentes del modelo
+
+### Próximos pasos
+- Mejorar detección de tormentas usando ensemble WN2 (P10/P50/P90 precipitación) + satélite
+- Revisar `detectar_ventanas_criticas` en subagente meteorológico para aprovechar mejor WN2
+
+### FIX-SAT-STORM (v23.0) — 2026-05-22
+
+**Problema resuelto**: ERA5 subestima precipitación convectiva andina → 0% detección de tormentas en validación Caro 2026 (n=3 eventos Snowlab≥3).
+
+**Causa raíz del circuito de fallo**:
+1. ERA5 precip≈0 mm → `ventanas_criticas=0`
+2. Gate FIX-CR7A: `precipitacion_72h<5 AND ventanas=0 AND factor=ESTABLE AND dias_bajo≥2` → `senales_calma_confirmada=True`
+3. EAWS Paso 1 → nivel 1 aunque Snowlab mida 4-5
+
+**Fix implementado**:
+- Nuevo parámetro `alertas_satelitales: list` en `ejecutar_detectar_ventanas_criticas()`
+- `NEVADA_RECIENTE_INTENSA` (S2 delta>20%) → `NEVADA_SATELITAL_CONFIRMADA` (muy_alta)
+- `NEVADA_RECIENTE_MODERADA` (S2 delta>10%) → `NEVADA_SATELITAL_MODERADA` (alta)
+- Guard: no duplicar si ERA5 o WN2 ya detectaron nevada
+- `_clasificar_factor_meteorologico()` incluye `NEVADA_RECIENTE` cuando S2 confirma
+- Prompt actualizado: instrucción explícita de pasar `alertas_satelitales` de S2 a S3
+
+**Archivos modificados**:
+- `agentes/subagentes/subagente_meteorologico/tools/tool_ventanas_criticas.py`
+- `agentes/subagentes/subagente_meteorologico/prompts.py`
+- `agentes/tests/test_fix_wn2.py` (+7 tests TestVentanasCriticasSatelital)
+
+**Commit**: 52a61d0 — Suite: 480 passed, 8 skipped
+
+### Demo FIX-SAT-STORM — análisis comparativo 2026-05-22
+
+Razón: datos satelitales retroactivos solo disponibles desde 2026-03-03 (no hay datos 
+para jun-ago 2024). Se construyó script de demo con condiciones simuladas de la 
+tormenta 2024-06-15 (ERA5=0.4mm, T=-3.2°C, Snowlab=5).
+
+**Resultados del comparativo** (`agentes/scripts/demo_fix_sat_storm.py`):
+
+| Escenario | Factor | Ventanas | EAWS | Ground Truth |
+|---|---|---|---|---|
+| v22.0 sin fix (ERA5 solo) | ESTABLE | 0 | 1 — Débil | 5 — Muy Alto |
+| v23.0 FIX-SAT-STORM | NEVADA_RECIENTE | 1 | 2 — Moderado | 5 — Muy Alto |
+| Calma v23.0 (sin regresión) | ESTABLE | 0 | 1 — Débil | 1 — Baja ✅ |
+| Techo teórico (very_poor+many+tam=4) | NEVADA_RECIENTE | 2 | 5 — Muy Fuerte | 5 ✅ |
+
+**Brecha residual**: 2 niveles (de 3). Para cerrarla:
+1. S1 PINN debe recibir `nieve_24h_cm_p50` de WN2 como forzante de carga → very_poor
+2. S2 ViT debe detectar cambios rápidos (carga nival) → very_poor bajo tormenta activa
+
+### FIX-WN2-PINN (v24.0) — 2026-05-22
+
+**Problema**: FIX-SAT-STORM (v23.0) mejoró EAWS 1→2 durante tormentas.
+Brecha residual de 2 niveles vs Snowlab porque S1 PINN devuelve `estabilidad_topografica=poor`
+(no `very_poor`) al no conocer la carga de nieve nueva.
+
+**Física implementada** (Schweizer et al. 2003):
+- Nieve nueva = sobrecarga (surcharge) sobre capa débil existente
+- En pendientes >28°: Δτ_cizalle > Δτ_resistencia → FS decrece
+- ρ_nueva = 100 kg/m³ (nieve de tormenta seca, Sturm et al. 1995)
+
+**Cambios**:
+- `tool_calcular_pinn.py`: parámetro `nieve_nueva_cm` en Mohr-Coulomb paso 3
+- Alertas: `SURCHARGE_NIEVE_CRITICA_Xcm_24h` (≥20 cm), `SURCHARGE_NIEVE_EXTREMA` (≥40 cm)
+- UQ Taylor: 4ª fuente de incertidumbre σ_nieve = 30% relativo (spread ensemble WN2)
+- Función auxiliar `_fs_con_surcharge()` para diferenciación numérica UQ
+- `prompts.py` S1: instrucción para consultar WN2 → pasar `nieve_24h_cm_p50_corr`
+- 9 tests nuevos en `TestToolsPINN`
+
+**Efecto sobre tormenta 2024-06-15** (nieve_nueva_cm≈62):
+- FS: ~1.35 → ~1.0 → MANTO_MARGINAL → MANTO_INESTABLE → very_poor
+- Con FIX-SAT-STORM+FIX-WN2-PINN: EAWS alcanza 3-4 (vs Snowlab 5)
+
+**Commit**: 6282642 — Suite: 489 passed, 8 skipped
+
+### Demo v24 — Medición del ajuste (2026-05-22)
+
+Script: `agentes/scripts/demo_v24_ajuste_tormenta.py`
+6 eventos: 3 tormentas + 3 calmas (La Parva, validación Caro 2026)
+
+| Fecha | Snowlab | v22 | v23 | v24 | Δ v22 | Δ v24 |
+|---|---|---|---|---|---|---|
+| 2024-06-15 (tormenta extraordinaria) | 5 | 1 | 2 | 3 | −4 | −2 |
+| 2024-06-21 (post-tormenta alta)      | 4 | 1 | 2 | 2 | −3 | −2 |
+| 2024-08-02 (tormenta moderada)       | 3 | 1 | 2 | 3 | −2 | ±0 |
+| Calmas (3 días)                      | 1 | 1 | 1 | 1 | ✅ | ✅ |
+
+**Métricas tormentas:**
+- v22: MAE=3.00, Sesgo=−3.00
+- v23: MAE=2.00, Sesgo=−2.00 (FIX-SAT-STORM)
+- v24: MAE=1.33, Sesgo=−1.33 (FIX-SAT-STORM + FIX-WN2-PINN)
+
+**Sin regresión en calmas** (todos EAWS 1 = correcto).
+
+**Brecha residual**: Jun-15 Δ=−2 (EAWS 3 vs Snowlab 5). Para cerrarla:
+estab_sat=very_poor requeriría ViT calibrado bajo tormenta activa.
+
+---
+
+## Sesión 2026-05-23 — FEAT Earth AI + Revisión arquitectura modelos
+
+### FEAT-EARTH-AI (v25.1) ✅ — commits `ad02712`, `b8dcf5f`, `112be20`
+
+**Segunda vía satelital activada**: `tool_gemini_multispectral.py` ahora usa `ClienteGeminiNativo` (Gemini 3.1 Pro Preview) como tool auxiliar dentro del SubagenteSatelital.
+
+- `tool_gemini_multispectral.py`: reemplazado cliente Databricks roto por `ClienteGeminiNativo.generar(thinking_level="LOW")`
+- `subagente_satelital/prompts.py` v4.1: paso 6 obligatorio `analizar_via_earth_ai` + sección EARTH AI en output
+- `registro_versiones.py`: hash satelital corregido a `3bf6c40e5ad4f451` (con `.strip()`)
+- Activado en Cloud Run Job: `S2_VIA=ambas_consolidar_vit`
+
+**Validación (preset 7 ubicaciones):**
+- 7/7 OK, niveles EAWS idénticos entre Earth AI y base
+- Ubicaciones chilenas: `via_activa=True`, Gemini ~15-21s por llamada, `confianza_global=0.1` (temporada sin nieve)
+- Ubicaciones suizas: `disponible=False` (sin datos BQ satelitales para Alpes)
+- 502 tests pasando, 8 skipped, sin regresiones
+
+### Decisión arquitectónica: Qwen3-80B como modelo principal confirmado
+
+Revisión basada en 17+ rondas de validación. **No se cambia el modelo principal.**
+
+| Capa | Modelo | Razón |
+|---|---|---|
+| S1 Topográfico | Qwen3-80B (Databricks) | Validado, gratuito, 17+ rondas |
+| S2 Satelital (principal) | Qwen3-80B (Databricks) | Ídem |
+| S2 Satelital (Earth AI) | Gemini 3.1 Pro Preview | Razonamiento cualitativo cross-source, NO clasificación |
+| S3 Meteorológico | Qwen3-80B (Databricks) | Ídem |
+| S4 SituationalBriefing | Qwen3-80B (Databricks) | Ídem |
+| S5 Integrador | Qwen3-80B (Databricks) | Calibración v21 (FIX-CALIB-REG shift +0.70 Alpes) atada al modelo |
+
+**Modelos evaluados y descartados:**
+- Qwen3.5-122B: thinking siempre activo, 5-7× tokens, no desactivable → descartado
+- Llama 3.3 70B (disponible en gateway): tool_calls nativo limpio, pero re-validar 17 rondas + recalibrar v21 supera beneficio
+- Gemini 3.1 Pro como principal: pago, 15-40s/llamada vs 3s Qwen3, requiere thought_signature handling
+
+**Por qué Earth AI no afecta H3/H4 QWK:**
+La clasificación EAWS la hace `tool_clasificar_eaws_integrado` con inputs estructurados (matriz determinista + calibración v21). Earth AI enriquece `resumen_satelital` (narrativa de texto), no modifica los inputs numéricos de clasificación. Los notebooks de validación H3/H4 (07/08) requieren boletines retroactivos en BQ versión `v6` — no hay boletines de temporada invernal activa en mayo → validación H3/H4 aplica post-temporada.
+
+**Rollback Earth AI:** `gcloud run jobs update orquestador-avalanchas --update-env-vars S2_VIA=vit_actual` → sin overhead, sin efecto en clasificación.

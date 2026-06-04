@@ -116,7 +116,7 @@ MAPA_SECTOR = {
 }
 
 
-def cargar_datos(cliente, version: str = "v6"):
+def cargar_datos(cliente, version: str = "v25.2"):
     job_config = bigquery.QueryJobConfig(query_parameters=[
         bigquery.ScalarQueryParameter("version", "STRING", version),
     ])
@@ -293,6 +293,20 @@ def calcular_metricas(df_pares, verbose=False):
                       f" — fecha AndesAI más cercana: {row['fecha_eaws']}"
                       f" ({row['dias_diferencia']}d)")
 
+    # Constraint crítico v7.0: MAE tormentas no debe empeorar (≤ 1.00)
+    col_snowlab = "nivel_snowlab"
+    if col_snowlab in df_pares.columns:
+        pares_tormenta = df_pares[df_pares[col_snowlab] >= 3]
+        if len(pares_tormenta) > 0:
+            mae_t = np.abs(pares_tormenta["nivel_andesai"] - pares_tormenta[col_snowlab]).mean()
+            sesgo_t = (pares_tormenta["nivel_andesai"] - pares_tormenta[col_snowlab]).mean()
+            print(f"\n  Constraint v7.0 — MAE tormentas (Snowlab≥3):")
+            print(f"    n={len(pares_tormenta)}  MAE={mae_t:.3f}  sesgo={sesgo_t:+.3f}  [objetivo MAE≤1.00]")
+            if mae_t <= 1.00:
+                print(f"    ✓ Constraint cumplido")
+            else:
+                print(f"    ✗ Constraint VIOLADO — MAE={mae_t:.3f} > 1.00")
+
     if verbose:
         print("\n  Pares completos:")
         print(df_pares.to_string(index=False))
@@ -308,8 +322,8 @@ def main():
                         help="'banda' usa el nivel por elevación; 'max' usa nivel_max global")
     parser.add_argument("--exportar", type=str, default=None,
                         help="Ruta CSV para exportar los pares (ej. /tmp/pares_h4.csv)")
-    parser.add_argument("--version", default="v6",
-                        help="Prefijo de version_prompts a evaluar (default: v6)")
+    parser.add_argument("--version", default="v25.2",
+                        help="Prefijo de version_prompts a evaluar (default: v25.2)")
     args = parser.parse_args()
 
     cliente = bigquery.Client(project=GCP_PROJECT)

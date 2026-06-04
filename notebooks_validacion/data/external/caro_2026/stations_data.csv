@@ -1,0 +1,70 @@
+﻿code_internal,name,lat,lon,elevation,basin,source
+2000002,Volcán Auncanquilcha,-21.1906,-68.4528,5087,Fronterizas Salar Michincha - R. Loa,DGA
+2400002,Cerro Chajnantor Cumbre,-22.9872,-67.7422,5625,Endorreica entre Fronterizas y Salar Atacama,DGA
+3031002,Volcán Ojos del Salado bajo Refugio Atacama,-27.0519,-68.5350,5201,Endorreicas entre Frontera y Vertiente,DGA
+3031003,Volcán Ojos del Salado en Refugio Tejos,-27.0869,-68.5378,5804,Endorreicas entre Frontera y Vertiente,DGA
+3413001,Glaciar Maranceles,-28.4572,-69.7236,3985,Río Copiapo,DGA
+4300004,Glaciar Tapado en Los Corrales,-30.1554,-69.8829,4065,Río Elqui,DGA
+430004,Tapado (TPF),-30.1584,-69.9084,4306,Río Elqui,CEAZA
+430014,Los Corrales ,-30.1615,-69.8759,3982,Río Elqui,CEAZA
+Capayan,Capayán,-30.1734,-69.8038,4754,Río Jáchal,IANIGLA
+430009,La Laguna,-30.2032,-70.0371,3209,Río Elqui,CEAZA
+430012,Llano de Las Liebres,-30.2542,-69.9345,3565,Río Elqui,CEAZA
+4300001,Cerro Olivares,-30.2567,-69.9355,3566,Río Elqui,DGA
+430003,El Jote,-30.4053,-70.2795,3660,Río Elqui,CEAZA
+4520006,Quebrada Larga Cota 3500,-30.7252,-70.2918,3550,Río Limarí,DGA
+4511004,Cerro Vega Negra,-30.9059,-70.5165,3529,Río Limarí,DGA
+450001,Tascadero,-31.2628,-70.5399,3427,Río Limarí,CEAZA
+470001,Casa del Canto,-31.4173,-70.5890,3570,Río Choapa,CEAZA
+4700002,El Soldado,-32.0066,-70.3213,3293,Río Choapa,DGA
+5100003,Nacimiento Del Sobrante,-32.1889,-70.4829,3143,Río Petorca,DGA
+Cuevas,Las Cuevas,-32.8130,-70.0530,3197,Río Mendoza,IANIGLA
+5401007,Portillo ,-32.8424,-70.0970,3032,Río Aconcagua,DGA
+5400005,Glaciar León Negro,-32.9936,-70.0283,4350,Río Aconcagua,DGA
+Portillo,Portillo Argentino,-33.6222,-69.5888,3890,Río Mendoza,IANIGLA
+5706004,Glaciar Juncal Sur,-33.1175,-70.1119,4035,Río Maipo,DGA
+5706002,Glaciar Olivares Gamma,-33.1564,-70.1528,3628,Río Maipo,DGA
+5706005,Glaciar Olivares Alfa,-33.1786,-70.2181,4230,Río Maipo,DGA
+5706003,Valle Olivares,-33.1910,-70.1141,2786,Río Maipo,DGA
+5721019,La Parva,-33.3306,-70.2972,2703,Río Maipo,DGA
+5720005,Farellones,-33.3517,-70.3128,2452,Río Maipo,DGA
+5705004,Glaciar Tupungatito Bajo,-33.3858,-69.8381,4425,Río Maipo,DGA
+5703013,Portezuelo Glaciar Echaurren Norte,-33.5764,-70.1289,3847,Río Maipo,DGA
+5703012,Valle Echaurren Norte,-33.5939,-70.1103,2950,Río Maipo,DGA
+5703014,Termas Del Plomo,-33.6133,-69.9058,3027,Río Maipo,DGA
+5703009,Laguna Negra,-33.6659,-70.1077,2785,Río Maipo,DGA
+5701010,Las Melosas Ruta de Nieve,-33.8636,-70.2727,3317,Río Maipo,DGA
+5701011,Las Hualtatas,-34.0677,-70.1089,2020,Río Maipo,DGA
+6005005,Codelco Cerro Teniente,-34.2047,-70.2692,2950,Río Rapel,DGA
+6000004,Laguna El Yeso,-34.4118,-70.2084,2140,Río Rapel,DGA
+6013008,Laguna Los Cristales,-34.5611,-70.5097,2357,Río Rapel,DGA
+6001000,Glaciar Cortaderal,-34.6608,-70.2561,3156,Río Rapel,DGA
+6023000,Glaciar Universidad en Río San Andrés,-34.7186,-70.3592,2436,Río Rapel,DGA
+6021002,Cerro Los Guzmanes,-34.8861,-70.4636,3125,Río Rapel,DGA
+6020001,Termas Del Flaco,-34.8930,-70.3300,2665,Río Rapel,DGA
+7100006,Paso Vergara,-35.1948,-70.5114,2602,Río Mataquito,DGA
+Toqui,Toqui Lautaro,-35.2928,-70.5163,2453,Río Lautaro,IANIGLA
+7301000,Lo Aguirre,-35.9713,-70.5721,1989,Río Maule,DGA
+7301002,NUEVA LO AGUIRRE,-35.9723,-70.5718,1997,Río Maule,DGA
+7301001,Los Condores,-36.0097,-70.5478,2439,Río Maule,DGA
+7350008,Nevado Longavi,-36.2344,-71.1435,1977,Río Maule,DGA
+8130009,Nevado Chillan,-36.8473,-71.4160,2546,Río Itata,DGA
+8374001,Volcan Chillan,-36.8939,-71.4116,2078,Río Biobio,DGA
+8372001,Alto Mallines,-37.1578,-71.2430,1784,Río Biobio,DGA
+8370010,Los Corralitos,-37.5772,-71.1575,1785,Río Biobio,DGA
+8308003,Chenqueco,-38.0647,-71.3547,778,Río Biobio,DGA
+8301001,Liucura,-38.6449,-71.0907,1034,Río Biobio,DGA
+10105003,Volcán Villarrica Pichillancahue,-39.4350,-71.8758,1800,Río Valdivia,DGA
+10110003,Complejo Volcánico Mocho Choshuenco,-39.9514,-72.0586,1565,Río Valdivia,DGA
+10321001,Cardenal Samore,-40.6831,-71.9864,920,Río Bueno,DGA
+10710004,Cuesta Moraga,-43.3360,-72.3990,575,Río Yelcho,DGA
+1130001,Cerro Divisadero,-45.6165,-72.0134,1430,Río Aysén,CIEP
+11314002,Cerro Divisadero en el Fraile,-45.6270,-72.0040,1190,Río Aysén,DGA
+11503002,Portezuelo Ibañez,-46.0778,-72.0510,1080,Río Baker,DGA
+11440001,Hielo Norte en Glaciar San Rafael,-46.7053,-73.5936,1187,Costeras e Islas R. Aisen R. Baker C. Gral. Martinez,DGA
+1150003,Steffen,-47.5555,-73.6958,30,Río Baker,CIEP
+Epulef,Epulef,-49.0523,-72.9505,898,Río Santa Cruz,IANIGLA
+Aonikenk,Aonikenk,-49.2774,-72.9975,1233,Río Santa Cruz,IANIGLA
+Chalten,Chalten,-49.3381,-72.8844,400,Río Santa Cruz,IANIGLA
+Tumbado,Pliegue Tumbado,-49.3793,-72.9368,1070,Río Santa Cruz,IANIGLA
+12730001,Glaciar Snoring,-53.7230,-72.6080,70,Islas al sur Estrecho de Magallanes,DGA

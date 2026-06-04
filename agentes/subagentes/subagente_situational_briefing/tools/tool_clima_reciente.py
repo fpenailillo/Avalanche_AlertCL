@@ -57,7 +57,7 @@ def obtener_clima_reciente_72h(ubicacion: str) -> dict:
 
     resultado = {
         "disponible": False,
-        "fuente": "clima.condiciones_actuales + clima.condiciones_actuales (72h)",
+        "fuente": "clima.condiciones_actuales + clima.pronostico_horas (72h)",
         "temperatura_promedio_c": None,
         "temperatura_min_c": None,
         "temperatura_max_c": None,
@@ -90,32 +90,25 @@ def obtener_clima_reciente_72h(ubicacion: str) -> dict:
         resultado["direccion_viento_dominante"] = _grados_a_cardinal(dir_deg)
 
     # Tendencia 72h para valores min/max y acumulados
+    # obtener_tendencia_meteorologica() retorna estadísticas agregadas (no registros individuales)
     tendencia = consultor.obtener_tendencia_meteorologica(ubicacion)
-    if tendencia.get("disponible") is not False and tendencia.get("total_registros", 0) > 0:
-        registros = tendencia.get("registros", [])
-        if registros:
-            temps = [r.get("temperatura") for r in registros if r.get("temperatura") is not None]
-            vientos = [r.get("velocidad_viento", 0) for r in registros]
-            precips = [r.get("precipitacion_acumulada", 0) or 0 for r in registros]
-            condiciones = [r.get("condicion_clima", "") for r in registros if r.get("condicion_clima")]
+    if tendencia.get("disponible") is not False:
+        temp_min = tendencia.get("temp_min_72h")
+        temp_max = tendencia.get("temp_max_72h")
+        if temp_min is not None:
+            resultado["temperatura_min_c"] = temp_min
+        if temp_max is not None:
+            resultado["temperatura_max_c"] = temp_max
+        if temp_min is not None and temp_max is not None:
+            resultado["temperatura_promedio_c"] = round((temp_min + temp_max) / 2, 1)
 
-            if temps:
-                resultado["temperatura_min_c"] = min(temps)
-                resultado["temperatura_max_c"] = max(temps)
-                resultado["temperatura_promedio_c"] = round(sum(temps) / len(temps), 1)
+        viento_max_ms = tendencia.get("viento_max_ms")
+        if viento_max_ms is not None:
+            resultado["viento_max_kmh"] = round(viento_max_ms * 3.6, 1)
 
-            if vientos:
-                viento_max_ms = max(v for v in vientos if v is not None)
-                resultado["viento_max_kmh"] = round(viento_max_ms * 3.6, 1)
-
-            if precips:
-                resultado["precipitacion_acumulada_mm"] = round(max(precips), 1)
-
-            if condiciones:
-                # Condición más frecuente
-                from collections import Counter
-                mas_frecuente = Counter(condiciones).most_common(1)[0][0]
-                resultado["condicion_predominante"] = mas_frecuente
+        precip_72h = tendencia.get("precip_total_acumulada_mm")
+        if precip_72h is not None:
+            resultado["precipitacion_acumulada_mm"] = round(precip_72h, 1)
 
     # Detectar eventos destacables
     eventos = []

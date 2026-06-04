@@ -5,7 +5,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/$PROJECT_ID/snow-alert-agentes:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID'
       - '-t'
       - 'gcr.io/$PROJECT_ID/snow-alert-agentes:latest'
       - '-f'
@@ -20,7 +20,7 @@ steps:
       - '--all-tags'
       - 'gcr.io/$PROJECT_ID/snow-alert-agentes'
 
-  # Paso 3: Crear o actualizar el Cloud Run Job con la nueva imagen
+  # Paso 3: Crear o actualizar el Cloud Run Job orquestador
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'crear-o-actualizar-job'
     entrypoint: 'bash'
@@ -30,20 +30,43 @@ steps:
         gcloud run jobs describe orquestador-avalanchas \
           --region=us-central1 --project=$PROJECT_ID > /dev/null 2>&1 \
         && gcloud run jobs update orquestador-avalanchas \
-            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$COMMIT_SHA \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
             --region=us-central1 --project=$PROJECT_ID \
         || gcloud run jobs create orquestador-avalanchas \
-            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$COMMIT_SHA \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
             --region=us-central1 --project=$PROJECT_ID \
             --memory=4Gi --cpu=2 \
             --task-timeout=3600 \
             --max-retries=1 \
             --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
-            --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
+            --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1,USE_WEATHERNEXT2=true
+
+  # Paso 4: Crear o actualizar el Cloud Run Job ingestor-wn2
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'crear-o-actualizar-ingestor-wn2'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run jobs describe ingestor-wn2 \
+          --region=us-central1 --project=$PROJECT_ID > /dev/null 2>&1 \
+        && gcloud run jobs update ingestor-wn2 \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+        || gcloud run jobs create ingestor-wn2 \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+            --memory=2Gi --cpu=1 \
+            --task-timeout=1800 \
+            --max-retries=1 \
+            --command=python \
+            --args="agentes/datos/ingestores/ingestor_wn2.py" \
+            --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
+            --set-env-vars=GCP_PROJECT=climas-chileno,ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
 images:
-  - 'gcr.io/$PROJECT_ID/snow-alert-agentes:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID'
   - 'gcr.io/$PROJECT_ID/snow-alert-agentes:latest'

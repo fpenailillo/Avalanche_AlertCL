@@ -41,6 +41,7 @@ gce_credentials.json
 
 # ─── Datos locales (no se versionan) ─────────────────────────────────────────
 datos_locales/
+data/external/
 outputs/
 exports/
 *.geotiff

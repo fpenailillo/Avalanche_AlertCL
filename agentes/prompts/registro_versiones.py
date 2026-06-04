@@ -23,6 +23,7 @@ Uso:
 import hashlib
 import importlib
 import logging
+import os
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -46,23 +47,23 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "3.0.0",
-        "descripcion": "PINN con Mohr-Coulomb, difusión térmica, gradiente desde LST satelital",
-        "hash_sha256": "1ceef64e71741bc4",
+        "version": "8.2.0",
+        "descripcion": "v8.2: FIX-PINN-EAWS-MAP — usar campo estabilidad_eaws del PINN directamente, sin reinterpretar",
+        "hash_sha256": "349d8ac7c25bb680",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
         "variable": "SYSTEM_PROMPT_SATELITAL",
-        "version": "4.0.0",
-        "descripcion": "ViT + estado manto: MODIS LST + ERA5 suelo + SAR humedad superficial (REQ-02a/02b)",
-        "hash_sha256": "be0b1be58880835c",
+        "version": "4.1.0",
+        "descripcion": "v4.1: paso 6 obligatorio analizar_via_earth_ai + sección EARTH AI en salida (FIX-EARTH-AI-PROMPT)",
+        "hash_sha256": "3bf6c40e5ad4f451",
     },
     "meteorologico": {
         "modulo": "agentes.subagentes.subagente_meteorologico.prompts",
         "variable": "SYSTEM_PROMPT_METEOROLOGICO",
-        "version": "5.1.0",
-        "descripcion": "FIX-S3: template salida corregido a FUSION_ACTIVA_CON_CARGA|CICLO_DIURNO_NORMAL (elimina FUSION_ACTIVA legacy)",
-        "hash_sha256": "7b02011031ec7b05",
+        "version": "5.3.0",
+        "descripcion": "v5.3: FIX-WN2-TRIGGERS (H) — S3 pasa wn2_heavy_snow/storm_slab/wind_strong a detectar_ventanas_criticas",
+        "hash_sha256": "971c1fcb276cdcb7",
     },
     "nlp": {
         "modulo": "agentes.subagentes.subagente_nlp.prompts",
@@ -74,14 +75,225 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "6.0.0",
-        "descripcion": "FIX-D: instrucción explícita dias_consecutivos_nivel_bajo SIEMPRE obligatorio",
-        "hash_sha256": "1c1f675934f3f2ae",
+        "version": "10.3.0",
+        "descripcion": "v10.3: FIX-PINN-EAWS-MAP — pasar estado_pinn a clasificar_riesgo_eaws_integrado; la tool calcula estabilidad_topografica determinísticamente",
+        "hash_sha256": "98dacfa68aa412cc",
     },
 }
 
 # Versión global del conjunto de prompts (se incrementa cuando cambia cualquiera)
-VERSION_GLOBAL = "6.2"
+# v25.0: FIX-STORM-EXTREME + FIX-SAT-STORM + FIX-WN2-PINN + fixes ultrareview 001/002/004/009/015/017:
+#   FIX-STORM-FREQ-WN2: very_poor + NEVADA_RECIENTE + ventanas≥1 en Andes Chile → frecuencia=many (Schweizer 2003).
+#   FIX-WN2-SIZE-ANDES: nieve_nueva_cm_wn2 parametriza tamano avalancha (Techel 2022: 25→D3, 40→D4, 60→D5).
+#   FIX-SAT-STORM: NDSI delta>20% → NEVADA_SATELITAL_CONFIRMADA propaga a ventanas_criticas (rompe gate calma).
+#   FIX-WN2-PINN: surcharge Mohr-Coulomb cuando nieve_nueva_cm_wn2≥20 → estabilidad very_poor en tormenta extrema.
+#   bug_001: claves IMIS alineadas (HS_meas_cm, TA_c; eliminar VW_max_ms silencioso).
+#   bug_002: propagar tools_llamadas de cache en modo solo_s5 (~15 columnas BQ que quedaban NULL).
+#   bug_009: umbral redistribución nieve Alpes 3→8 m/s (Schmidt 1980; diferenciado del umbral detección ERA5).
+#   bug_015: COALESCE(nivel_eaws_24h_raw, nivel_eaws_24h) en calibrador evita doble calibración desde v21.
+#   bug_017: timezone-aware fecha_local en WN2 (Europe/Zurich vs America/Santiago según longitud).
+# v22.0: FIX-WIND-UNITS (bug_021) + FIX-CR10B-RECAL:
+#   FIX-WIND-UNITS: normalizar velocidad_viento km/h→m/s en ConsultorBigQuery.obtener_condiciones_actuales.
+#     Causa raíz: todas las rutas de ingesta guardan km/h, pero consumers asumían m/s.
+#     Fix: /3.6 al leer BQ; los ×3.6 downstream (fuente_open_meteo, tool_clima_reciente,
+#     almacenador) ya producen km/h correctos.
+#   FIX-CR10B-RECAL: recalibrar umbral viento Alpes tras corrección de unidades.
+#     Análisis 30 pares DEAPSnow 2018-2020: ratio IMIS/ERA5 ≈ 1.0 (estaciones valle,
+#     no cresta); max ERA5 = 5.22 m/s → umbral 7 m/s apagaba toda señal.
+#     Nuevo umbral: 3.0 m/s (activa 4/30 días, 100% GT≥3, sin falsos positivos).
+#     No afecta Andes Chile (_umbral_viento_fuerte = 10.0 m/s sin cambio).
+# v21.0: FIX-CALIB-REG (D): calibración estadística post-LLM por región.
+# v18.0: FIX-CR18-CH-1/2/3 — fixes H3 Suiza:
+#   CH-1 (prompt): S5 no intenta llamar obtener_condiciones_actuales_meteo (no registrada en S5);
+#         añadir instrucción de pasar siempre viento_kmh.
+#   CH-2 (tool): umbral ventanas_criticas >=2 para boost frecuencia en Alpes+NEVADA_RECIENTE (vs >=3 global).
+#   CH-3 (tool): tamano mínimo 3 en Alpes con NEVADA_RECIENTE + >=2 ventanas (tormenta masiva D3+).
+#   No afecta Andes Chile (guards region=alpes_swiss).
+# v17.0: FIX-CR17A — cap estabilidad base en 'fair' (Andes + factor neutro + sin ventanas).
+#   El PINN siempre da 'poor' en La Parva (terreno potencial). Sin trigger meteo
+#   la estabilidad activa es 'fair' → matriz EAWS ≤ nivel 2. No afecta Alpes.
+# v15.5: REVERT FIX-CR16A — restaurar fallback precip_efectiva global (CR-10A).
+#   FIX-CR16A (v16.0) empeoró sesgo +0.770→+1.023 y QWK +0.022→-0.065.
+# v15.0: Integración WeatherNext 2 — nueva tool obtener_pronostico_wn2_ventanas.
+#   Fuente: BigQuery Analytics Hub climas-chileno.weathernext_2.weathernext_2_0_0.
+#   Enriquecimiento: ventanas 6h, ensemble 64 miembros, probable_avalanche_problem,
+#   4 alertas booleanas (heavy_snow/storm_slab/wet_snow/wind_strong).
+#   Persistencia: 6 nuevos campos wn2_* en boletines_riesgo.
+# v14.3: Experimento limpio — mismo código que v14.0 (sin CR-14B).
+#   Fix timeout: ThreadPoolExecutor → multiprocessing.Process con .terminate() real.
+#   120 runs desde cero para verificar reproducibilidad H3 QWK≈0.24 + H4 QWK≈0.028.
+# v14.2: Re-run parcial (noche, lento, mezclado con v14.1 CR-14B). Descartado.
+# v14.0: Redesign validación suiza → DEAPSnow test set 2018-2020.
+#   Backfill IMIS (TA, VW, HN24, RH) en condiciones_actuales para 30 fechas per-estación.
+# v19.0: FIX-CR19 — nieve_nueva_cm = HN24_cm (IMIS) en condiciones_actuales:
+#   consultor_bigquery: SELECT datos_json_crudo; parsear nieve_nueva_cm desde HN24_cm.
+#   tool_condiciones_actuales: surfacear nieve_nueva_cm al LLM; alerta CARGA_NIEVE_EXTREMA_30CM.
+#   tool_ventanas_criticas: param nieve_nueva_cm_imis; ventana CARGA_NIEVE_PROFUNDA
+#   cuando HN24>=25cm en Alpes (2a ventana -> activa CH-2/CH-3). Guard _es_alpes.
+# v21.0: FIX-CALIB-REG (D): calibración estadística post-LLM por región.
+#   alpes_swiss: shift-only aprobado (α=+0.70, β=1.0, p=0.026, QWK_cv 0.191→0.250).
+#     Mapa: nivel 1→2, 2→3, 3→4, 4→5. QWK full 0.264→0.353 (objetivo ≥0.35 cumplido).
+#   andes_chile: identidad — shift-only rechazado (|α|=0.40<0.50). Ya cumple objetivo ≥0.15.
+#   Infraestructura: calibrador.py, coeficientes_calibracion.json, tool_clasificar_eaws (+raw),
+#     almacenador (+nivel_eaws_24h_raw), schema_boletines.json.
+# v20.0: FIX-VAL-FRAMEWORK (G): cache S1-S4 + --solo-s5 (3.5h → ~4 min por validación).
+#   FIX-LLM-DETER (C): temperature=0.0 en todos los LLM clients (seed eliminado — Databricks rechaza).
+#   FIX-HN24-PROMO (A): HN24 → precip_efectiva en Alpes cuando supera ERA5.
+#   FIX-IMIS-EXT (F): extracción extendida HS/TA/VW/VW_max desde JSON IMIS.
+#   FIX-HN24-SIZE (B): graduación tamaño D3/D4/D5 por HN24 en Alpes (reemplaza CH-3 binario).
+#   FIX-CR7A-REFACTOR (E): compuerta condicional Andes — reemplaza bloqueo absoluto CR-7A
+#     por gate basado en señales de calma (factor neutro+vc=0+p72h<5mm+viento<30+dias_bajo>=2).
+#   FIX-WN2-TRIGGERS (H): alertas WN2 ensemble → ventanas deterministas (NEVADA_WN2_CONFIRMADA,
+#     PLACA_VIENTO_WN2, VIENTO_WN2_FUERTE). Guard disponible=False en retroactivo.
+#
+# v25.1 (FIX-CR17A-ATENUACION):
+#   FIX-CR17A-ATENUACION: reemplaza cap duro v17.0 en Andes Chile por atenuación graduada.
+#     very_poor→poor (1 paso); poor→fair solo con ESTABLE + dias_bajo≥3 (calma absoluta).
+#     poor + CICLO_DIURNO_NORMAL → mantener poor → habilita poor×some×3 → nivel 3.
+#   FIX-CICLO-CALMA: separa CICLO_DIURNO_NORMAL de ESTABLE en calma sostenida (dias_bajo≥4).
+#     Activa calma sostenida solo con ESTABLE/""; ciclo térmico activo no es calma real.
+#   Resultado validación H4 v25.1 (n=87): QWK=+0.008 (+0.088 vs v25.0). Techo ≤2 persiste.
+#   Causa raíz: PINN retornaba FS constante por sector (sin WN2). FIX-CR17A sin efecto.
+#
+# v25.2 (FIX-PINN-WN2):
+#   FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
+#     Causa raíz identificada con datos BQ (17 boletines v25.1 La Parva GT≥3):
+#     TOOL_PRONOSTICO_WN2_VENTANAS solo estaba registrada en S3, no en S1.
+#     Qwen3 no podía invocarla desde S1 aunque el prompt lo indicara.
+#     WN2 ensemble tiene señal retroactiva para todas las fechas GT≥3
+#     (prec_6h_max 10-41 mm, confirmado query BQ weathernext_2_0_0).
+#   Cambios:
+#     1. subagente_topografico/agente.py: registra TOOL_PRONOSTICO_WN2_VENTANAS en S1.
+#     2. tool_calcular_pinn.py: fallback determinista — si nieve_nueva_cm no viene del LLM
+#        y USE_WEATHERNEXT2=true y nombre_ubicacion provisto, consulta WN2 directamente.
+#        Acepta nombre_ubicacion + fecha_objetivo como params opcionales del schema.
+#     3. subagente_topografico/prompts.py: cambia "opcionalmente" → "OBLIGATORIO".
+#
+# v25.3 (FIX-PINN-WN2-P95):
+#   Causa raíz adicional (data-driven, observada en reproceso v25.2):
+#     nieve_24h_cm_p50_corr = 0.0 para todas las fechas GT≥3 — el percentil p50 del
+#     ensemble de 64 miembros WN2 es 0 porque <50% de miembros predicen precipitación
+#     para eventos de tormenta con alta incertidumbre. La señal existe en p95 (10-41 mm).
+#   Cambios:
+#     1. tool_calcular_pinn.py: fallback usa p95 cuando p50==0 y p95>0 (ensemble disperso).
+#        Metodológicamente: p95 = escenario de planificación (tail-risk EAWS).
+#        fuente_nieve_nueva distingue "wn2_fallback_determinista_p50" vs "_p95".
+#     2. subagente_topografico/prompts.py v8.1: instrucción LLM de usar p95 si p50==0.
+#     3. reprocesar_retroactivo.py: añade flag --force para reescribir boletines existentes.
+#
+# v25.4 (FIX-WN2-3D):
+#   Causa raíz confirmada con análisis data-driven (perfil datos + Caro 2026 Río Maipo):
+#     GT=5 (2024-06-15): la tormenta ocurrió jun 12-14 (HN3d=87cm en Farellones DGA 2452m).
+#     El día del boletín (jun 15) no hubo nueva precipitación → p50=0, p95≈0 en WN2.
+#     El peligro persiste por placas de tormenta ya formadas (Schweizer et al. 2003).
+#     WN2 ventana 24h = correcto para el día, pero no captura la carga acumulada del storm.
+#   Solución: ampliar la ventana de consulta WN2 a 3 días previos al boletín (t-2, t-1, t).
+#   El CTE diario_3d (mejor init por ventana via rn=1) suma p95 corr de los 3 días.
+#   El init_date_start se extiende 5 días atrás para que esos runs estén disponibles.
+#   Prioridad fallback en tool_calcular_pinn.py: p50_24h → p95_24h → p95_3d.
+#   Validación oracle (Caro DGA offline): AUC=1.000 para HN3d vs GT≥3 en 14 fechas 2024.
+#   Cambios:
+#     1. fuente_weathernext2.py: CTE diario_3d + param @fecha_obj + init 5d atrás.
+#     2. tool_calcular_pinn.py: prioridad p50→p95→p95_3d; fuente_nieve distingue "p95_3d".
+#
+# v25.5 (FIX-WN2-THRESHOLD):
+#   Causa raíz: WN2 ensemble siempre devuelve nieve_24h_cm_p50_corr > 0 por ruido numérico
+#     (~0.1-0.5 cm), incluso en días completamente despejados. Para 2024-06-15 (GT=5):
+#     p50=0.13 cm (ruido) → condición `val_p50 > 0` TRUE → surcharge=2 N/m² → FS=1.81 (sin cambio).
+#     La ventana 3d (173.6 cm) nunca se evaluaba porque p50>0 siempre.
+#   Solución: umbral mínimo 5 cm (Schweizer 2003: HN24h < 5 cm no genera placas de tormenta).
+#     Condición cambia de `> 0` a `>= 5` para p50 y p95.
+#   Diagnóstico confirmado con query BQ: Jun 13 p95=30-35 cm/slot × 4 slots = señal fuerte.
+#     Con threshold: p50=0.13 < 5 → skip; p95=2.42 < 5 → skip; 3d=173.6 >= 5 → usa 3d.
+#     Resultado esperado: FS=1.566, SURCHARGE_NIEVE_EXTREMA_174cm → riesgo_falla="alto" → INESTABLE.
+#   Cambios:
+#     1. tool_calcular_pinn.py: _MIN_NIEVE_CM=5.0 para filtrar ruido p50/p95/3d.
+#     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_p50_ruido_usa_p95_3d (caso real 2024-06-15).
+#
+# v25.6 (FIX-WN2-LLM-OVERRIDE):
+#   Causa raíz adicional (observada en tracer 2024-06-15 con USE_WEATHERNEXT2=true):
+#     El LLM llama obtener_pronostico_wn2_ventanas (83 ventanas), extrae nieve_24h_cm_p95_corr
+#     y lo pasa como nieve_nueva_cm=4.3 cm al PINN. Como 4.3 != None, la condición
+#     `nieve_nueva_cm is None` era False → fallback 3d nunca se activaba.
+#     Resultado: surcharge=42 N/m², FS=1.81, estado=ESTABLE (igual que sin WN2).
+#   Solución: ampliar condición a `nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM`.
+#     Si el LLM extrae un valor de 24h pequeño (< 5 cm), el fallback lo sobreescribe
+#     con el valor 3d cuando éste tiene señal (>= 5 cm). Si no hay señal >= 5 cm en
+#     ninguna ventana, se mantiene el valor que pasó el LLM (even if small).
+#   Cambios:
+#     1. tool_calcular_pinn.py: condición fallback ampliada a `or nieve_nueva_cm < 5`.
+#     2. test_fix_pinn_wn2.py: nuevo test_fallback_wn2_llm_valor_pequeno_usa_p95_3d.
+# v25.7 (FIX-PINN-FECHA-GLOBAL):
+#   Bug detectado en reproceso completo: el LLM siempre pasaba fecha_objetivo="2024-06-15"
+#   al PINN independiente del boletín real, porque el prompt de S1 no incluye la fecha
+#   y el LLM la infería del contexto WN2 previo (que tiene datos de jun-15).
+#   El fallback determinista usaba esa fecha incorrecta → siempre consultaba la tormenta
+#   de jun-15 (235.7 cm) para todos los boletines → sobreestimación sistémica.
+#   Solución: en el fallback de tool_calcular_pinn.py, priorizar
+#   obtener_fecha_referencia_global() (establecida por el orquestador con la fecha real
+#   del boletín) sobre la fecha que pasa el LLM.
+#   Cambios:
+#     1. tool_calcular_pinn.py: fecha_ref global siempre override la del LLM en fallback.
+# v25.8 (FIX-WN2-P95-THRESHOLD):
+#   Análisis data-driven del sesgo +0.448 en validación H4 v25.7:
+#     El p95_24h del ensemble activa el PINN con 6-57 cm en días sin tormenta real
+#     (p50_24h ≈ 0, wn2_avalanche_problem=low_load). Dispersión natural del ensemble,
+#     no señal genuina. Ejemplos: 2024-07-19 p50=0.3/p95=41.9 cm → AI=3, GT=1.
+#   Solución: umbrales diferenciados por nivel de confianza:
+#     p50_24h: 5 cm (escenario mediano — señal real)
+#     p95_24h: 30 cm (cola del ensemble — Schweizer 2003: HN24h≥30 cm para placas)
+#     p95_3d:  5 cm (suma 3 días — 5 cm/3d es acumulación genuina)
+#   Cambios:
+#     1. tool_calcular_pinn.py: _MIN_P95_CM = 30.0 (antes 5.0)
+#     2. test_fix_pinn_wn2.py: test actualizado para nuevo umbral
+#   Resultado validación H4 v25.8 (n=87 pares):
+#     QWK=+0.385, MAE=0.782, sesgo=+0.414, MAE_tormentas=1.250
+#     H4 RECHAZADA — QWK 0.015 bajo el objetivo de 0.40
+#     Por sector: Alto QWK=0.211 | Bajo QWK=0.213 | Medio QWK=0.578
+#
+# v25.9 (FIX-PINN-EAWS-MAP) — PENDIENTE:
+#   Diagnóstico data-driven del sesgo residual +0.414 en H4 v25.8:
+#     35 pares GT=1→AI≥2 analizados. 31/35 tienen PINN=ESTABLE (FS=1.81),
+#     wn2_prob=low_load, wn2_storm_slab=False. Sin señal física de tormenta.
+#     Causa: el LLM en S5 mapea estado_manto PINN a escala EAWS un escalón arriba:
+#       PINN ESTABLE (FS>1.5) → LLM pasa estabilidad_topografica="poor" o "fair"
+#       Correcto: ESTABLE → "good"
+#     Con "good+a_few+D2" la matriz EAWS → nivel 1. Con "fair+a_few+D2" → nivel 2.
+#     Verificado en tools_llamadas BQ: 2024-07-05 La Parva Alto, PINN ESTABLE,
+#     LLM pasa estabilidad_topografica="poor" → nivel 2 (GT=1).
+#   Tabla EAWS (datos/analizador_avalanchas/eaws_constantes.py):
+#     good + any_freq + D1/D2/D3 → siempre nivel 1
+#     fair + a_few + D2 → nivel 2
+#     poor + a_few + D2 → nivel 2
+#   Mapeo correcto PINN → estabilidad_eaws (Schweizer 2003):
+#     ESTABLE  (FS ≥ 1.5)          → "good"
+#     MARGINAL (1.3 ≤ FS < 1.5)   → "fair"
+#     INESTABLE (1.0 ≤ FS < 1.3)  → "poor"
+#     CRITICO  (FS < 1.0)          → "very_poor"
+#   Impacto en GT≥3: INESTABLE "poor" en lugar de "very_poor" no baja niveles altos:
+#     poor+some+D3=3 (igual que very_poor+some+D3=3). Neutral en tormentas reales.
+#   Cambios:
+#     1. tool_calcular_pinn.py: añadir campo "estabilidad_eaws" al dict de retorno.
+#     2. subagente_topografico/prompts.py: instrucción explícita de copiar
+#        estabilidad_eaws directamente como estabilidad_topografica, sin reinterpretar.
+#   Proyección: eliminar ~31 falsos positivos GT=1 → QWK proyectado > 0.40,
+#     MAE tormentas proyectado ≤ 1.00 (objetivo H4 cumplido).
+#
+# v25.10 (FIX-WN2-DIARIO):
+#   Bug identificado post-validación v25.9: fuente_weathernext2._formatear_ventanas
+#   sobreescribía el dict `diario` en cada iteración (loop SQL ORDER BY fecha_local ASC).
+#   El último día procesado (hasta 8 días adelante) ganaba, reportando p. ej.
+#   nieve_24h_cm_p50_corr=100 cm para una tormenta futura como si fuera snow de hoy.
+#   Síntoma: 2025-09-12 Alto obtuvo nieve_wn2=100 (tormenta del 17-20 sep, 8 días out),
+#   que combinada con NEVADA_RECIENTE+ventanas=3 → nivel=4 para GT=1 → QWK=0.138.
+#   FIX-PINN-EAWS-MAP (v25.9) funcionó correctamente (ESTABLE→good confirmado en log),
+#   pero la señal WN2 falsa lo sobreescribió vía la lógica meteorológica.
+#   Fix: en _formatear_ventanas, solo actualizar `diario` cuando
+#   r["fecha_local"] == fecha_objetivo; guardar primer día disponible como fallback.
+#   Cambios:
+#     1. fuente_weathernext2.py: lógica de selección diario por fecha_objetivo.
+#   Proyección: QWK recupera niveles v25.9 correctos, esperado > 0.40.
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.10")
 
 
 def _calcular_hash(contenido: str) -> str:

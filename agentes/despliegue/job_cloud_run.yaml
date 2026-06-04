@@ -25,6 +25,9 @@ spec:
                   value: clima
                 - name: REGION
                   value: us-central1
+                # WeatherNext 2 (v15.0+): activo en producción
+                - name: USE_WEATHERNEXT2
+                  value: "true"
                 # LLM: usa Databricks por defecto (token leído desde Secret Manager en runtime)
                 # Secret: projects/climas-chileno/secrets/databricks-token
               # Tiempo máximo de ejecución: 60 minutos

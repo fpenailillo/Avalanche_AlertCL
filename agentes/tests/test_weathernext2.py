@@ -351,3 +351,6 @@ class TestRegresionS3:
         ejecutores = s._cargar_ejecutores()
         assert "obtener_pronostico_ensemble" in ejecutores
         assert callable(ejecutores["obtener_pronostico_ensemble"])
+        # WN2 v15.0
+        assert "obtener_pronostico_wn2_ventanas" in ejecutores
+        assert callable(ejecutores["obtener_pronostico_wn2_ventanas"])

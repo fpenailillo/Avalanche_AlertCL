@@ -5,7 +5,7 @@ Cubre:
   - tool_tagee_terreno: datos disponibles y fallback cuando no hay datos BQ
   - tool_alphaearth: análisis de embedding y drift interanual
   - tool_calcular_pinn: features TAGEE/AE opcionales + retro-compatibilidad
-  - SubagenteTopografico: 6 tools registradas, ejecutores presentes
+  - SubagenteTopografico: 7 tools registradas, ejecutores presentes
   - ConsultorBigQuery.obtener_atributos_tagee_ae: retorno gracioso
 """
 
@@ -270,15 +270,16 @@ class TestCalcularPinnConFeaturesGLO30:
 class TestSubagenteTopograficoV2:
 
     def test_seis_tools_registradas(self):
-        """S1 ahora debe tener 6 tools (2 nuevas: TAGEE y AlphaEarth)."""
+        """S1 ahora debe tener 7 tools (FIX-PINN-WN2 v25.2: +obtener_pronostico_wn2_ventanas)."""
         from agentes.subagentes.subagente_topografico.agente import SubagenteTopografico
         with patch("agentes.subagentes.base_subagente.crear_cliente", return_value=MagicMock()):
             agente = SubagenteTopografico()
         tools = [t["name"] for t in agente._cargar_tools()]
-        assert len(tools) == 6
+        assert len(tools) == 7
         assert "analizar_dem" in tools
         assert "analizar_terreno_tagee" in tools
         assert "analizar_embedding_alphaearth" in tools
+        assert "obtener_pronostico_wn2_ventanas" in tools
         assert "calcular_pinn" in tools
         assert "identificar_zonas_riesgo" in tools
         assert "evaluar_estabilidad_manto" in tools

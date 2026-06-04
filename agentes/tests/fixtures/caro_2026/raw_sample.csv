@@ -1,0 +1,31 @@
+station_id,station_name,basin,andean_zone,country,latitude,longitude,elevation_m,observation_date,snow_depth_cm,data_source,sensor_model
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-01,45.2,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-02,47.8,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-03,350.0,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-04,49.1,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-05,50.3,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-06,51.0,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-07,52.2,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-08,53.5,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-09,54.1,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-06-10,55.0,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-07-01,-1.2,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-07-02,0.3,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-07-03,0.4,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-07-04,0.2,DGA,Campbell/SR50A
+LA_PARVA_01,La Parva,Maipo,Mediterranean,CL,-33.35,-70.27,2662,2020-07-05,0.1,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-01,38.5,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-02,40.1,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-03,41.0,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-04,42.3,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-05,400.0,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-06,44.0,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-07,45.2,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-08,46.0,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-09,47.1,DGA,Campbell/SR50A
+FARELLONES_01,Farellones,Maipo,Mediterranean,CL,-33.35,-70.30,2460,2020-06-10,48.0,DGA,Campbell/SR50A
+LAGUNA_NEGRA_01,Laguna Negra,Maipo,Mediterranean,CL,-33.65,-70.15,2250,2020-06-01,55.0,DGA,Campbell/SR50A
+LAGUNA_NEGRA_01,Laguna Negra,Maipo,Mediterranean,CL,-33.65,-70.15,2250,2020-06-02,56.3,DGA,Campbell/SR50A
+LAGUNA_NEGRA_01,Laguna Negra,Maipo,Mediterranean,CL,-33.65,-70.15,2250,2020-06-03,57.1,DGA,Campbell/SR50A
+LAGUNA_NEGRA_01,Laguna Negra,Maipo,Mediterranean,CL,-33.65,-70.15,2250,2020-06-04,58.0,DGA,Campbell/SR50A
+LAGUNA_NEGRA_01,Laguna Negra,Maipo,Mediterranean,CL,-33.65,-70.15,2250,2020-06-05,59.2,DGA,Campbell/SR50A

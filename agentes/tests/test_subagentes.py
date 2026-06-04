@@ -177,6 +177,80 @@ class TestToolsPINN:
         # El IC debe ser más ancho que 0 (hay incertidumbre real)
         assert uq["ic_95_sup"] > uq["ic_95_inf"]
 
+    # ── FIX-WN2-PINN: forzante de carga nival ────────────────────────────────
+
+    def _pinn_base(self, **kwargs):
+        from agentes.subagentes.subagente_topografico.tools.tool_calcular_pinn import (
+            ejecutar_calcular_pinn,
+        )
+        params = dict(
+            gradiente_termico_C_100m=-0.65,
+            densidad_kg_m3=300.0,
+            indice_metamorfismo=1.0,
+            energia_fusion_J_kg=150000.0,
+            pendiente_grados=38.0,
+        )
+        params.update(kwargs)
+        return ejecutar_calcular_pinn(**params)
+
+    def test_nieve_nueva_reduce_fs(self):
+        """Nieve nueva reduce el factor de seguridad respecto al caso sin forzante."""
+        sin = self._pinn_base()
+        con = self._pinn_base(nieve_nueva_cm=30.0)
+        assert con["factor_seguridad_mohr_coulomb"] < sin["factor_seguridad_mohr_coulomb"]
+
+    def test_nieve_nueva_mayor_reduce_mas_fs(self):
+        """A mayor nieve nueva, mayor reducción del FS (monotónico)."""
+        r20 = self._pinn_base(nieve_nueva_cm=20.0)
+        r40 = self._pinn_base(nieve_nueva_cm=40.0)
+        r60 = self._pinn_base(nieve_nueva_cm=60.0)
+        assert r60["factor_seguridad_mohr_coulomb"] < r40["factor_seguridad_mohr_coulomb"]
+        assert r40["factor_seguridad_mohr_coulomb"] < r20["factor_seguridad_mohr_coulomb"]
+
+    def test_surcharge_critica_20cm_genera_alerta(self):
+        """≥20 cm/24h activa alerta SURCHARGE_NIEVE_CRITICA."""
+        r = self._pinn_base(nieve_nueva_cm=25.0)
+        alertas = r["alertas_pinn"]
+        assert any("SURCHARGE_NIEVE_CRITICA" in a for a in alertas)
+
+    def test_surcharge_extrema_40cm_genera_alerta_extrema(self):
+        """≥40 cm/24h activa alerta SURCHARGE_NIEVE_EXTREMA."""
+        r = self._pinn_base(nieve_nueva_cm=45.0)
+        alertas = r["alertas_pinn"]
+        assert any("SURCHARGE_NIEVE_EXTREMA" in a for a in alertas)
+
+    def test_nieve_nueva_cero_no_cambia_fs(self):
+        """nieve_nueva_cm=0 o None no altera el FS base."""
+        sin = self._pinn_base()
+        con_zero = self._pinn_base(nieve_nueva_cm=0.0)
+        assert sin["factor_seguridad_mohr_coulomb"] == con_zero["factor_seguridad_mohr_coulomb"]
+
+    def test_uq_incluye_contrib_nieve_nueva(self):
+        """Con nieve_nueva_cm, la sensibilidad nieve_nueva_cm está en el UQ."""
+        r = self._pinn_base(nieve_nueva_cm=30.0)
+        sens = r["incertidumbre_pinn"]["sensibilidades"]
+        assert "nieve_nueva_cm" in sens
+        assert sens["nieve_nueva_cm"] > 0
+
+    def test_uq_sin_nieve_nueva_contrib_es_cero(self):
+        """Sin nieve_nueva_cm, la contribución de incertidumbre de nieve es 0."""
+        r = self._pinn_base()
+        sens = r["incertidumbre_pinn"]["sensibilidades"]
+        assert sens.get("nieve_nueva_cm", 0) == 0.0
+
+    def test_fs_positivo_siempre(self):
+        """FS siempre > 0, incluso con carga extrema (no puede ser negativo)."""
+        r = self._pinn_base(nieve_nueva_cm=200.0)
+        assert r["factor_seguridad_mohr_coulomb"] > 0
+
+    def test_metricas_reporta_surcharge(self):
+        """Las métricas físicas incluyen peso_surcharge_N_m2 cuando hay nieve nueva."""
+        r = self._pinn_base(nieve_nueva_cm=30.0)
+        metricas = r["metricas_fisicas"]
+        assert "peso_surcharge_N_m2" in metricas
+        assert metricas["peso_surcharge_N_m2"] > 0
+        assert metricas["nieve_nueva_cm"] == 30.0
+
 
 class TestToolsVIT:
     """Tests del motor ViT sin llamadas a Anthropic."""
@@ -1676,15 +1750,15 @@ class TestDisclaimerPrompts:
         faltantes = campos_transparencia - nombres
         assert not faltantes, f"Campos de transparencia faltantes: {faltantes}"
 
-    def test_schema_boletines_tiene_34_campos(self):
-        """El schema de boletines tiene 34 campos (34 = 33 originales + subagentes_degradados)."""
+    def test_schema_boletines_tiene_43_campos(self):
+        """El schema de boletines tiene 43 campos (42 prev + nivel_eaws_24h_raw de v21.0)."""
         import json, os
         schema_path = os.path.join(
             os.path.dirname(__file__), '..', 'salidas', 'schema_boletines.json'
         )
         with open(schema_path) as f:
             schema = json.load(f)
-        assert len(schema) == 34, f"Se esperaban 34 campos, hay {len(schema)}"
+        assert len(schema) == 43, f"Se esperaban 43 campos, hay {len(schema)}"
 
     def test_marco_etico_legal_existe(self):
         """El documento de marco ético-legal existe en docs/."""

@@ -158,8 +158,10 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
     res_condiciones = _extraer_resultado_tool(tools_llamadas, "obtener_condiciones_actuales_meteo")
     res_nlp_sint = _extraer_resultado_tool(tools_llamadas, "sintetizar_conocimiento_historico")
     res_patrones = _extraer_resultado_tool(tools_llamadas, "extraer_patrones_riesgo")
+    res_clasificar = _extraer_resultado_tool(tools_llamadas, "clasificar_riesgo_eaws_integrado")
+    res_wn2 = _extraer_resultado_tool(tools_llamadas, "obtener_pronostico_wn2_ventanas")
 
-    # Extraer viento_kmh desde condiciones (viene en m/s → convertir)
+    # velocidad_viento_ms viene en m/s (normalizado en ConsultorBigQuery) → convertir a km/h
     viento_ms = (res_condiciones.get("condiciones") or {}).get("velocidad_viento_ms")
     viento_kmh = round(viento_ms * 3.6, 1) if viento_ms is not None else None
 
@@ -203,6 +205,16 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
             else {},
             ensure_ascii=False, default=str
         ),
+        # FIX-S1-SEMANTICA (v7.0): trazabilidad EAWS Paso 1
+        "problema_avalancha_presente": res_clasificar.get("problema_avalancha_presente"),
+        "tipo_problema_eaws": res_clasificar.get("tipo_problema_eaws"),
+        # WN2 v15.0: alertas ensemble + problema avalancha (NULL cuando WN2 inactivo)
+        "wn2_alert_heavy_snow": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("heavy_snow") if res_wn2.get("disponible") else None,
+        "wn2_alert_storm_slab": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("storm_slab") if res_wn2.get("disponible") else None,
+        "wn2_alert_wet_snow": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("wet_snow") if res_wn2.get("disponible") else None,
+        "wn2_alert_wind_strong": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("wind_strong") if res_wn2.get("disponible") else None,
+        "wn2_avalanche_problem": (res_wn2.get("diario") or {}).get("problema_dominante") if res_wn2.get("disponible") else None,
+        "wn2_confianza": (res_wn2.get("diario") or {}).get("confianza_dia") if res_wn2.get("disponible") else None,
     }
 
 
@@ -375,6 +387,8 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
             "nombre_ubicacion": nombre_ubicacion,
             "fecha_emision": fecha_emision.isoformat(),
             "nivel_eaws_24h": nivel_24h,
+            # FIX-CALIB-REG (v21.0): nivel antes de calibración estadística post-LLM
+            "nivel_eaws_24h_raw": res_clasificar_tool.get("nivel_eaws_24h_raw"),
             "nivel_eaws_48h": nivel_48h,
             "nivel_eaws_72h": nivel_72h,
             "nombre_nivel_24h": nombre_nivel_24h,
@@ -410,6 +424,16 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
             "subagentes_degradados": json.dumps(
                 resultado_boletin.get("subagentes_degradados", [])
             ),
+            # FIX-S1-SEMANTICA (v7.0)
+            "problema_avalancha_presente": campos_sa["problema_avalancha_presente"],
+            "tipo_problema_eaws": campos_sa["tipo_problema_eaws"],
+            # WN2 v15.0 — NULL cuando WN2 inactivo (compatibilidad retroactiva)
+            "wn2_alert_heavy_snow": campos_sa["wn2_alert_heavy_snow"],
+            "wn2_alert_storm_slab": campos_sa["wn2_alert_storm_slab"],
+            "wn2_alert_wet_snow": campos_sa["wn2_alert_wet_snow"],
+            "wn2_alert_wind_strong": campos_sa["wn2_alert_wind_strong"],
+            "wn2_avalanche_problem": campos_sa["wn2_avalanche_problem"],
+            "wn2_confianza": campos_sa["wn2_confianza"],
         }
 
         tabla_ref = f"{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}"
@@ -461,7 +485,7 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
 
         contenido = json.dumps(resultado_boletin, ensure_ascii=False, default=str, indent=2)
         blob = bucket.blob(ruta_gcs)
-        blob.upload_from_string(contenido, content_type="application/json")
+        blob.upload_from_string(contenido, content_type="application/json", timeout=120)
 
         uri_gcs = f"gs://{NOMBRE_BUCKET}/{ruta_gcs}"
         logger.info(f"Boletín guardado en GCS: {uri_gcs}")

@@ -1,42 +1,54 @@
 """
-Reprocesamiento retroactivo v6.2 — AndesAI (FIX-T + FIX-V + FIX-D + FIX-S3 + FIX-HIST implementados)
+Reprocesamiento retroactivo v25.6 — AndesAI
 
-Genera nuevas predicciones para las fechas de validación usando el código
-actualizado (v6.2) y las guarda en clima.boletines_riesgo (upsert).
+v25.6 cambios respecto a v25.1 (baseline FIX-CR17A-ATENUACION):
+  - FIX-PINN-WN2: cerrar el path WN2 → S1 → PINN → CR17A → EAWS nivel ≥3.
+      Causa raíz: TOOL_PRONOSTICO_WN2_VENTANAS no estaba registrada en S1.
+      Ahora: S1 puede llamar WN2 → nieve_nueva_cm → surcharge Mohr-Coulomb →
+      factor_seguridad < 1.5 → estado MARGINAL/INESTABLE → estabilidad poor/very_poor →
+      guard idx_base > 1 en FIX-CR17A-ATENUACION → nivel EAWS ≥3.
+      Además: fallback determinista en calcular_pinn garantiza WN2 aunque el LLM lo omita.
 
-v6.2 cambios respecto a v6.2:
-  - FIX-HIST: bug QueryJobConfig en obtener_historial_boletines y obtener_zona_geografica;
-              _ejecutar_query recibía QueryJobConfig en vez de lista → historial siempre 0;
-              dia_consecutivos_nivel_bajo ahora lee correctamente desde BigQuery
+Contexto — causa raíz del techo en ≤ 2:
+  H3 (SLF Suiza, n=24): QWK=−0.103 en v25.0. AndesAI predecía 0 veces nivel ≥ 3.
+  H4 (Snowlab La Parva, n=87): QWK=−0.080, sesgo=−0.310. Idem.
+  FIX-CR17A-ATENUACION abre la ruta poor×some×3 → nivel 3 en ~270 días/año en La Parva
+  (CICLO_DIURNO_NORMAL es el factor predominante en condiciones de manto consolidado).
 
-v6.2 cambios respecto a v6.0:
-  - FIX-S3: template de salida S3 corregido; FUSION_ACTIVA legacy eliminado del prompt;
-            LLM ahora emite FUSION_ACTIVA_CON_CARGA o CICLO_DIURNO_NORMAL correctamente
+v25.0 cambios respecto a v19.0 (referencia histórica):
+  - FIX-WN2-TRIGGERS: alertas WN2 ensemble → ventanas deterministas.
+  - FIX-HN24-PROMO / FIX-HN24-SIZE: tamaño graduado por HN24 en Alpes.
+  - FIX-CR7A-REFACTOR: compuerta condicional Andes (reemplaza bloqueo absoluto CR-7A).
+  - FIX-LLM-DETER: temperature=0.0, seed=42.
+  - FIX-VAL-FRAMEWORK: cache S1-S4 + --solo-s5 (3.5h → ~4 min).
 
-v6.0 cambios respecto a v5.0:
-  - FIX-T: tamano_eaws capado en ≤3 cuando factor neutro y ventanas<2;
-           bug integer/string corregido en _determinar_tamano()
-  - FIX-V: DIA_ALTO_RIESGO_PRONOSTICADO excluido del conteo de ventanas_criticas
-           que se usa para bump de frecuencia en la matriz EAWS
-  - FIX-D: prompt S5 reforzado para siempre pasar dias_consecutivos_nivel_bajo
+La Parva (H4): sin IMIS ni WN2 histórico → mejora proviene de FIX-CR17A-ATENUACION.
+Suiza (H3): requiere reproceso completo (ERA5 + IMIS + embeddings S2) para ver delta real.
+
+Prerequisito (solo Suiza): ejecutar antes de este script:
+    python agentes/datos/backfill/cargar_imis_condiciones_actuales.py
 
 Procesamiento CRONOLÓGICO para que REQ-01 (persistencia temporal) pueda
-leer la cadena de predicciones v5 anteriores al evaluar calma sostenida.
+leer la cadena de predicciones anteriores al evaluar calma sostenida.
 
 Fechas procesadas:
   H1/H3 Suiza : 3 estaciones × 10 fechas = 30 runs
   H4 Snowlab  : 3 sectores   × 30 fechas = 90 runs
-  Total       : 120 runs × ~100s ≈ 3.5 horas
+  Total       : 120 runs × ~100s ≈ 3.5 horas (completo)
+               120 runs ×   ~3s ≈ 6 min  (--solo-s5 con cache previo)
 
 Uso:
     python notebooks_validacion/reprocesar_retroactivo.py
     python notebooks_validacion/reprocesar_retroactivo.py --solo-suiza
     python notebooks_validacion/reprocesar_retroactivo.py --solo-snowlab
     python notebooks_validacion/reprocesar_retroactivo.py --dry-run
+    python notebooks_validacion/reprocesar_retroactivo.py --generar-cache --cache-dir /tmp/cache_v25
+    python notebooks_validacion/reprocesar_retroactivo.py --solo-s5 --cache-dir /tmp/cache_v25
 """
 
 import argparse
 import logging
+import multiprocessing
 import os
 import sys
 import time
@@ -58,15 +70,37 @@ logger = logging.getLogger(__name__)
 GCP_PROJECT = "climas-chileno"
 
 # ── Fechas de validación ──────────────────────────────────────────────────────
+# v14.0: fechas del DEAPSnow test set (2018-2020), per-estación.
+# Reemplaza las fechas 2023-2024 (WeatherAPI) que carecían de datos IMIS.
 
-FECHAS_SUIZA = [
-    "2023-12-01", "2023-12-15",
-    "2024-01-01", "2024-01-15",
-    "2024-02-01", "2024-02-15",
-    "2024-03-01", "2024-03-15",
-    "2024-04-01", "2024-04-15",
-]
-ESTACIONES_SUIZA = ["Interlaken", "Matterhorn Zermatt", "St Moritz"]
+FECHAS_SUIZA_POR_ESTACION = {
+    "Interlaken": [
+        "2018-12-07", "2018-12-17", "2018-12-27",
+        "2019-01-13", "2019-01-26",
+        "2019-02-13", "2019-02-23",
+        "2019-03-16",
+        "2019-04-02", "2019-04-14",
+    ],
+    "Matterhorn Zermatt": [
+        "2018-12-11", "2018-12-24",
+        "2019-01-04", "2019-01-22",
+        "2019-02-08", "2019-02-18",
+        "2019-03-01", "2019-03-20",
+        "2019-04-14",
+        "2019-12-03",
+    ],
+    "St Moritz": [
+        "2018-12-06", "2018-12-22",
+        "2019-01-02", "2019-01-12",
+        "2019-02-02", "2019-02-13",
+        "2019-02-27",
+        "2019-03-25",
+        "2019-04-18",
+        "2019-12-21",
+    ],
+}
+# Alias plano para compatibilidad con funciones auxiliares
+ESTACIONES_SUIZA = list(FECHAS_SUIZA_POR_ESTACION.keys())
 
 # fecha_inicio de cada boletín Snowlab → fecha de referencia para AndesAI
 FECHAS_SNOWLAB = [
@@ -79,6 +113,8 @@ FECHAS_SNOWLAB = [
     "2025-08-01", "2025-08-08", "2025-08-15", "2025-08-22",
     "2025-08-29", "2025-09-05", "2025-09-12", "2025-09-19",
 ]
+TIMEOUT_POR_RUN_SEGUNDOS = 480  # 8 min — proceso hijo; .terminate() lo mata de verdad
+
 SECTORES_LAPARVA = [
     "La Parva Sector Alto",
     "La Parva Sector Medio",
@@ -86,14 +122,47 @@ SECTORES_LAPARVA = [
 ]
 
 
+def _worker(
+    queue: multiprocessing.Queue,
+    ubicacion: str,
+    fecha_ref: datetime,
+    cache_dir: str | None = None,
+    solo_s5: bool = False,
+    generar_cache: bool = False,
+) -> None:
+    """Proceso hijo aislado. Crea su propio orquestador y devuelve resultado via queue."""
+    try:
+        orquestador = OrquestadorAvalancha()
+        resultado = orquestador.generar_boletin(
+            nombre_ubicacion=ubicacion,
+            fecha_referencia=fecha_ref,
+            cache_dir=cache_dir,
+            solo_s5=solo_s5,
+            generar_cache=generar_cache,
+        )
+        nivel = resultado.get("nivel_eaws_24h", "?")
+        guardado = guardar_boletin(resultado)
+        queue.put(("ok", nivel, guardado))
+    except Exception as exc:
+        queue.put(("error", str(exc), {}))
+
+
 def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) -> bool:
-    """Retorna True si ya existe un boletín v6.2 para esta (ubicacion, fecha)."""
+    """Retorna True si ya existe un boletín v25.2–v25.10 para esta (ubicacion, fecha)."""
     q = f"""
         SELECT COUNT(*) AS n
         FROM `{GCP_PROJECT}.clima.boletines_riesgo`
         WHERE nombre_ubicacion = @loc
           AND DATE(fecha_emision) = @fecha
-          AND STARTS_WITH(version_prompts, 'v6.2')
+          AND (STARTS_WITH(version_prompts, 'v25.2')
+            OR STARTS_WITH(version_prompts, 'v25.3')
+            OR STARTS_WITH(version_prompts, 'v25.4')
+            OR STARTS_WITH(version_prompts, 'v25.5')
+            OR STARTS_WITH(version_prompts, 'v25.6')
+            OR STARTS_WITH(version_prompts, 'v25.7')
+            OR STARTS_WITH(version_prompts, 'v25.8')
+            OR STARTS_WITH(version_prompts, 'v25.9')
+            OR STARTS_WITH(version_prompts, 'v25.10'))
     """
     job = cliente.query(
         q,
@@ -105,16 +174,24 @@ def ya_procesado_v6(cliente: bigquery.Client, ubicacion: str, fecha_str: str) ->
     return list(job.result())[0]["n"] > 0
 
 
-def construir_lista_runs(solo_suiza: bool, solo_snowlab: bool) -> list[tuple[str, str]]:
+def construir_lista_runs(
+    solo_suiza: bool,
+    solo_snowlab: bool,
+    fechas_filtro: list[str] | None = None,
+) -> list[tuple[str, str]]:
     """
     Construye la lista de (ubicacion, fecha_str) a procesar, ordenada
-    cronológicamente para que REQ-01 pueda leer la cadena de predicciones v4.
+    cronológicamente para que REQ-01 pueda leer la cadena de predicciones anteriores.
+
+    Args:
+        fechas_filtro: si se provee, solo incluye runs cuya fecha_str esté en esta lista.
+                       Útil para reproceso focalizado (ej. 6 fechas GT≥3 de Snowlab).
     """
     runs: list[tuple[str, str]] = []
 
     if not solo_snowlab:
-        for fecha in FECHAS_SUIZA:
-            for est in ESTACIONES_SUIZA:
+        for est, fechas in FECHAS_SUIZA_POR_ESTACION.items():
+            for fecha in fechas:
                 runs.append((est, fecha))
 
     if not solo_suiza:
@@ -122,22 +199,43 @@ def construir_lista_runs(solo_suiza: bool, solo_snowlab: bool) -> list[tuple[str
             for sector in SECTORES_LAPARVA:
                 runs.append((sector, fecha))
 
+    if fechas_filtro:
+        runs = [(u, f) for u, f in runs if f in fechas_filtro]
+
     # Ordenar cronológicamente (por fecha, luego por ubicacion)
     runs.sort(key=lambda x: (x[1], x[0]))
     return runs
 
 
-def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None:
-    cliente = bigquery.Client(project=GCP_PROJECT)
-    orquestador = OrquestadorAvalancha()
+def ejecutar_replay(
+    dry_run: bool,
+    solo_suiza: bool,
+    solo_snowlab: bool,
+    cache_dir: str | None = None,
+    solo_s5: bool = False,
+    generar_cache: bool = False,
+    fechas_filtro: list[str] | None = None,
+    force: bool = False,
+) -> None:
+    from agentes.validacion.cache_subagentes import existe_cache
 
-    runs = construir_lista_runs(solo_suiza, solo_snowlab)
+    cliente = bigquery.Client(project=GCP_PROJECT)
+
+    runs = construir_lista_runs(solo_suiza, solo_snowlab, fechas_filtro)
     total = len(runs)
 
+    modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
+    est_seg = 3 if solo_s5 else 100
     print(f"\n{'='*65}")
-    print(f"REPROCESAMIENTO RETROACTIVO v6.2 — {total} ejecuciones")
-    print(f"Estimado: ~{round(total * 100 / 60)} min ({round(total * 100 / 3600, 1)}h)")
+    from agentes.prompts.registro_versiones import VERSION_GLOBAL
+    print(f"REPROCESAMIENTO RETROACTIVO v{VERSION_GLOBAL} — {total} ejecuciones")
+    if fechas_filtro:
+        print(f"Filtro fechas: {fechas_filtro}")
+    print(f"Modo: {modo}")
+    print(f"Estimado: ~{round(total * est_seg / 60)} min ({round(total * est_seg / 3600, 1)}h)")
     print(f"Dry-run: {dry_run}")
+    if cache_dir:
+        print(f"Cache dir: {cache_dir}")
     print(f"{'='*65}\n")
 
     ok = 0
@@ -148,11 +246,19 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     for i, (ubicacion, fecha_str) in enumerate(runs, start=1):
         prefijo = f"[{i:3d}/{total}]"
 
-        # Saltar si ya procesado con v5
-        if ya_procesado_v6(cliente, ubicacion, fecha_str):
-            logger.info(f"{prefijo} SKIP (ya v6.2) — {ubicacion} {fecha_str}")
-            skip += 1
-            continue
+        if solo_s5:
+            # En modo solo-S5 saltamos si no hay cache (no podemos ejecutar)
+            if cache_dir and not existe_cache(cache_dir, ubicacion, fecha_str):
+                logger.warning(
+                    f"{prefijo} SKIP (sin cache) — {ubicacion} {fecha_str}"
+                )
+                skip += 1
+                continue
+        else:
+            if not force and ya_procesado_v6(cliente, ubicacion, fecha_str):
+                logger.info(f"{prefijo} SKIP (ya v25.6) — {ubicacion} {fecha_str}")
+                skip += 1
+                continue
 
         if dry_run:
             logger.info(f"{prefijo} DRY-RUN — {ubicacion} {fecha_str}")
@@ -163,30 +269,50 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         logger.info(f"\n{prefijo} INICIANDO — {ubicacion} {fecha_str}")
 
         t0 = time.time()
-        try:
-            resultado = orquestador.generar_boletin(
-                nombre_ubicacion=ubicacion,
-                fecha_referencia=fecha_ref,
+        queue: multiprocessing.Queue = multiprocessing.Queue()
+        proc = multiprocessing.Process(
+            target=_worker,
+            args=(queue, ubicacion, fecha_ref),
+            kwargs={"cache_dir": cache_dir, "solo_s5": solo_s5, "generar_cache": generar_cache},
+        )
+        proc.start()
+        proc.join(timeout=TIMEOUT_POR_RUN_SEGUNDOS)
+
+        dur = round(time.time() - t0, 1)
+
+        if proc.is_alive():
+            proc.terminate()
+            proc.join(timeout=15)   # 15s para SIGTERM
+            if proc.is_alive():
+                proc.kill()         # SIGKILL — no se puede ignorar
+                proc.join(timeout=10)  # macOS: proc.join() sin timeout puede colgar
+            logger.error(
+                f"{prefijo} TIMEOUT ({TIMEOUT_POR_RUN_SEGUNDOS}s) — {ubicacion} {fecha_str} "
+                f"(proceso terminado, continuando con siguiente run)"
             )
-            nivel = resultado.get("nivel_eaws_24h", "?")
-            dur   = round(time.time() - t0, 1)
-
-            guardado = guardar_boletin(resultado)
-
-            estado_guardado = "BQ+GCS" if guardado.get("guardado_bigquery") and guardado.get("guardado_gcs") else \
-                              "BQ"     if guardado.get("guardado_bigquery") else \
-                              "GCS"    if guardado.get("guardado_gcs")      else "ERROR"
-
-            logger.info(
-                f"{prefijo} OK — nivel={nivel} dur={dur}s guardado={estado_guardado} "
-                f"({ubicacion} {fecha_str})"
-            )
-            ok += 1
-
-        except Exception as exc:
-            dur = round(time.time() - t0, 1)
-            logger.error(f"{prefijo} ERROR — {ubicacion} {fecha_str} ({dur}s): {exc}")
             err += 1
+        else:
+            try:
+                status, *rest = queue.get_nowait()
+            except Exception:
+                status, rest = "error", [f"queue vacía (exit_code={proc.exitcode})", {}]
+
+            if status == "ok":
+                nivel, guardado = rest
+                estado_guardado = (
+                    "BQ+GCS" if guardado.get("guardado_bigquery") and guardado.get("guardado_gcs") else
+                    "BQ"     if guardado.get("guardado_bigquery") else
+                    "GCS"    if guardado.get("guardado_gcs")      else "ERROR"
+                )
+                logger.info(
+                    f"{prefijo} OK — nivel={nivel} dur={dur}s guardado={estado_guardado} "
+                    f"({ubicacion} {fecha_str})"
+                )
+                ok += 1
+            else:
+                exc_str = rest[0] if rest else "desconocido"
+                logger.error(f"{prefijo} ERROR — {ubicacion} {fecha_str} ({dur}s): {exc_str}")
+                err += 1
 
         # Progreso parcial cada 10 ejecuciones
         if i % 10 == 0:
@@ -204,7 +330,7 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
     print(f"\n{'='*65}")
     print(f"COMPLETADO en {elapsed_total}s ({round(elapsed_total/60)}min)")
     print(f"  OK:   {ok}")
-    print(f"  Skip: {skip} (ya v6.2)")
+    print(f"  Skip: {skip} (ya v22)")
     print(f"  Err:  {err}")
     print(f"{'='*65}")
 
@@ -212,29 +338,57 @@ def ejecutar_replay(dry_run: bool, solo_suiza: bool, solo_snowlab: bool) -> None
         print(f"\nWARNING: {err} ejecuciones fallaron — revisar logs")
 
     if not dry_run and ok > 0:
-        print("\nPróximo paso — Ronda 5 validación v6.2:")
-        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v6.2")
-        print("  python notebooks_validacion/08_validacion_snowlab.py --version v6.2")
-        print("\nObjetivo v6.2:")
-        print("  H4 sesgo: +1.61 → ≤ +0.80 (FIX-T tamano cap + FIX-V ventanas + FIX-S3)")
-        print("  H4 QWK:   -0.00 → ≥ +0.20 (FIX-D cadena REQ-01 + FIX-S3 CICLO_DIURNO)")
-        print("  H4 nivel 1-2: 21% → ≥ 30% (FIX-T nivel 3→2 en días calmos)")
+        print("\nPróximo paso — Validación v25.6:")
+        print("  python notebooks_validacion/07_validacion_slf_suiza.py --version v25.6 --imis-gt")
+        print("  python notebooks_validacion/08_validacion_snowlab.py --version v25.6")
+        print("\nObjetivos v25.6 (FIX-WN2-LLM-OVERRIDE):")
+        print("  H4 QWK La Parva: ≥ 0.100 (baseline v25.1: +0.008)")
+        print("  H4 MAE tormentas (GT≥3): ≤ 1.50 (baseline v25.1: 2.000)")
+        print("  H4 boletines nivel ≥3: ≥ 6 (baseline v25.1: 0)")
+        print("  factor_seguridad_pinn: CV > 0.05 por sector (baseline: constante)")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v6.2")
+    parser = argparse.ArgumentParser(description="Reprocesamiento retroactivo v25.6 (FIX-WN2-LLM-OVERRIDE)")
     parser.add_argument("--dry-run", action="store_true",
                         help="Lista runs sin ejecutar")
     parser.add_argument("--solo-suiza", action="store_true",
                         help="Solo H1/H3 (30 runs Swiss)")
     parser.add_argument("--solo-snowlab", action="store_true",
                         help="Solo H4 (90 runs La Parva)")
+    # FIX-VAL-FRAMEWORK (v20.0): flags para cache S1-S4
+    parser.add_argument("--cache-dir", type=str, default=None,
+                        help="Directorio local para cache outputs S1-S4. "
+                             "Requerido con --solo-s5 y --generar-cache.")
+    parser.add_argument("--solo-s5", action="store_true",
+                        help="Cargar S1-S4 de --cache-dir y ejecutar solo S5. "
+                             "Reduce ~3.5h → ~4 min. Requiere --cache-dir.")
+    parser.add_argument("--generar-cache", action="store_true",
+                        help="Ejecutar pipeline completo y guardar S1-S4 en --cache-dir "
+                             "para uso posterior con --solo-s5. Requiere --cache-dir.")
+    parser.add_argument("--fechas", nargs="+", default=None,
+                        help="Filtrar por fechas específicas YYYY-MM-DD (ej. --fechas 2024-06-15 2024-06-21). "
+                             "Útil para reproceso focalizado en las 6 fechas GT≥3 de Snowlab antes del batch completo.")
+    parser.add_argument("--force", action="store_true",
+                        help="Forzar reproceso incluso si ya existe v25.x en BQ (sobreescribe). "
+                             "Útil al corregir bugs entre sub-versiones.")
     args = parser.parse_args()
+
+    if (args.solo_s5 or args.generar_cache) and not args.cache_dir:
+        parser.error("--solo-s5 y --generar-cache requieren --cache-dir")
+
+    if args.solo_s5 and args.generar_cache:
+        parser.error("--solo-s5 y --generar-cache son mutuamente excluyentes")
 
     ejecutar_replay(
         dry_run=args.dry_run,
         solo_suiza=args.solo_suiza,
         solo_snowlab=args.solo_snowlab,
+        cache_dir=args.cache_dir,
+        solo_s5=args.solo_s5,
+        generar_cache=args.generar_cache,
+        fechas_filtro=args.fechas,
+        force=args.force,
     )
 
 
