@@ -37,8 +37,8 @@ from agentes.subagentes.subagente_meteorologico.fuentes.base import (
 
 logger = logging.getLogger(__name__)
 
-# Flag de activación
-_USE_WEATHERNEXT2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
+def _use_weathernext2() -> bool:
+    return os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
 
 # Dataset en BigQuery (después de suscripción en Analytics Hub)
 _BQ_DATASET = "climas-chileno.weathernext_2"
@@ -59,7 +59,7 @@ class FuenteWeatherNext2(FuenteMeteorologica):
 
     @property
     def disponible(self) -> bool:
-        return _USE_WEATHERNEXT2 and self._verificar_acceso_bq()
+        return _use_weathernext2() and self._verificar_acceso_bq()
 
     def _verificar_acceso_bq(self) -> bool:
         """Verifica que el dataset esté suscrito y accesible."""

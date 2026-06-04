@@ -110,14 +110,10 @@ class TestFuenteWeatherNext2:
     def test_flag_off_disponible_false(self):
         """Con USE_WEATHERNEXT2=false, la fuente es no disponible."""
         with patch.dict(os.environ, {"USE_WEATHERNEXT2": "false"}):
-            # Necesitamos recargar el módulo para que el flag se aplique
-            import importlib
             import agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 as mod
-            importlib.reload(mod)
             f = mod.FuenteWeatherNext2()
-            # disponible depende del flag + verificar_acceso_bq
-            # Con flag false siempre disponible=False
-            assert mod._USE_WEATHERNEXT2 is False
+            assert mod._use_weathernext2() is False
+            assert f.disponible is False
 
     def test_pronostico_cuando_no_disponible(self):
         """Cuando no disponible, retorna PronosticoMeteorologico con fuente_disponible=False."""
