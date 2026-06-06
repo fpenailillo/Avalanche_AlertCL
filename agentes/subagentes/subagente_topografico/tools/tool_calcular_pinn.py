@@ -170,13 +170,18 @@ def ejecutar_calcular_pinn(
             from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
             from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
 
-            # Priorizar la fecha global del orquestador sobre la del LLM:
-            # el LLM puede pasar una fecha incorrecta (e.g. la de los datos WN2
-            # previos en el contexto); el orquestador siempre establece la fecha
-            # real del boletín vía establecer_fecha_referencia_global().
+            # Priorizar la fecha global del orquestador sobre la del LLM.
+            # En modo operacional (fecha_referencia=None en el orquestador),
+            # obtener_fecha_referencia_global() devuelve None → usar hoy UTC
+            # para evitar que el LLM pase fechas históricas del dataset de
+            # validación (e.g. "2024-06-15") que retornan cargas de nieve
+            # infladas y producen estados PINN incorrectos (FIX-PINN-FECHA-OPS).
+            from datetime import datetime as _dt_now, timezone as _tz_now
             fecha_ref = obtener_fecha_referencia_global()
             if fecha_ref is not None:
                 fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
+            else:
+                fecha_objetivo = _dt_now.now(_tz_now.utc).strftime("%Y-%m-%d")
 
             coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
             if coords and fecha_objetivo:
