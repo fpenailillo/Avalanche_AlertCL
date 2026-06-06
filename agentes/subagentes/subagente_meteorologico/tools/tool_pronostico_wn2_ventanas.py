@@ -92,7 +92,20 @@ def ejecutar_obtener_pronostico_wn2_ventanas(
     lat, lon = coords
     elevacion_m = obtener_elevacion_referencia(nombre_ubicacion)
 
-    if fecha_objetivo is None:
+    # FIX-WN2-FECHA-OPS: la fecha del orquestador es siempre autoritativa.
+    # El LLM puede pasar fechas históricas del dataset de validación (e.g.
+    # "2024-06-15") que retornan datos de tormenta erróneos para días
+    # tranquilos. Prioridad: (1) fecha global del orquestador, (2) hoy UTC,
+    # (3) fecha del LLM solo si (1) y (2) no aplican (nunca en práctica).
+    try:
+        from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+        _fecha_global = obtener_fecha_referencia_global()
+    except Exception:
+        _fecha_global = None
+
+    if _fecha_global is not None:
+        fecha_objetivo = _fecha_global.strftime("%Y-%m-%d")
+    else:
         fecha_objetivo = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     try:
