@@ -231,11 +231,16 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
                 if _res.get("disponible"):
                     _d = _res.get("diario", {})
                     _p50 = _d.get("nieve_24h_cm_p50_corr") or 0.0
-                    if _p50 >= 5.0:
-                        nieve_nueva_cm_wn2 = float(_p50)
+                    _p95 = _d.get("nieve_24h_cm_p95_corr") or 0.0
+                    _heavy = (_d.get("alerts_dia") or {}).get("heavy_snow", False)
+                    # Con alerta heavy_snow usar p95 (conservador por cola de riesgo)
+                    _nieve_fb = _p95 if _heavy else _p50
+                    if _nieve_fb >= 5.0:
+                        nieve_nueva_cm_wn2 = float(_nieve_fb)
                         logger.info(
                             f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
-                            f"no provista → WN2 fallback {_fecha_wn2} p50={_p50:.1f} cm"
+                            f"no provista → WN2 fallback {_fecha_wn2} "
+                            f"{'p95' if _heavy else 'p50'}={_nieve_fb:.1f} cm (heavy={_heavy})"
                         )
         except Exception as _exc_eaws:
             logger.warning(f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: fallback falló — {_exc_eaws}")
