@@ -205,6 +205,41 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
+    # ─── FIX-WN2-SIZE-EAWS (v25.11): fallback WN2 para nieve_nueva_cm_wn2 ─────────────────
+    # El LLM frecuentemente omite nieve_nueva_cm_wn2 al llamar esta tool, impidiendo que
+    # FIX-WN2-SIZE-ANDES escale el tamaño de avalancha correctamente en tormentas reales.
+    # Si no se recibió el parámetro, consultamos WN2 directamente con la fecha autoritativa
+    # (misma lógica que FIX-PINN-FECHA-OPS y FIX-WN2-FECHA-OPS).
+    _USE_WN2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
+    if nieve_nueva_cm_wn2 is None and nombre_ubicacion and _USE_WN2:
+        try:
+            from datetime import datetime as _dt_eaws, timezone as _tz_eaws
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
+            from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import FuenteWeatherNext2
+
+            _fecha_ref = obtener_fecha_referencia_global()
+            _fecha_wn2 = _fecha_ref.strftime("%Y-%m-%d") if _fecha_ref else _dt_eaws.now(_tz_eaws.utc).strftime("%Y-%m-%d")
+            _coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
+            if _coords:
+                _lat, _lon = _coords
+                _elev = obtener_elevacion_referencia(nombre_ubicacion)
+                _res = FuenteWeatherNext2().obtener_ventanas_6h(
+                    zona=nombre_ubicacion, lat=_lat, lon=_lon,
+                    fecha_objetivo=_fecha_wn2, elevacion_m=_elev,
+                )
+                if _res.get("disponible"):
+                    _d = _res.get("diario", {})
+                    _p50 = _d.get("nieve_24h_cm_p50_corr") or 0.0
+                    if _p50 >= 5.0:
+                        nieve_nueva_cm_wn2 = float(_p50)
+                        logger.info(
+                            f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
+                            f"no provista → WN2 fallback {_fecha_wn2} p50={_p50:.1f} cm"
+                        )
+        except Exception as _exc_eaws:
+            logger.warning(f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: fallback falló — {_exc_eaws}")
+
     # ─── FIX-PINN-EAWS-MAP (v25.9): mapeo determinista estado_pinn → estabilidad_topografica ──
     # El LLM tiende a desplazar el mapeo un escalón (ESTABLE→"poor"/"fair" en lugar de "good").
     # Si el LLM proporciona estado_pinn, el código sobreescribe estabilidad_topografica
