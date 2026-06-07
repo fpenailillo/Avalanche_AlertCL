@@ -205,13 +205,15 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
-    # ─── FIX-WN2-SIZE-EAWS (v25.11): fallback WN2 para nieve_nueva_cm_wn2 ─────────────────
-    # El LLM frecuentemente omite nieve_nueva_cm_wn2 al llamar esta tool, impidiendo que
-    # FIX-WN2-SIZE-ANDES escale el tamaño de avalancha correctamente en tormentas reales.
-    # Si no se recibió el parámetro, consultamos WN2 directamente con la fecha autoritativa
-    # (misma lógica que FIX-PINN-FECHA-OPS y FIX-WN2-FECHA-OPS).
+    # ─── FIX-WN2-SIZE-EAWS + FIX-WN2-VENTANAS-EAWS (v25.11 → v25.13) ───────────────────────
+    # Una sola llamada WN2 cubre dos fallbacks cuando el LLM omite parámetros:
+    # (A) FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 → tamaño correcto en FIX-WN2-SIZE-ANDES
+    # (B) FIX-WN2-VENTANAS-EAWS: ventanas_criticas_detectadas → FIX-STORM-FREQ-WN2 activo
+    #     Regla: heavy_snow=True + p50≥25 → 2 ventanas; heavy_snow=True + p50≥10 → 1 ventana
     _USE_WN2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
-    if nieve_nueva_cm_wn2 is None and nombre_ubicacion and _USE_WN2:
+    _needs_nieve = nieve_nueva_cm_wn2 is None
+    _needs_ventanas = ventanas_criticas_detectadas == 0
+    if (_needs_nieve or _needs_ventanas) and nombre_ubicacion and _USE_WN2:
         try:
             from datetime import datetime as _dt_eaws, timezone as _tz_eaws
             from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
@@ -233,14 +235,26 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
                     _p50 = _d.get("nieve_24h_cm_p50_corr") or 0.0
                     _p95 = _d.get("nieve_24h_cm_p95_corr") or 0.0
                     _heavy = (_d.get("alerts_dia") or {}).get("heavy_snow", False)
-                    # Con alerta heavy_snow usar p95 (conservador por cola de riesgo)
-                    _nieve_fb = _p95 if _heavy else _p50
-                    if _nieve_fb >= 5.0:
-                        nieve_nueva_cm_wn2 = float(_nieve_fb)
+
+                    # (A) FIX-WN2-SIZE-EAWS: nieve para escalar tamaño
+                    if _needs_nieve:
+                        _nieve_fb = _p95 if _heavy else _p50
+                        if _nieve_fb >= 5.0:
+                            nieve_nueva_cm_wn2 = float(_nieve_fb)
+                            logger.info(
+                                f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
+                                f"no provista → WN2 fallback {_fecha_wn2} "
+                                f"{'p95' if _heavy else 'p50'}={_nieve_fb:.1f} cm (heavy={_heavy})"
+                            )
+
+                    # (B) FIX-WN2-VENTANAS-EAWS: ventanas críticas desde señal diaria
+                    if _needs_ventanas and _heavy:
+                        _vc_wn2 = 2 if _p50 >= 25.0 else 1
+                        ventanas_criticas_detectadas = _vc_wn2
                         logger.info(
-                            f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
-                            f"no provista → WN2 fallback {_fecha_wn2} "
-                            f"{'p95' if _heavy else 'p50'}={_nieve_fb:.1f} cm (heavy={_heavy})"
+                            f"[ClasificarEAWS] FIX-WN2-VENTANAS-EAWS: ventanas_criticas "
+                            f"no provistas → WN2 {_fecha_wn2} heavy=True "
+                            f"p50={_p50:.0f}cm → ventanas={_vc_wn2}"
                         )
         except Exception as _exc_eaws:
             logger.warning(f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: fallback falló — {_exc_eaws}")
