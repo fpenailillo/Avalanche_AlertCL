@@ -694,20 +694,29 @@ def _determinar_frecuencia(
     if estabilidad == "very_poor" and idx_base < 2:
         idx_base = 2  # Al menos "some"
 
-    # FIX-STORM-FREQ-WN2 (v25.0): tormenta extrema confirmada → frecuencia "many".
-    # Cuando manto CRITICO (very_poor) + señal NEVADA_RECIENTE activa + al menos 1 ventana,
-    # todos los terrenos >28° se movilizan simultáneamente (Schweizer et al. 2003, §4.2).
+    # FIX-STORM-FREQ-WN2 (v25.0 → v25.12): escalado graduado por tormenta en Andes Chile.
+    # Cuando hay señal NEVADA_RECIENTE + al menos 1 ventana crítica, la frecuencia sube
+    # según la estabilidad del manto (Schweizer et al. 2003, §4.2):
+    #   · CRITICO  (very_poor) → many  (todos los terrenos >28° se movilizan)
+    #   · INESTABLE (poor)     → some  (múltiples corredores activos, no todos)
+    # Esto cierra el gap nivel 3→5 que saltaba el nivel 4 para zonas INESTABLE en tormenta.
     # Solo Andes Chile; en Alpes el mecanismo equivalente es FIX-CR18-CH-2 + IMIS.
-    if (
+    _storm_activa = (
         _region_freq == "andes_chile"
-        and estabilidad == "very_poor"
         and "NEVADA_RECIENTE" in factor_meteorologico
         and ventanas_criticas >= 1
-    ):
+    )
+    if _storm_activa and estabilidad == "very_poor":
         idx_base = 3  # many
         logger.info(
             f"[ClasificarEAWS] FIX-STORM-FREQ-WN2: tormenta extrema confirmada "
             f"(very_poor + NEVADA_RECIENTE + ventanas={ventanas_criticas}) → frecuencia=many"
+        )
+    elif _storm_activa and estabilidad == "poor" and idx_base < 2:
+        idx_base = 2  # some
+        logger.info(
+            f"[ClasificarEAWS] FIX-STORM-FREQ-WN2: tormenta con manto inestable "
+            f"(poor + NEVADA_RECIENTE + ventanas={ventanas_criticas}) → frecuencia=some"
         )
 
     # Ajuste por factor meteorológico de precipitación crítica
