@@ -47,9 +47,9 @@ REGISTRO_PROMPTS = {
     "topografico": {
         "modulo": "agentes.subagentes.subagente_topografico.prompts",
         "variable": "SYSTEM_PROMPT_TOPOGRAFICO",
-        "version": "8.2.0",
-        "descripcion": "v8.2: FIX-PINN-EAWS-MAP — usar campo estabilidad_eaws del PINN directamente, sin reinterpretar",
-        "hash_sha256": "349d8ac7c25bb680",
+        "version": "8.3.0",
+        "descripcion": "v8.3: FIX-PINN-EAWS-MAP + FIX-WN2-P95-SELECTOR — tabla mapeo PINN→EAWS + instrucción p50/p95",
+        "hash_sha256": "7d353cc6f44d3dcb",
     },
     "satelital": {
         "modulo": "agentes.subagentes.subagente_satelital.prompts",
@@ -75,9 +75,9 @@ REGISTRO_PROMPTS = {
     "integrador": {
         "modulo": "agentes.subagentes.subagente_integrador.prompts",
         "variable": "SYSTEM_PROMPT_INTEGRADOR",
-        "version": "10.3.0",
-        "descripcion": "v10.3: FIX-PINN-EAWS-MAP — pasar estado_pinn a clasificar_riesgo_eaws_integrado; la tool calcula estabilidad_topografica determinísticamente",
-        "hash_sha256": "98dacfa68aa412cc",
+        "version": "10.4.0",
+        "descripcion": "v10.4: FIX-PINN-EAWS-MAP final — estado_pinn siempre obligatorio; estabilidad_eaws informativo, no reinterpretar",
+        "hash_sha256": "69934be78d427f0a",
     },
 }
 
@@ -293,7 +293,27 @@ REGISTRO_PROMPTS = {
 #   Cambios:
 #     1. fuente_weathernext2.py: lógica de selección diario por fecha_objetivo.
 #   Proyección: QWK recupera niveles v25.9 correctos, esperado > 0.40.
-VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.10")
+#
+# v25.11 (FIX-PINN-WN2-HEAVY):
+#   Bug: cuando el LLM pasaba nieve_nueva_cm ≥ 5 cm pero alerts_dia.heavy_snow=True,
+#   el PINN usaba el valor del LLM (p50) en lugar del p95 conservador.
+#   Ej. tormenta 10-jun: p50=21.7 cm → FS=1.86 MARGINAL; p95=62.1 cm → FS=1.712 INESTABLE.
+#   Fix: en tool_calcular_pinn.py, si heavy_snow=True y p95 disponible, usar p95
+#   independientemente de si el LLM pasó un valor ≥ MIN_NIEVE_CM.
+#
+# v25.12 (FIX-STORM-FREQ-WN2):
+#   Bug: el escalado de frecuencia por tormenta solo aplicaba para estado CRITICO (very_poor),
+#   dejando INESTABLE (poor) en 'a_few' → nivel 4 inalcanzable en tormenta moderada.
+#   Fix: escalado graduado por estado_pinn — INESTABLE → 'some', CRITICO → 'many'.
+#   Resultado: La Parva Alto + Valle Nevado nivel 4 en tormenta 10-jun confirmado.
+#
+# v25.13 (FIX-WN2-VENTANAS-EAWS):
+#   Bug: el LLM frecuentemente omitía ventanas_criticas_detectadas al llamar clasificar_riesgo,
+#   impidiendo que FIX-STORM-FREQ-WN2 escalara la frecuencia.
+#   Fix: en tool_clasificar_eaws, si ventanas_criticas_detectadas es None/vacío y
+#   USE_WEATHERNEXT2=true, consultar WN2 directamente y derivar ventanas.
+#   Validación tormenta 10-jun: La Parva=4, Valle Nevado=5 (objetivo cumplido).
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.13")
 
 
 def _calcular_hash(contenido: str) -> str:
