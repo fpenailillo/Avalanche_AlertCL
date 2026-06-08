@@ -27,7 +27,8 @@
       "Bash(gcloud config get-value *)",
       "Bash(gcloud run jobs executions describe *)",
       "Bash(ps aux)",
-      "Bash(gcloud auth application-default print-access-token *)"
+      "Bash(gcloud auth application-default print-access-token *)",
+      "Bash(gcloud projects list *)"
     ]
   }
 }
