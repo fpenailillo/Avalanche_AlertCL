@@ -74,5 +74,11 @@ htmlcov/
 .coverage
 coverage.xml
 
+# ─── Logs de validación ──────────────────────────────────────────────────────
+logs_validacion/
+
+# ─── Configuración Claude Code ────────────────────────────────────────────────
+.claude/
+
 # ─── Documentos académicos (solo uso local) ───────────────────────────────────
 docs/*.pdf
