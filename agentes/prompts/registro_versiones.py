@@ -330,7 +330,16 @@ REGISTRO_PROMPTS = {
 #     no debe superar el nivel del día de tormenta para el mismo sector.
 #     Fix: guard adicional — p95_3d solo activa si val_p95>=2.0 cm (hoy tiene señal de nevada).
 #     Si p95<2cm, el día es esencialmente sin precipitación y p95_3d es residual de días previos.
-VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.14")
+# v25.15 (FIX-WN2-3D-POST-STORM-v2):
+#   Diagnóstico: guard absoluto val_p95≥2cm (v25.14) insuficiente para Jun-12:
+#     p50=0.8, p95=8.2, p95_3d=70.3 → 8.2≥2 → guard pasa → PINN usa 70.3cm → INESTABLE → N24=3
+#     El p95_3d=70.3 incluye la tormenta del Jun-10 (2 días antes).
+#   Fix: ratio guard — p95_3d solo activa si val_3d ≤ val_p95 × 5.
+#     Jun-11: 76.6/0.5=153 > 5 → bloqueado ✓
+#     Jun-12: 70.3/8.2=8.6  > 5 → bloqueado ✓
+#     Gradual (p95=8, 3d=20): 20/8=2.5 ≤ 5 → permitido ✓
+#   Resultado esperado Jun-12 LP Medio: ESTABLE → nivel 2 (vs nivel 3 con guard absoluto).
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.15")
 
 
 def _calcular_hash(contenido: str) -> str:

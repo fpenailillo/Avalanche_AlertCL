@@ -205,13 +205,19 @@ def ejecutar_calcular_pinn(
                         # (A) FALLBACK: umbrales diferenciados por confianza del ensemble
                         # p95_24h requiere ≥30 cm para evitar falsos positivos en días despejados
                         # (data-driven: 2024-07-19 p50=0.3/p95=41.9 con GT=1)
-                        # FIX-WN2-3D-POST-STORM: p95_3d requiere val_p95≥2cm para evitar
-                        # que el acumulado 3d de la tormenta anterior se propague al día post-tormenta
-                        # (diagnosticado: Jun-11 p50=0/p95=0.5 → p95_3d=76.6 por storm Jun-10)
-                        _MIN_P50_CM      = 5.0
-                        _MIN_P95_CM      = 30.0
-                        _MIN_3D_CM       = 5.0
-                        _MIN_P95_FOR_3D  = 2.0  # guard: hoy debe tener señal mínima de nevada
+                        # FIX-WN2-3D-POST-STORM v2: ratio guard
+                        # p95_3d requiere que sea consistente con la señal de hoy:
+                        #   val_3d / val_p95 ≤ _MAX_3D_P95_RATIO (≤5×)
+                        # Si el ratio es mayor, el acumulado 3d viene de días anteriores
+                        # (tormenta previa) y no representa nieve nueva de hoy.
+                        # Casos: Jun-11 0.5cm p95 → ratio=153 → bloqueado ✓
+                        #        Jun-12 8.2cm p95 → ratio=8.6 → bloqueado ✓
+                        #        Gradual 8cm p95, 20cm 3d → ratio=2.5 → permitido ✓
+                        _MIN_P50_CM       = 5.0
+                        _MIN_P95_CM       = 30.0
+                        _MIN_3D_CM        = 5.0
+                        _MIN_P95_FOR_3D   = 2.0   # hoy debe tener señal mínima de nevada
+                        _MAX_3D_P95_RATIO = 5.0   # 3d acumulado ≤ 5× p95 diario
                         if val_p50 >= _MIN_P50_CM:
                             # FIX-PINN-HEAVY-PATH-A: si ensemble heavy_snow y p95>p50, usar p95
                             # (sin este fix, LP Medio en tormenta usaba p50=32cm en vez de p95=68cm
@@ -222,7 +228,9 @@ def ejecutar_calcular_pinn(
                                 val, fuente_suffix = val_p50, "p50"
                         elif val_p95 >= _MIN_P95_CM:
                             val, fuente_suffix = val_p95, "p95"
-                        elif val_3d >= _MIN_3D_CM and val_p95 >= _MIN_P95_FOR_3D:
+                        elif (val_3d >= _MIN_3D_CM
+                              and val_p95 >= _MIN_P95_FOR_3D
+                              and val_3d <= val_p95 * _MAX_3D_P95_RATIO):
                             val, fuente_suffix = val_3d, "p95_3d"
                         else:
                             val, fuente_suffix = 0.0, "none"
