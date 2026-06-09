@@ -25,3 +25,5 @@ desplegar.sh
 .env
 *.log
 tmp/
+logs_validacion/
+.claude/
