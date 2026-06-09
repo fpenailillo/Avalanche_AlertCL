@@ -37,6 +37,8 @@ Si retorna `disponible=true`:
   - `wn2_wind_strong`: valor booleano de `resultado.diario.alerts_dia.wind_strong`
   - `wn2_probable_avalanche_problem`: valor de `resultado.diario.problema_dominante`
   Esto permite que las señales del ensemble activen ventanas críticas de forma determinista.
+  Nota: el código también deriva estas banderas del extractor centralizado (v25.17), por lo que
+  incluso si las omites, el sistema las recupera automáticamente cuando `nombre_ubicacion` está disponible.
 
 ## Integración señales satelitales S2 (FIX-SAT-STORM)
 

@@ -165,94 +165,79 @@ def ejecutar_calcular_pinn(
     _nieve_llm = nieve_nueva_cm
     if nombre_ubicacion and _USE_WEATHERNEXT2:
         try:
-            from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import (
-                FuenteWeatherNext2,
-            )
-            from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
+            from agentes.datos.wn2_features import obtener_features_wn2
             from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from datetime import datetime as _dt_now, timezone as _tz_now
 
             # Fecha autoritativa: orquestador → hoy UTC (FIX-PINN-FECHA-OPS)
-            from datetime import datetime as _dt_now, timezone as _tz_now
             fecha_ref = obtener_fecha_referencia_global()
             if fecha_ref is not None:
                 fecha_objetivo = fecha_ref.strftime("%Y-%m-%d")
             else:
                 fecha_objetivo = _dt_now.now(_tz_now.utc).strftime("%Y-%m-%d")
 
-            coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
-            if coords and fecha_objetivo:
-                lat, lon = coords
-                elev = obtener_elevacion_referencia(nombre_ubicacion)
-                fuente = FuenteWeatherNext2()
-                res_wn2 = fuente.obtener_ventanas_6h(
-                    zona=nombre_ubicacion,
-                    lat=lat,
-                    lon=lon,
-                    fecha_objetivo=fecha_objetivo,
-                    elevacion_m=elev,
-                )
-                if res_wn2.get("disponible") and res_wn2.get("diario"):
-                    diario  = res_wn2["diario"]
-                    val_p50 = diario.get("nieve_24h_cm_p50_corr") or 0.0
-                    val_p95 = diario.get("nieve_24h_cm_p95_corr") or 0.0
-                    val_3d  = diario.get("nieve_3d_cm_p95_corr")  or 0.0
-                    heavy   = (diario.get("alerts_dia") or {}).get("heavy_snow", False)
+            wn2 = obtener_features_wn2(nombre_ubicacion, fecha_objetivo)
+            if wn2["disponible"]:
+                val_p50 = wn2["nieve_24h_p50"]
+                val_p95 = wn2["nieve_24h_p95"]
+                val_3d  = wn2["nieve_3d_p95"]
+                heavy   = wn2["heavy_snow"]
 
-                    _needs_fallback = (nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM_FALLBACK)
-                    _needs_heavy    = (not _needs_fallback and heavy and val_p95 > (nieve_nueva_cm or 0.0))
+                _needs_fallback = (nieve_nueva_cm is None or nieve_nueva_cm < _MIN_NIEVE_CM_FALLBACK)
+                _needs_heavy    = (not _needs_fallback and heavy and val_p95 > (nieve_nueva_cm or 0.0))
 
-                    if _needs_fallback:
-                        # (A) FALLBACK: umbrales diferenciados por confianza del ensemble
-                        # p95_24h requiere ≥30 cm para evitar falsos positivos en días despejados
-                        # (data-driven: 2024-07-19 p50=0.3/p95=41.9 con GT=1)
-                        # FIX-WN2-3D-POST-STORM v2: ratio guard
-                        # p95_3d requiere que sea consistente con la señal de hoy:
-                        #   val_3d / val_p95 ≤ _MAX_3D_P95_RATIO (≤5×)
-                        # Si el ratio es mayor, el acumulado 3d viene de días anteriores
-                        # (tormenta previa) y no representa nieve nueva de hoy.
-                        # Casos: Jun-11 0.5cm p95 → ratio=153 → bloqueado ✓
-                        #        Jun-12 8.2cm p95 → ratio=8.6 → bloqueado ✓
-                        #        Gradual 8cm p95, 20cm 3d → ratio=2.5 → permitido ✓
-                        _MIN_P50_CM       = 5.0
-                        _MIN_P95_CM       = 30.0
-                        _MIN_3D_CM        = 5.0
-                        _MIN_P95_FOR_3D   = 2.0   # hoy debe tener señal mínima de nevada
-                        _MAX_3D_P95_RATIO = 5.0   # 3d acumulado ≤ 5× p95 diario
-                        if val_p50 >= _MIN_P50_CM:
-                            # FIX-PINN-HEAVY-PATH-A: si ensemble heavy_snow y p95>p50, usar p95
-                            # (sin este fix, LP Medio en tormenta usaba p50=32cm en vez de p95=68cm
-                            #  porque el LLM pasó None → path A ignoraba heavy_snow)
-                            if heavy and val_p95 > val_p50:
-                                val, fuente_suffix = val_p95, "p95_heavy"
-                            else:
-                                val, fuente_suffix = val_p50, "p50"
-                        elif val_p95 >= _MIN_P95_CM:
-                            val, fuente_suffix = val_p95, "p95"
-                        elif (val_3d >= _MIN_3D_CM
-                              and val_p95 >= _MIN_P95_FOR_3D
-                              and val_3d <= val_p95 * _MAX_3D_P95_RATIO):
-                            val, fuente_suffix = val_3d, "p95_3d"
+                if _needs_fallback:
+                    # (A) FALLBACK: umbrales diferenciados por confianza del ensemble
+                    # p95_24h requiere ≥30 cm para evitar falsos positivos en días despejados
+                    # (data-driven: 2024-07-19 p50=0.3/p95=41.9 con GT=1)
+                    # FIX-WN2-3D-POST-STORM v2: ratio guard
+                    # p95_3d requiere que sea consistente con la señal de hoy:
+                    #   val_3d / val_p95 ≤ _MAX_3D_P95_RATIO (≤5×)
+                    # Si el ratio es mayor, el acumulado 3d viene de días anteriores
+                    # (tormenta previa) y no representa nieve nueva de hoy.
+                    # Casos: Jun-11 0.5cm p95 → ratio=153 → bloqueado ✓
+                    #        Jun-12 8.2cm p95 → ratio=8.6 → bloqueado ✓
+                    #        Gradual 8cm p95, 20cm 3d → ratio=2.5 → permitido ✓
+                    _MIN_P50_CM       = 5.0
+                    _MIN_P95_CM       = 30.0
+                    _MIN_3D_CM        = 5.0
+                    _MIN_P95_FOR_3D   = 2.0   # hoy debe tener señal mínima de nevada
+                    _MAX_3D_P95_RATIO = 5.0   # 3d acumulado ≤ 5× p95 diario
+                    if val_p50 >= _MIN_P50_CM:
+                        # FIX-PINN-HEAVY-PATH-A: si ensemble heavy_snow y p95>p50, usar p95
+                        # (sin este fix, LP Medio en tormenta usaba p50=32cm en vez de p95=68cm
+                        #  porque el LLM pasó None → path A ignoraba heavy_snow)
+                        if heavy and val_p95 > val_p50:
+                            val, fuente_suffix = val_p95, "p95_heavy"
                         else:
-                            val, fuente_suffix = 0.0, "none"
-                        if val > 0:
-                            nieve_nueva_cm = float(val)
-                            _fuente_nieve = f"wn2_fallback_determinista_{fuente_suffix}"
-                            logger.info(
-                                f"calcular_pinn FIX-PINN-WN2: '{nombre_ubicacion}' "
-                                f"{fecha_objetivo} → nieve_nueva_cm={nieve_nueva_cm} cm "
-                                f"(llm={_nieve_llm}, fallback WN2 {fuente_suffix}: "
-                                f"p50={val_p50:.1f}, p95={val_p95:.1f}, p95_3d={val_3d:.1f})"
-                            )
-                    elif _needs_heavy:
-                        # (B) HEAVY-UPGRADE: ensemble confirma heavy_snow → p95 conservador
-                        _prev = nieve_nueva_cm
-                        nieve_nueva_cm = float(val_p95)
-                        _fuente_nieve = "wn2_heavy_snow_p95"
+                            val, fuente_suffix = val_p50, "p50"
+                    elif val_p95 >= _MIN_P95_CM:
+                        val, fuente_suffix = val_p95, "p95"
+                    elif (val_3d >= _MIN_3D_CM
+                          and val_p95 >= _MIN_P95_FOR_3D
+                          and val_3d <= val_p95 * _MAX_3D_P95_RATIO):
+                        val, fuente_suffix = val_3d, "p95_3d"
+                    else:
+                        val, fuente_suffix = 0.0, "none"
+                    if val > 0:
+                        nieve_nueva_cm = float(val)
+                        _fuente_nieve = f"wn2_fallback_determinista_{fuente_suffix}"
                         logger.info(
-                            f"calcular_pinn FIX-PINN-WN2-HEAVY: '{nombre_ubicacion}' "
-                            f"{fecha_objetivo} heavy_snow=True → "
-                            f"nieve {_prev:.1f}→{nieve_nueva_cm:.1f} cm (p95)"
+                            f"calcular_pinn FIX-PINN-WN2: '{nombre_ubicacion}' "
+                            f"{fecha_objetivo} → nieve_nueva_cm={nieve_nueva_cm} cm "
+                            f"(llm={_nieve_llm}, fallback WN2 {fuente_suffix}: "
+                            f"p50={val_p50:.1f}, p95={val_p95:.1f}, p95_3d={val_3d:.1f})"
                         )
+                elif _needs_heavy:
+                    # (B) HEAVY-UPGRADE: ensemble confirma heavy_snow → p95 conservador
+                    _prev = nieve_nueva_cm
+                    nieve_nueva_cm = float(val_p95)
+                    _fuente_nieve = "wn2_heavy_snow_p95"
+                    logger.info(
+                        f"calcular_pinn FIX-PINN-WN2-HEAVY: '{nombre_ubicacion}' "
+                        f"{fecha_objetivo} heavy_snow=True → "
+                        f"nieve {_prev:.1f}→{nieve_nueva_cm:.1f} cm (p95)"
+                    )
         except Exception as _exc_wn2:
             logger.warning(f"calcular_pinn FIX-PINN-WN2: fallback WN2 falló — {_exc_wn2}")
 

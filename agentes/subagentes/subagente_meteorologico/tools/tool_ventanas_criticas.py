@@ -150,6 +150,32 @@ def ejecutar_detectar_ventanas_criticas(
     alertas_tendencia = alertas_tendencia or []
     ventanas = []
 
+    # ─── FIX-WN2-TRIGGERS-CENTRAL (v25.17): derivar banderas WN2 del extractor ──
+    # El LLM puede omitir o transcribir mal las alertas booleanas de WN2.
+    # Cuando nombre_ubicacion está disponible, el extractor centralizado
+    # (wn2_features.py) provee los valores deterministas y sobreescribe los del LLM.
+    import os as _os_vc
+    if nombre_ubicacion and _os_vc.environ.get("USE_WEATHERNEXT2", "false").lower() == "true":
+        try:
+            from agentes.datos.wn2_features import obtener_features_wn2
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from datetime import datetime as _dt_vc, timezone as _tz_vc
+            _fecha_ref_vc = obtener_fecha_referencia_global()
+            _fecha_vc = (
+                _fecha_ref_vc.strftime("%Y-%m-%d")
+                if _fecha_ref_vc else
+                _dt_vc.now(_tz_vc.utc).strftime("%Y-%m-%d")
+            )
+            _wn2_vc = obtener_features_wn2(nombre_ubicacion, _fecha_vc)
+            if _wn2_vc["disponible"]:
+                wn2_heavy_snow  = _wn2_vc["heavy_snow"]
+                wn2_storm_slab  = _wn2_vc["storm_slab"]
+                wn2_wind_strong = _wn2_vc["wind_strong"]
+                if not wn2_probable_avalanche_problem and _wn2_vc["prob_problem"]:
+                    wn2_probable_avalanche_problem = _wn2_vc["prob_problem"]
+        except Exception:
+            pass  # Mantener valores del LLM si el extractor falla
+
     # ─── Umbrales calibrados por región (CR-10A + CR-10B, v10.0) ─────────────
     # ERA5 a 9km promedia espacialmente: en Alpes, el valor puntual de estaciones
     # IMIS es ~2-3× el valor ERA5. En Andes, la subestimación es menor pero

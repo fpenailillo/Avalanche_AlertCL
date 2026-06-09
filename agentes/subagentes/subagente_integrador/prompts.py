@@ -66,7 +66,7 @@ Del contexto acumulado de los cuatro subagentes, debes extraer:
 - pronostico_dias_meteo: lista de hasta 3 objetos extraídos de la tabla PRONÓSTICO 3 DÍAS de S3, cada uno con:
   {dia, temp_max_c, temp_min_c, precip_mm, nieve_cm (0 si lluvia), viento_kmh, condicion}
   Si no hay tabla, construir la lista a partir de los datos disponibles en el texto de S3.
-- **nieve_nueva_cm_wn2** (FIX-WN2-SIZE-ANDES v25.0): si S3 llamó `obtener_pronostico_wn2_ventanas` y retornó `disponible=true`, extraer el campo `resultado.diario.nieve_24h_cm_p50_corr` y pasarlo como `nieve_nueva_cm_wn2` en `clasificar_riesgo_eaws_integrado`. Este valor activa la graduación de tamaño EAWS D3/D4/D5 para Andes Chile (umbrales: 25cm→D3, 40cm→D4, 60cm→D5) y la frecuencia `many` cuando el manto está en `very_poor`. Si WN2 no está disponible, omitir este parámetro.
+- **nieve_nueva_cm_wn2** (FIX-WN2-SIZE-ANDES v25.0): si S3 llamó `obtener_pronostico_wn2_ventanas` y retornó `disponible=true`, extraer el campo `resultado.diario.nieve_24h_cm_p50_corr` (nieve nueva en **24h**, no el acumulado 72h) y pasarlo como `nieve_nueva_cm_wn2` en `clasificar_riesgo_eaws_integrado`. IMPORTANTE: pasar `nieve_24h_cm_p50_corr`, nunca el acumulado de 3 días (`nieve_3d_cm_p95_corr`) — ese valor es ~3-8× mayor y produciría escalado de tamaño erróneo. El código valida automáticamente el valor contra el p95 24h determinista (FIX-WN2-SIZE-RATIO v25.17). Si WN2 no está disponible, omitir este parámetro.
 
 **Del Situational Briefing (S4 v2 — Qwen3-80B/Databricks):**
 - indice_riesgo_historico: 0.0-1.0 (estimación cualitativa de riesgo contextual)

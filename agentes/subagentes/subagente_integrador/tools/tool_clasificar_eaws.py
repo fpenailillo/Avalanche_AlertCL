@@ -205,57 +205,67 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     Returns:
         dict con nivel EAWS 24h/48h/72h, factores y recomendaciones
     """
-    # ─── FIX-WN2-SIZE-EAWS + FIX-WN2-VENTANAS-EAWS (v25.11 → v25.13) ───────────────────────
-    # Una sola llamada WN2 cubre dos fallbacks cuando el LLM omite parámetros:
-    # (A) FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 → tamaño correcto en FIX-WN2-SIZE-ANDES
-    # (B) FIX-WN2-VENTANAS-EAWS: ventanas_criticas_detectadas → FIX-STORM-FREQ-WN2 activo
-    #     Regla: heavy_snow=True + p50≥25 → 2 ventanas; heavy_snow=True + p50≥10 → 1 ventana
+    # ─── FIX-WN2-SIZE-EAWS + FIX-WN2-SIZE-RATIO + FIX-WN2-VENTANAS-EAWS (v25.11→v25.17) ──────
+    # Una sola llamada WN2 (cacheada en wn2_features.py) cubre tres guards:
+    # (A) FIX-WN2-SIZE-EAWS: rellenar nieve_nueva_cm_wn2 si LLM omitió el parámetro.
+    # (B) FIX-WN2-SIZE-RATIO: validar el valor del LLM contra el p95 24h determinista.
+    #     El LLM puede confundir el acumulado 72h con la nieve diaria
+    #     (ej. LP Bajo Jun-12: LLM pasó 68cm acum-72h → FIX-WN2-SIZE-ANDES → N5 erróneo).
+    #     Guard: nieve_nueva_cm_wn2 ≤ p95_24h × 2.5; si excede, reemplazar por p95 24h.
+    # (C) FIX-WN2-VENTANAS-EAWS: rellenar ventanas_criticas si LLM no las proveyó.
+    #     Regla: heavy_snow=True + p50≥25 → 2 ventanas; heavy_snow=True → 1 ventana.
     _USE_WN2 = os.environ.get("USE_WEATHERNEXT2", "false").lower() == "true"
     _needs_nieve = nieve_nueva_cm_wn2 is None
     _needs_ventanas = ventanas_criticas_detectadas == 0
-    if (_needs_nieve or _needs_ventanas) and nombre_ubicacion and _USE_WN2:
+    if nombre_ubicacion and _USE_WN2:
         try:
             from datetime import datetime as _dt_eaws, timezone as _tz_eaws
             from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
-            from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, obtener_elevacion_referencia
-            from agentes.subagentes.subagente_meteorologico.fuentes.fuente_weathernext2 import FuenteWeatherNext2
+            from agentes.datos.wn2_features import obtener_features_wn2
 
             _fecha_ref = obtener_fecha_referencia_global()
             _fecha_wn2 = _fecha_ref.strftime("%Y-%m-%d") if _fecha_ref else _dt_eaws.now(_tz_eaws.utc).strftime("%Y-%m-%d")
-            _coords = COORDENADAS_ZONAS.get(nombre_ubicacion)
-            if _coords:
-                _lat, _lon = _coords
-                _elev = obtener_elevacion_referencia(nombre_ubicacion)
-                _res = FuenteWeatherNext2().obtener_ventanas_6h(
-                    zona=nombre_ubicacion, lat=_lat, lon=_lon,
-                    fecha_objetivo=_fecha_wn2, elevacion_m=_elev,
-                )
-                if _res.get("disponible"):
-                    _d = _res.get("diario", {})
-                    _p50 = _d.get("nieve_24h_cm_p50_corr") or 0.0
-                    _p95 = _d.get("nieve_24h_cm_p95_corr") or 0.0
-                    _heavy = (_d.get("alerts_dia") or {}).get("heavy_snow", False)
+            _wn2 = obtener_features_wn2(nombre_ubicacion, _fecha_wn2)
 
-                    # (A) FIX-WN2-SIZE-EAWS: nieve para escalar tamaño
-                    if _needs_nieve:
-                        _nieve_fb = _p95 if _heavy else _p50
-                        if _nieve_fb >= 5.0:
-                            nieve_nueva_cm_wn2 = float(_nieve_fb)
-                            logger.info(
-                                f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
-                                f"no provista → WN2 fallback {_fecha_wn2} "
-                                f"{'p95' if _heavy else 'p50'}={_nieve_fb:.1f} cm (heavy={_heavy})"
-                            )
+            if _wn2["disponible"]:
+                _p50   = _wn2["nieve_24h_p50"]
+                _p95   = _wn2["nieve_24h_p95"]
+                _heavy = _wn2["heavy_snow"]
 
-                    # (B) FIX-WN2-VENTANAS-EAWS: ventanas críticas desde señal diaria
-                    if _needs_ventanas and _heavy:
-                        _vc_wn2 = 2 if _p50 >= 25.0 else 1
-                        ventanas_criticas_detectadas = _vc_wn2
+                # (A) FIX-WN2-SIZE-EAWS: rellenar nieve_nueva_cm_wn2 si LLM omitió
+                if _needs_nieve:
+                    _nieve_fb = _p95 if _heavy else _p50
+                    if _nieve_fb >= 5.0:
+                        nieve_nueva_cm_wn2 = float(_nieve_fb)
                         logger.info(
-                            f"[ClasificarEAWS] FIX-WN2-VENTANAS-EAWS: ventanas_criticas "
-                            f"no provistas → WN2 {_fecha_wn2} heavy=True "
-                            f"p50={_p50:.0f}cm → ventanas={_vc_wn2}"
+                            f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: nieve_nueva_cm_wn2 "
+                            f"no provista → WN2 fallback {_fecha_wn2} "
+                            f"{'p95' if _heavy else 'p50'}={_nieve_fb:.1f} cm (heavy={_heavy})"
                         )
+
+                # (B) FIX-WN2-SIZE-RATIO: validar valor del LLM vs p95 24h determinista.
+                # Evita que el LLM pase el acumulado 72h en lugar de la nieve diaria,
+                # lo que dispararía FIX-WN2-SIZE-ANDES erróneamente hasta N5.
+                elif nieve_nueva_cm_wn2 is not None and _p95 > 0:
+                    _MAX_WN2_SIZE_RATIO = 2.5   # nieve_diaria ≤ 2.5× p95_24h
+                    if nieve_nueva_cm_wn2 > _p95 * _MAX_WN2_SIZE_RATIO:
+                        logger.info(
+                            f"[ClasificarEAWS] FIX-WN2-SIZE-RATIO: nieve_nueva_cm_wn2 "
+                            f"{nieve_nueva_cm_wn2:.0f}→{_p95:.1f}cm "
+                            f"(LLM pasó acumulado multi-día; ratio>{_MAX_WN2_SIZE_RATIO}×, "
+                            f"p95_24h determinista: {_fecha_wn2})"
+                        )
+                        nieve_nueva_cm_wn2 = float(_p95)
+
+                # (C) FIX-WN2-VENTANAS-EAWS: rellenar ventanas críticas desde señal diaria
+                if _needs_ventanas and _heavy:
+                    _vc_wn2 = 2 if _p50 >= 25.0 else 1
+                    ventanas_criticas_detectadas = _vc_wn2
+                    logger.info(
+                        f"[ClasificarEAWS] FIX-WN2-VENTANAS-EAWS: ventanas_criticas "
+                        f"no provistas → WN2 {_fecha_wn2} heavy=True "
+                        f"p50={_p50:.0f}cm → ventanas={_vc_wn2}"
+                    )
         except Exception as _exc_eaws:
             logger.warning(f"[ClasificarEAWS] FIX-WN2-SIZE-EAWS: fallback falló — {_exc_eaws}")
 
@@ -529,21 +539,22 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     nivel_72h = _calibrar_nivel(nivel_72h, _region_cal)
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
 
-    # FIX-POST-STORM-PERSIST (v25.16): piso mínimo post-tormenta en Andes Chile.
+    # FIX-POST-STORM-PERSIST (v25.16 → v25.17): piso mínimo post-tormenta en Andes Chile.
     # Tras un nivel ≥ 4, las placas de tormenta persisten 24-48h aunque el PINN
     # no vea nieve nueva (Schweizer 2003 §4.2: storm slabs activas hasta 48h post-nevada).
-    # Regla: nivel_hoy ≥ nivel_ayer - 2  (max caída de 2 escalones por día).
-    # Ej: ayer N5 → hoy mín N3; ayer N4 → hoy mín N2.
+    # Regla v25.17: nivel_hoy ≥ nivel_ayer - 1  (max caída de 1 escalón por día).
+    # v25.16 usaba ayer-2 (LP N4→N2 en un día); ayer-1 es más conservador y alineado
+    # con práctica EAWS operacional (descenso gradual). Ej: ayer N5→hoy mín N4; ayer N4→mín N3.
     # Solo Andes Chile — Alpes tiene persistencia real via IMIS/DEAPSnow.
     if _region_cal == "andes_chile" and nombre_ubicacion:
         _nivel_ayer = _obtener_nivel_ayer(nombre_ubicacion)
         if _nivel_ayer is not None and _nivel_ayer >= 4:
-            _piso_24h = _nivel_ayer - 2
+            _piso_24h = _nivel_ayer - 1
             if nivel_24h < _piso_24h:
                 logger.info(
                     f"[ClasificarEAWS] FIX-POST-STORM-PERSIST: {nombre_ubicacion} "
                     f"nivel {nivel_24h}→{_piso_24h} "
-                    f"(nivel_ayer={_nivel_ayer}, regla=ayer-2)"
+                    f"(nivel_ayer={_nivel_ayer}, regla=ayer-1)"
                 )
                 nivel_24h = _piso_24h
                 nivel_48h = max(nivel_48h, max(1, _piso_24h - 1))

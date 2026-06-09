@@ -350,7 +350,33 @@ REGISTRO_PROMPTS = {
 #   Solo Andes Chile (Alpes tiene persistencia real via IMIS/DEAPSnow).
 #   Fallback graceful: si BQ query falla (sin historial, sin conexión), no aplica el piso.
 #   Resultado esperado: VN Jun-10=5 → Jun-11=3 (vs N2 sin fix); Jun-12=1 sin cambio.
-VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.16")
+# v25.17 (FIX-WN2-SIZE-RATIO + WN2-FEATURES-CENTRAL + POST-STORM-PERSIST-AYER1):
+#   Diagnóstico raíz: reproceso v25.16 Jun-12 → LP Bajo N5 artefacto.
+#   Causa: LLM del integrador pasó nieve_nueva_cm_wn2=68cm (acumulado 72h, no nieve diaria).
+#   Como el LLM sí proveyó el parámetro, FIX-WN2-SIZE-EAWS (fallback determinista) se saltó.
+#   FIX-WN2-SIZE-ANDES: 68≥60 → tamaño 5 → frecuencia many → N5 erróneo.
+#   LP Alto/Medio/VN no pasaron el parámetro → fallback trajo p95=12.9cm → N3 correcto.
+#
+#   Fix A — FIX-WN2-SIZE-RATIO (tool_clasificar_eaws.py):
+#     Incluso cuando el LLM provee nieve_nueva_cm_wn2, obtener el p95 24h determinista
+#     del extractor y aplicar ratio-guard: si nieve_wn2 > p95_24h × 2.5, reemplazar por p95.
+#     LP Bajo Jun-12: 68 > 12.9×2.5=32.3 → override a 12.9 → FIX-WN2-SIZE-ANDES → N3 ✓.
+#
+#   Fix B — WN2-FEATURES-CENTRAL (agentes/datos/wn2_features.py, nuevo):
+#     Extractor único con @lru_cache(256) que evita consultas BQ redundantes.
+#     PINN, clasificador y ventanas_criticas usan obtener_features_wn2() en vez de
+#     instanciar FuenteWeatherNext2 directamente cada uno por su cuenta.
+#
+#   Fix C — FIX-WN2-TRIGGERS-CENTRAL (tool_ventanas_criticas.py):
+#     Derivar banderas WN2 (heavy_snow/storm_slab/wind_strong) del extractor cuando
+#     nombre_ubicacion disponible; el LLM puede omitirlas o transcribirlas mal.
+#
+#   Fix D — POST-STORM-PERSIST-AYER1 (tool_clasificar_eaws.py):
+#     Cambiar regla de piso de ayer-2 a ayer-1 (máx 1 nivel de caída por día).
+#     v25.16 ayer-2 permitía LP N4→N2 en un día; ayer-1 es más conservador
+#     y alineado con práctica EAWS operacional (descenso gradual).
+#     Resultado esperado: LP (ayer N4) → hoy mín N3; VN (ayer N5) → hoy mín N4.
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.17")
 
 
 def _calcular_hash(contenido: str) -> str:
