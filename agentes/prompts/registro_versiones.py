@@ -339,7 +339,18 @@ REGISTRO_PROMPTS = {
 #     Jun-12: 70.3/8.2=8.6  > 5 → bloqueado ✓
 #     Gradual (p95=8, 3d=20): 20/8=2.5 ≤ 5 → permitido ✓
 #   Resultado esperado Jun-12 LP Medio: ESTABLE → nivel 2 (vs nivel 3 con guard absoluto).
-VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.15")
+# v25.16 (FIX-POST-STORM-PERSIST):
+#   Diagnóstico: VN y LP saltan de N5→N2 en un día post-tormenta porque el PINN
+#   no modela persistencia de storm slabs. Con p50≈0 en Jun-11, PINN retorna ESTABLE
+#   y el clasificador baja hasta N2 aunque las placas sigan activas 24-48h.
+#   Referencia: Schweizer et al. 2003 §4.2 — storm slabs peligrosas ≥24h post-nevada.
+#   Fix: en tool_clasificar_eaws.py, después de calibración, consultar nivel_ayer desde
+#   BQ (obtener_historial_boletines). Si nivel_ayer ≥ 4, aplicar piso nivel_hoy ≥ ayer-2.
+#   Regla: ayer N5 → hoy mín N3; ayer N4 → hoy mín N2.
+#   Solo Andes Chile (Alpes tiene persistencia real via IMIS/DEAPSnow).
+#   Fallback graceful: si BQ query falla (sin historial, sin conexión), no aplica el piso.
+#   Resultado esperado: VN Jun-10=5 → Jun-11=3 (vs N2 sin fix); Jun-12=1 sin cambio.
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.16")
 
 
 def _calcular_hash(contenido: str) -> str:

@@ -529,6 +529,27 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     nivel_72h = _calibrar_nivel(nivel_72h, _region_cal)
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
 
+    # FIX-POST-STORM-PERSIST (v25.16): piso mínimo post-tormenta en Andes Chile.
+    # Tras un nivel ≥ 4, las placas de tormenta persisten 24-48h aunque el PINN
+    # no vea nieve nueva (Schweizer 2003 §4.2: storm slabs activas hasta 48h post-nevada).
+    # Regla: nivel_hoy ≥ nivel_ayer - 2  (max caída de 2 escalones por día).
+    # Ej: ayer N5 → hoy mín N3; ayer N4 → hoy mín N2.
+    # Solo Andes Chile — Alpes tiene persistencia real via IMIS/DEAPSnow.
+    if _region_cal == "andes_chile" and nombre_ubicacion:
+        _nivel_ayer = _obtener_nivel_ayer(nombre_ubicacion)
+        if _nivel_ayer is not None and _nivel_ayer >= 4:
+            _piso_24h = _nivel_ayer - 2
+            if nivel_24h < _piso_24h:
+                logger.info(
+                    f"[ClasificarEAWS] FIX-POST-STORM-PERSIST: {nombre_ubicacion} "
+                    f"nivel {nivel_24h}→{_piso_24h} "
+                    f"(nivel_ayer={_nivel_ayer}, regla=ayer-2)"
+                )
+                nivel_24h = _piso_24h
+                nivel_48h = max(nivel_48h, max(1, _piso_24h - 1))
+                nivel_72h = max(nivel_72h, max(1, _piso_24h - 2))
+                info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
+
     return {
         "nivel_eaws_24h": nivel_24h,
         "nivel_eaws_24h_raw": nivel_24h_raw,
@@ -775,6 +796,20 @@ def _determinar_tamano(
 
     # Fallback: default 2 (mediano)
     return 2, "default"
+
+
+def _obtener_nivel_ayer(nombre_ubicacion: str):
+    """Consulta el nivel EAWS del día anterior desde BQ para FIX-POST-STORM-PERSIST."""
+    try:
+        from agentes.datos.consultor_bigquery import ConsultorBigQuery
+        bq = ConsultorBigQuery()
+        hist = bq.obtener_historial_boletines(nombre_ubicacion, n_dias=2)
+        boletines = hist.get("boletines", [])
+        if boletines:
+            return boletines[0].get("nivel_eaws_24h")
+    except Exception as _e:
+        logger.debug(f"[FIX-POST-STORM-PERSIST] nivel_ayer query falló: {_e}")
+    return None
 
 
 def _proyectar_nivel(
