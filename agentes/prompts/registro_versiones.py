@@ -313,7 +313,24 @@ REGISTRO_PROMPTS = {
 #   Fix: en tool_clasificar_eaws, si ventanas_criticas_detectadas es None/vacío y
 #   USE_WEATHERNEXT2=true, consultar WN2 directamente y derivar ventanas.
 #   Validación tormenta 10-jun: La Parva=4, Valle Nevado=5 (objetivo cumplido).
-VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.13")
+#
+# v25.14 (FIX-PINN-HEAVY-PATH-A + FIX-WN2-3D-POST-STORM):
+#   Diagnóstico LP Sector Medio — simulación 10-11-12 jun 2026:
+#   Bug 1 (FIX-PINN-HEAVY-PATH-A):
+#     En path A (fallback, LLM=None), el check heavy_snow no existía → LP Medio usaba
+#     p50=32.1 cm en Jun-10 (MARGINAL→nivel 3) aunque Alto/Bajo usaran p95=68.4 cm (INESTABLE→4).
+#     Root cause: path B (heavy-upgrade) solo aplica cuando LLM pasa nieve_nueva_cm≥5cm;
+#     si LLM pasa None → path A → heavy_snow ignorado → p50 siempre gana.
+#     Fix: en path A, si val_p50≥_MIN_P50_CM y heavy_snow=True y val_p95>val_p50, usar p95.
+#     fuente_nieve_nueva = "wn2_fallback_determinista_p95_heavy"
+#   Bug 2 (FIX-WN2-3D-POST-STORM):
+#     En Jun-11 (post-tormenta), p50=0.0/p95=0.5 → path A activa p95_3d=76.6 cm (acumulado 3d
+#     que incluye los 68.4 cm del storm Jun-10) → PINN INESTABLE → nivel 4, superando al
+#     nivel de la tormenta real (Jun-10=3 por Bug 1). Artefacto: el nivel post-tormenta
+#     no debe superar el nivel del día de tormenta para el mismo sector.
+#     Fix: guard adicional — p95_3d solo activa si val_p95>=2.0 cm (hoy tiene señal de nevada).
+#     Si p95<2cm, el día es esencialmente sin precipitación y p95_3d es residual de días previos.
+VERSION_GLOBAL = os.environ.get("VALIDACION_VERSION", "25.14")
 
 
 def _calcular_hash(contenido: str) -> str:

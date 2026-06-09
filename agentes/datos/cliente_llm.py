@@ -115,7 +115,7 @@ class ClienteDatabricks:
 
     MODELO_DEFAULT = "databricks-qwen3-next-80b-a3b-instruct"
     BASE_URL_DEFAULT = (
-        "https://2113388677481041.ai-gateway.cloud.databricks.com/mlflow/v1"
+        "https://dbc-6f162706-efdf.cloud.databricks.com/ai-gateway/mlflow/v1"
     )
     SECRET_NAME = "projects/climas-chileno/secrets/databricks-token/versions/latest"
 
