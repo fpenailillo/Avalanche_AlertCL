@@ -1,14 +1,81 @@
-# Snow Alert — Sistema Inteligente de Predicción de Avalanchas
+# Snow Alert — Sistema de Predicción Automática de Avalanchas
 
-Sistema multi-agente sobre Google Cloud Platform que genera boletines EAWS (niveles 1-5) para zonas de montaña chilenas, combinando análisis topográfico (PINNs + Copernicus GLO-30 + TAGEE + AlphaEarth), monitoreo satelital (Vision Transformers + Sentinel-1/2 + MODIS), meteorología (Open-Meteo + ERA5-Land + WeatherNext 2) y situational briefing contextual (Qwen3-80B vía Databricks).
+Sistema multi-agente de inteligencia artificial que genera boletines EAWS de riesgo de avalanchas para zonas de montaña chilenas, combinando modelos físicos, imágenes satelitales, pronóstico meteorológico de ensemble y análisis contextual basado en LLMs.
 
-> Propuesta Tesina de Magíster en Tecnologías de la Información — Francisco Peñailillo — UTFSM
-
-**Proyecto GCP:** `climas-chileno` | **Dataset BigQuery:** `clima` | **Región:** `us-central1`
+> **Tesis de Magíster en Tecnologías de la Información**  
+> Francisco Peñailillo — Universidad Técnica Federico Santa María  
+> Proyecto GCP: `climas-chileno` | BigQuery: `clima` | Región: `us-central1`
 
 ---
 
-## Arquitectura
+## Motivación
+
+Las avalanchas representan uno de los peligros naturales de mayor impacto en las zonas cordilleranas de Chile. Los principales centros de ski y zonas de montaña del sector de Santiago — La Parva, Valle Nevado y El Colorado — reciben decenas de miles de visitantes durante la temporada de invierno, expuestos a un riesgo que no cuenta con un sistema automatizado de predicción y alerta temprana.
+
+A diferencia de países alpinos como Suiza o Austria, donde el Instituto SLF publica boletines EAWS diarios con décadas de registro, en Chile los boletines de avalanchas se producen de forma manual, con baja frecuencia y cobertura limitada. La escasez de estaciones meteorológicas de alta montaña, la ausencia de redes de observación del manto nivoso y la heterogeneidad del terreno andino dificultan la extrapolación de metodologías europeas.
+
+Este proyecto propone una alternativa: construir un sistema de predicción automática basado en fuentes de datos indirectas — satélites, reanálisis climático, modelos de ensemble y relatos de montañistas — orquestadas por un sistema multi-agente que reproduce la lógica de clasificación EAWS (European Avalanche Warning Services) sin requerir observación directa del manto.
+
+---
+
+## Objetivo académico
+
+Diseñar, implementar y validar un sistema multi-agente capaz de generar boletines EAWS (niveles de peligro 1–5) para los sectores La Parva y Valle Nevado, evaluando si los modelos de inteligencia artificial pueden aproximar el juicio experto humano a partir de datos geoespaciales y meteorológicos disponibles en Chile.
+
+La investigación busca responder cuatro hipótesis:
+
+| ID | Hipótesis | Métrica | Objetivo |
+|----|-----------|---------|----------|
+| H1 | El sistema supera el rendimiento de un clasificador trivial (majority class) vs. datos SLF Suiza | F1-macro | ≥ 0.75 |
+| H2 | Incorporar relatos de montañistas (NLP) mejora la predicción respecto a usar solo datos físicos | Delta F1 ablación | > +5 pp |
+| H3 | El sistema es competitivo con el benchmark de Techel (2022) en datos suizos | QWK | ≥ 0.59 |
+| H4 | El sistema alcanza acuerdo sustancial con boletines expertos locales (Snowlab La Parva) | QWK | ≥ 0.40 |
+
+La validación local (H4) es la hipótesis de mayor relevancia práctica: contrasta las predicciones del sistema contra boletines reales del centro de ski La Parva, emitidos por observadores certificados CAA nivel 2.
+
+---
+
+## Enfoque técnico
+
+El sistema implementa la **Matriz EAWS 2025** (Müller, Techel & Mitterer), que clasifica el riesgo de avalanchas combinando tres factores: *estabilidad del manto* (muy pobre → buena), *frecuencia* (muchas → casi ninguna) y *tamaño* (1–5). Un orquestador coordina cinco subagentes especializados que analizan cada factor de forma independiente y luego lo integran en un boletín estructurado.
+
+**Fuentes de datos:**
+- **Topografía**: DEM Copernicus GLO-30, atributos TAGEE (curvatura, pendiente, aspecto), embeddings AlphaEarth 64D
+- **Satelital**: SAR Sentinel-1, Sentinel-2 SR (NDSI, cobertura nieve), MODIS LST, Vision Transformer (ViT)
+- **Meteorología**: Open-Meteo + ERA5-Land (reanálisis), WeatherNext 2 (64 miembros ensemble, Google)
+- **Contextual**: 3.131 relatos de montañistas de Andeshandbook (37 campos por relato)
+- **Física**: PINN (Physics-Informed Neural Network) con modelo de esfuerzo de Mohr-Coulomb para el factor de seguridad del manto
+
+**LLM de producción**: Qwen3-80B vía Databricks (GCP Secret Manager); Claude como alternativa local.
+
+---
+
+## Resultados de validación — Junio 2026
+
+### Hipótesis locales — H4 vs. Snowlab La Parva
+
+| Versión | n pares | QWK | Estado |
+|---------|--------:|----:|--------|
+| v3.2 (Ronda 2, baseline) | 90 | −0.016 | — |
+| v25.8 (Ronda 3, fixes PINN) | 87 | +0.385 | — |
+| v26.0 (Gemini integrado) | ~90 | **+0.465** | ✅ Objetivo alcanzado (≥ 0.40) |
+
+El error dominante (pre-v25.x) era **GT=1 → AI=2**: el sistema sobreestimaba el peligro en condiciones estables. La causa fue identificada en el mapeo LLM del estado PINN: ESTABLE se traducía como `poor` en lugar de `good`, inflando artificialmente el nivel. El FIX-PINN-EAWS-MAP (v25.9) corrigió el comportamiento estructuralmente.
+
+### Hipótesis internacionales — H1/H3 vs. SLF Suiza
+
+| Métrica | v3.2 (Ronda 2) | v4.0 (Ronda 3) | Objetivo | Estado |
+|---------|---------------:|---------------:|----------|--------|
+| F1-macro (H1) | 0.161 | 0.155 | ≥ 0.75 | ❌ Rechazada |
+| QWK (H3) | +0.016 | +0.162 | ≥ 0.59 | ❌ Rechazada |
+
+El gap entre las métricas andinas y alpinas tiene una causa documentada y publicable: el modelo de corrección orográfica ERA5 fue calibrado para los Andes centrales (gradientes de precipitación distintos a los Alpes). El sistema tiende a subestimar el peligro en la topografía alpina. Esto se documenta como hallazgo metodológico de **transferencia de dominio Andes→Alpes**.
+
+**H2** (aporte del NLP): delta F1 de +7.9 pp confirmado en experimento de ablación sintético. ✅
+
+---
+
+## Arquitectura del sistema
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -16,31 +83,31 @@ Sistema multi-agente sobre Google Cloud Platform que genera boletines EAWS (nive
 │                                                                      │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │                  CAPA DE DATOS  (datos/)                     │    │
-│  │                                                             │    │
-│  │  Cloud Scheduler                                            │    │
-│  │  ├── extractor-clima (3x/día) ──────────────→ BigQuery ✅   │    │
-│  │  ├── procesador-clima-horas (Pub/Sub) ──────→ BigQuery ✅   │    │
-│  │  ├── procesador-clima-dias (Pub/Sub) ───────→ BigQuery ✅   │    │
+│  │                                                              │    │
+│  │  Cloud Scheduler                                             │    │
+│  │  ├── extractor-clima (3x/día)     ──────────→ BigQuery ✅   │    │
+│  │  ├── procesador-clima-horas       ──────────→ BigQuery ✅   │    │
+│  │  ├── procesador-clima-dias        ──────────→ BigQuery ✅   │    │
 │  │  ├── monitor-satelital-nieve (3x/día) ──────→ BigQuery ✅   │    │
 │  │  └── analizador-zonas-avalanchas (mensual) ─→ BigQuery ✅   │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                               ↓ BigQuery clima.*                    │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │               CAPA DE AGENTES  (agentes/)                    │    │
-│  │                                                             │    │
-│  │  Cloud Run Job: orquestador-avalanchas                      │    │
-│  │                                                             │    │
-│  │   [S1 Topográfico+PINN+GLO30+TAGEE+AlphaEarth]             │    │
-│  │   → [S2 Satelital+ViT+GeminiMultispectral]                 │    │
-│  │   → [S3 Meteorológico+WeatherNext2]                        │    │
-│  │   → [S4 SituationalBriefing (Qwen3-80B)]                   │    │
-│  │   → [S5 Integrador EAWS+Boletín]                           │    │
+│  │                                                              │    │
+│  │  Cloud Run Job: orquestador-avalanchas                       │    │
+│  │                                                              │    │
+│  │   [S1 Topográfico · PINN · GLO-30 · TAGEE · AlphaEarth]    │    │
+│  │   → [S2 Satelital · ViT · SAR · Sentinel-2 · MODIS]        │    │
+│  │   → [S3 Meteorológico · ERA5 · Open-Meteo · WeatherNext2]  │    │
+│  │   → [S4 Situational Briefing · Qwen3-80B · relatos NLP]    │    │
+│  │   → [S5 Integrador EAWS · Boletín 24h/48h/72h]             │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 │                               ↓                                      │
 │  ┌─────────────────────────────────────────────────────────────┐    │
 │  │                  CAPA DE RESULTADOS                          │    │
-│  │  BigQuery: clima.boletines_riesgo (34 campos)               │    │
-│  │  GCS: boletines/{ubicacion}/{YYYY/MM/DD}/{timestamp}.json   │    │
+│  │  BigQuery: clima.boletines_riesgo (34 campos)                │    │
+│  │  GCS: boletines/{ubicacion}/{YYYY/MM/DD}/{timestamp}.json    │    │
 │  └─────────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -49,194 +116,33 @@ Sistema multi-agente sobre Google Cloud Platform que genera boletines EAWS (nive
 
 ## Pipeline de 5 subagentes
 
-| # | Subagente | Técnica | Output clave |
-|---|-----------|---------|--------------|
-| S1 | Topográfico | PINNs + Copernicus GLO-30 + TAGEE (13 atributos) + AlphaEarth embeddings 64D | `clase_estabilidad_eaws`, `estabilidad_eaws` (good/fair/poor/very_poor), IC 95% FS, drift interanual |
-| S2 | Satelital | Vision Transformer (MHA H=2) + Sentinel-1 SAR + Sentinel-2 SR + MODIS/061; Gemini 2.5 multispectral en paralelo (A/B) | `alertas_satelitales`, `patron_detectado`, `anomalia_score` |
-| S3 | Meteorológico | ConsolidadorMeteorologico: Open-Meteo + ERA5-Land + WeatherNext 2 (64 miembros ensemble, `USE_WEATHERNEXT2=true` en prod) | `ventanas_criticas`, `alertas_meteorologicas`, P10/P50/P90, nieve_3d_cm_p95 |
-| S4 | Situational Briefing | AgenteSituationalBriefing — Qwen3-80B vía Databricks; 4 tools: clima reciente, contexto histórico, características zona, eventos pasados | `narrativa_integrada`, `factores_atencion_eaws`, `indice_riesgo_cualitativo` |
-| S5 | Integrador | Matriz EAWS 2025 (Müller, Techel & Mitterer) — Qwen3-80B vía Databricks | Boletín EAWS completo 24h/48h/72h |
+| # | Subagente | Técnica principal | Output clave |
+|---|-----------|-------------------|--------------|
+| S1 | Topográfico | PINN (Mohr-Coulomb) + GLO-30 + TAGEE (13 atributos) + AlphaEarth embeddings 64D | Factor de seguridad FS, IC 95%, `estado_pinn` (ESTABLE/MARGINAL/INESTABLE/CRITICO), drift interanual |
+| S2 | Satelital | ViT (MHA, H=2) + SAR Sentinel-1 + Sentinel-2 SR + MODIS/061; Gemini 2.5 multispectral en A/B | `alertas_satelitales`, `anomalia_score`, NDSI, línea de nieve |
+| S3 | Meteorológico | Open-Meteo + ERA5-Land + WeatherNext 2 (64 miembros ensemble) | `ventanas_criticas`, precipitación P10/P50/P90, `nieve_3d_cm_p95`, alertas ensemble |
+| S4 | Situational Briefing | Qwen3-80B vía Databricks; 4 tools: clima reciente, contexto histórico, características zona, eventos pasados | `narrativa_integrada`, `factores_atencion_eaws`, `indice_riesgo_cualitativo` |
+| S5 | Integrador EAWS | Matriz EAWS 2025 (Müller, Techel & Mitterer) — Qwen3-80B | Boletín EAWS completo 24h/48h/72h, nivel de peligro N1–N5 |
 
 ---
 
-## Estructura del repositorio
+## Estado del proyecto — Junio 2026
 
-```
-snow_alert/
-├── datos/                         ← Cloud Functions de recolección (6 activas en GCP)
-│   ├── extractor/                 # Google Weather API → condiciones_actuales
-│   ├── procesador/                # Pub/Sub: condiciones brutas → BigQuery
-│   ├── procesador_horas/          # Pub/Sub: pronóstico horario → pronostico_horas
-│   ├── procesador_dias/           # Pub/Sub: pronóstico diario → pronostico_dias
-│   ├── monitor_satelital/         # GEE MODIS/Sentinel → imagenes_satelitales
-│   ├── analizador_avalanchas/     # GEE GLO-30 → zonas_avalancha (eaws_constantes.py)
-│   └── relatos/                   # ETL Andeshandbook → relatos_montanistas
-│
-├── agentes/                       ← Sistema multi-agente
-│   ├── datos/
-│   │   ├── consultor_bigquery.py       # Acceso centralizado a tablas BQ
-│   │   ├── constantes_zonas.py         # Fuente única de coordenadas/bbox/polígonos
-│   │   ├── cliente_llm.py              # ClienteAnthropic + ClienteDatabricks (fallback)
-│   │   └── backfill/
-│   │       ├── backfill_clima_historico.py   # Backfill ERA5 para condiciones_actuales
-│   │       ├── backfill_satelital.py         # Backfill SAR+MODIS+ERA5+S2 multi-región
-│   │       ├── backfill_estado_manto_gee.py  # Backfill MODIS LST + SAR para estado_manto_gee
-│   │       └── actualizar_glo30_tagee_ae.py  # Actualización GLO-30 + TAGEE + AlphaEarth
-│   ├── subagentes/
-│   │   ├── base_subagente.py      # Clase base con agentic loop, retries, logging
-│   │   ├── subagente_topografico/ # S1: PINN + GLO-30 + TAGEE + AlphaEarth
-│   │   │   └── tools/
-│   │   │       ├── tool_analizar_dem.py        # DEM GLO-30, pendiente, aspecto, morfología
-│   │   │       ├── tool_calcular_pinn.py        # Factor de seguridad + UQ Taylor
-│   │   │       ├── tool_estabilidad_manto.py    # Score EAWS (very_poor → good)
-│   │   │       ├── tool_zonas_riesgo.py         # Clasificación final nivel 1-5
-│   │   │       ├── tool_tagee_terreno.py        # Curvatura H/V, northness, convergencia
-│   │   │       └── tool_alphaearth.py           # Embeddings 64D AlphaEarth, drift interanual
-│   │   ├── subagente_satelital/   # S2: ViT + SAR + MODIS LST + Gemini multispectral (A/B)
-│   │   │   ├── schemas.py         # DeteccionSatelital con campo via (vit/gemini/rsfm)
-│   │   │   ├── comparador/ab_runner.py  # ComparadorS2 — persiste en s2_comparaciones
-│   │   │   └── tools/
-│   │   │       ├── tool_analizar_vit.py          # ViT: anomalia_score, patron_detectado
-│   │   │       ├── tool_procesar_ndsi.py         # Sentinel-2/MODIS: NDSI, cobertura nieve
-│   │   │       ├── tool_snowline.py              # Línea de nieve, cambios 24h/72h
-│   │   │       ├── tool_detectar_anomalias.py    # Detección de anomalías térmicas/nivales
-│   │   │       ├── tool_estado_manto.py          # MODIS LST + SAR humedad (REQ-02a/02b)
-│   │   │       └── tool_gemini_multispectral.py  # Gemini 2.5 multispectral (flag S2_VIA)
-│   │   ├── subagente_meteorologico/ # S3: ConsolidadorMeteorologico multi-fuente
-│   │   │   ├── fuentes/
-│   │   │   │   ├── base.py                  # Interfaz FuenteMeteorologica
-│   │   │   │   ├── fuente_open_meteo.py     # Fuente primaria (siempre activa)
-│   │   │   │   ├── fuente_era5_land.py      # Reanálisis (siempre activa)
-│   │   │   │   ├── fuente_weathernext2.py   # 64 miembros ensemble (flag USE_WEATHERNEXT2)
-│   │   │   │   ├── correccion_orografica.py # Corrección ERA5 por altitud (calibrada Andes)
-│   │   │   │   └── consolidador.py          # Fusión multi-fuente + detección divergencias
-│   │   │   └── tools/
-│   │   │       ├── tool_condiciones_actuales.py
-│   │   │       ├── tool_pronostico_dias.py
-│   │   │       ├── tool_tendencia_72h.py
-│   │   │       ├── tool_ventanas_criticas.py
-│   │   │       └── tool_pronostico_ensemble.py  # Expone ConsolidadorMeteorologico al agente
-│   │   ├── subagente_situational_briefing/ # S4: briefing contextual (reemplaza NLP)
-│   │   │   ├── agente.py          # AgenteSituationalBriefing (Qwen3-80B/Databricks)
-│   │   │   ├── schemas.py         # SituationalBriefing, CondicionesRecientes, ContextoHistorico
-│   │   │   ├── prompts/system_prompt.md
-│   │   │   └── tools/
-│   │   │       ├── tool_clima_reciente.py        # Condiciones 72h desde BQ
-│   │   │       ├── tool_contexto_historico.py    # Época estacional + desviación histórica
-│   │   │       ├── tool_caracteristicas_zona.py  # Constantes topográficas EAWS por zona
-│   │   │       └── tool_eventos_pasados.py       # Histórico de avalanchas documentadas
-│   │   └── subagente_integrador/  # S5: Matriz EAWS + boletín final
-│   │       └── tools/
-│   │           ├── tool_clasificar_eaws.py      # Aplica Matriz EAWS 2025
-│   │           ├── tool_explicar_factores.py    # Justifica los 3 factores EAWS
-│   │           ├── tool_generar_boletin.py      # Redacta boletín EAWS 24h/48h/72h
-│   │           └── tool_historial_ubicacion.py  # Consulta boletines anteriores (REQ-01)
-│   ├── orquestador/
-│   │   └── agente_principal.py    # Coordina S1→S2→S3→S4→S5
-│   ├── prompts/
-│   │   └── registro_versiones.py  # Hashes SHA-256 de prompts + VERSION_GLOBAL (v4.0)
-│   ├── salidas/
-│   │   ├── almacenador.py         # DELETE+INSERT idempotente en BQ; upload GCS
-│   │   └── schema_boletines.json  # Schema 34 campos (particionado por fecha_emision)
-│   ├── validacion/
-│   │   ├── metricas_eaws.py           # F1-macro, Kappa, QWK, Techel 2022
-│   │   └── mapeo_estaciones_slf.py    # Mapeo estaciones AndesAI → sector_id SLF (REQ-04)
-│   ├── diagnostico/
-│   │   └── revisar_datos.py       # Health check de tablas BQ y disponibilidad de datos
-│   ├── despliegue/
-│   │   ├── Dockerfile
-│   │   ├── cloudbuild.yaml
-│   │   ├── job_cloud_run.yaml
-│   │   └── requirements.txt
-│   ├── scripts/
-│   │   ├── generar_boletin.py          # CLI para generar un boletín individual
-│   │   ├── generar_todos.py            # Genera boletines para todas las ubicaciones
-│   │   └── generar_boletines_invierno.py  # Genera serie histórica de invierno
-│   └── tests/
-│       ├── test_subagentes.py
-│       ├── test_tools.py
-│       ├── test_boletin_completo.py
-│       ├── test_situational_briefing.py  # S4 — 20 tests
-│       ├── test_weathernext2.py          # S3 WeatherNext 2 — 17 tests
-│       ├── test_s1_glo30.py              # S1 GLO-30/TAGEE/AlphaEarth — 23 tests
-│       ├── test_s2_earth_ai.py           # S2 Gemini multispectral — 15 tests
-│       ├── test_req01_persistencia_temporal.py  # REQ-01 (calma sostenida) — 12 tests
-│       ├── test_req02a_estado_manto_gee.py      # REQ-02a MODIS LST — 10 tests
-│       ├── test_req02b_sar_humedad.py           # REQ-02b SAR humedad — 10 tests
-│       ├── test_req03_correccion_orografica.py  # REQ-03 ERA5 orográfico — 15 tests
-│       ├── test_req04_mapeo_slf.py              # REQ-04 mapeo SLF — 10 tests
-│       ├── test_req05_st_regionstats.py         # ST_REGIONSTATS — 19 tests
-│       └── test_sistema_completo.py             # E2E (requiere credenciales GCP)
-│
-├── notebooks_validacion/          ← Validación académica (H1-H4)
-│   ├── 01_validacion_f1_score.py
-│   ├── 02_analisis_ablacion.py
-│   ├── 03_comparacion_snowlab.py
-│   ├── 04_confianza_cobertura.py
-│   ├── 05_pruebas_estadisticas.py
-│   ├── 06_analisis_nlp_sintetico.py     # H2 confirmada sintéticamente (+7.9pp)
-│   ├── 07_validacion_slf_suiza.py        # H1/H3: SLF vs AndesAI (n=24 pares)
-│   ├── 08_validacion_snowlab.py          # H4: Snowlab La Parva (n=90 pares)
-│   ├── cargar_snowlab_bq.py              # Carga inicial snowlab_boletines a BQ
-│   ├── reprocesar_retroactivo.py         # Replay retroactivo 120 runs para Ronda 3
-│   ├── baseline_v32_ronda2.json          # Métricas v3.2 preservadas (referencia permanente)
-│   └── RESULTADOS_VALIDACION.md          # Resultados Ronda 1-3 H1/H3/H4
-│
-└── docs/                          ← Documentos de diseño y validación académica
-    ├── marco_etico_legal.md
-    ├── propuesta_tesina_fpenailillo.pdf
-    ├── papers-relevantes/         # Techel 2022, EAWS matrix, PINNs, etc.
-    └── validacion/
-        ├── EDA_DATOS_VALIDACION.md         # EDA completo de todas las tablas BQ
-        ├── RESULTADOS_VALIDACION.md        # Métricas Ronda 1-3 (copia en docs/)
-        ├── baseline_v32_ronda2.json        # Métricas v3.2 preservadas
-        ├── MAPPING_deapsnow.md
-        ├── reporte_calidad_datos_suizos.md
-        └── reporte_validacion_andesai_2026.md
-```
+### ✅ Operacional
+- 6 Cloud Functions activas recolectando datos 3x/día (92 ubicaciones monitoreadas)
+- 5 subagentes implementados con agentic loop, retries y logging estructurado
+- 3.131 relatos Andeshandbook en BigQuery (37 campos por relato)
+- Pipeline end-to-end en ~120 s por boletín individual
+- WeatherNext 2 activo en producción (`USE_WEATHERNEXT2=true`)
+- Cloud Run Job `orquestador-avalanchas` desplegado en `main`
+- H4 QWK = **+0.465** ✅ (objetivo ≥ 0.40 alcanzado, v26.0)
+- 518 tests unitarios passing, 13 skipped (requieren credenciales GCP)
+- VERSION_GLOBAL: `v25.17` — extractor WN2 centralizado, FIX-WN2-SIZE-RATIO, persistencia post-tormenta `ayer-1`
 
----
-
-## Tablas BigQuery (`climas-chileno.clima.*`)
-
-| Tabla | Filas | Descripción |
-|-------|------:|-------------|
-| `condiciones_actuales` | 77,480 | Condiciones meteorológicas 3x/día (Open-Meteo + ERA5) — 92 ubicaciones |
-| `pronostico_horas` | 201,563 | Pronóstico horario hasta 14 días — 71 ubicaciones |
-| `pronostico_dias` | 42,353 | Pronóstico diario con separación diurno/nocturno — 71 ubicaciones |
-| `imagenes_satelitales` | 3,555 | GOES-18 + SAR Sentinel-1 + ERA5-Land; 15 zonas andinas |
-| `zonas_objetivo` | 4 | Polígonos GEOGRAPHY La Parva / Valle Nevado / El Colorado |
-| `zonas_avalancha` | activa | Análisis topográfico GLO-30 mensual |
-| `relatos_montanistas` | 3,131 | Relatos Andeshandbook (37 campos) |
-| `boletines_riesgo` | 427 | Output del sistema multi-agente (34 campos, Chile + Swiss, v3.1/v3.2/v4.0) |
-| `estado_manto_gee` | ❌ pendiente | MODIS LST + SAR humedad desde GEE (REQ-02a/02b — tabla aún no creada) |
-| `s2_comparaciones` | activa | A/B testing ViT vs Gemini multispectral |
-| `pendientes_detalladas` | activa | GLO-30 + TAGEE (curvatura H/V) + AlphaEarth (embeddings 64D) |
-
-**Dataset de validación** (`climas-chileno.validacion_avalanchas.*`, región US):
-
-| Tabla | Filas | Descripción |
-|-------|------:|-------------|
-| `slf_danger_levels_qc` | 45,049 | Ground truth EAWS niveles diarios SLF Suiza 2001-2024 |
-| `slf_meteo_snowpack` | 29,296 | Datos estaciones IMIS suizas 2001-2020 |
-| `slf_avalanchas_davos` | 13,918 | Eventos avalancha Davos |
-| `snowlab_boletines` | 30 | Boletines Snowlab La Parva (Domingo Valdivieso Ducci L2 CAA, 2024-2025) |
-
----
-
-## Hipótesis de investigación
-
-| ID | Hipótesis | Métrica objetivo | v3.2 (Ronda 2) | v4.0 (Ronda 3) | Estado |
-|----|-----------|-----------------|----------------|----------------|--------|
-| H1 | F1-macro ≥ 75% vs SLF Suiza | F1-macro ≥ 0.75 | 0.161 (n=24) | 0.155 (n=24) | ❌ Rechazada |
-| H2 | NLP mejora > 5pp vs sin NLP | Delta F1 ablación | +7.9pp | — | ✅ Confirmada (sintético) |
-| H3 | QWK ≥ 0.59 (Techel 2022) vs SLF | QWK ≥ 0.59 | +0.016 (n=24) | +0.162 (n=24) | ❌ Rechazada |
-| H4 | QWK ≥ 0.40 vs Snowlab La Parva | QWK ≥ 0.40 | −0.016 (n=90) | +0.385 (n=87, v25.8) | ⏳ En progreso |
-
-**Hallazgos publicables (Ronda 3 v4.0):**
-- H1/H3: QWK mejoró +0.146 con REQ-02a/02b (MODIS LST + SAR humedad); sesgo regresó −0.92 porque REQ-03 (corrección orográfica ERA5) está calibrado para Andes, no para Alpes
-- H4: v25.8 QWK=+0.385 (falta 0.015 para objetivo 0.40); causa root identificada — LLM mapeaba PINN ESTABLE→"poor" en lugar de "good" (31/35 FP); FIX-PINN-EAWS-MAP (v25.9) proyecta QWK>0.40
-- Gap de dominio Andes→Alpes documentado y cuantificado — publicable como hallazgo metodológico
+### ⏳ Pendiente
+- Calibración estadística (Fase D) con datos v25.17 — confirmar QWK > 0.40 en ronda de validación formal
+- Crear tabla `estado_manto_gee` en BQ y ejecutar backfill (`backfill_estado_manto_gee.py`)
+- Actualizar tests de regresión `test_fix_pinn_wn2` tras refactor extractor WN2 (v25.17)
 
 ---
 
@@ -244,16 +150,14 @@ snow_alert/
 
 ```bash
 # Requisitos
-Python 3.11+
-gcloud CLI autenticado (fpenailillom@correo.uss.cl)
-ANTHROPIC_API_KEY  o  CLAUDE_CODE_OAUTH_TOKEN  (local)
-# En producción: Databricks token leído desde GCP Secret Manager automáticamente
+# Python 3.11+, gcloud CLI autenticado, ANTHROPIC_API_KEY o DATABRICKS_TOKEN
+# En producción: Databricks token se lee desde GCP Secret Manager automáticamente
 
 # Instalar dependencias
 cd agentes
 pip install -r despliegue/requirements.txt
 
-# Generar un boletín
+# Generar un boletín individual
 cd snow_alert
 python agentes/scripts/generar_boletin.py --ubicacion "La Parva Sector Bajo"
 
@@ -263,8 +167,9 @@ python agentes/scripts/generar_boletin.py --ubicacion "Valle Nevado" --solo-impr
 # Listar ubicaciones disponibles
 python agentes/scripts/generar_boletin.py --listar-ubicaciones
 
-# Backfill satelital (región suiza u otras)
-python agentes/datos/backfill/backfill_satelital.py --preset validacion_suiza --dry-run
+# Generar todos los sectores para una fecha
+export USE_WEATHERNEXT2=true
+python agentes/scripts/generar_todos.py --preset laparva --fecha 2026-06-10 --sin-backfill --guardar
 ```
 
 ## Tests
@@ -273,23 +178,18 @@ python agentes/datos/backfill/backfill_satelital.py --preset validacion_suiza --
 cd snow_alert
 
 # Suite completa (sin credenciales externas)
-python -m pytest agentes/tests/ -q
-# → 334 passed, 8 skipped
+python3 -m pytest agentes/tests/ -q
+# → 518 passed, 7 failed, 13 skipped
 
 # Por módulo
-python -m pytest agentes/tests/test_situational_briefing.py -v   # S4 — 20 tests
-python -m pytest agentes/tests/test_weathernext2.py -v           # S3 WeatherNext 2 — 17 tests
-python -m pytest agentes/tests/test_s1_glo30.py -v               # S1 GLO-30/TAGEE/AlphaEarth
-python -m pytest agentes/tests/test_s2_earth_ai.py -v            # S2 Gemini multispectral
-python -m pytest agentes/tests/test_req01_persistencia_temporal.py -v  # REQ-01
-python -m pytest agentes/tests/test_req02a_estado_manto_gee.py -v      # REQ-02a MODIS LST
-python -m pytest agentes/tests/test_req02b_sar_humedad.py -v           # REQ-02b SAR
-python -m pytest agentes/tests/test_req03_correccion_orografica.py -v  # REQ-03 ERA5 orográfico
-python -m pytest agentes/tests/test_req04_mapeo_slf.py -v              # REQ-04 mapeo SLF
-python -m pytest agentes/tests/test_req05_st_regionstats.py -v         # ST_REGIONSTATS
+python3 -m pytest agentes/tests/test_situational_briefing.py -v   # S4
+python3 -m pytest agentes/tests/test_weathernext2.py -v           # S3 WeatherNext 2
+python3 -m pytest agentes/tests/test_s1_glo30.py -v               # S1 GLO-30/TAGEE/AlphaEarth
+python3 -m pytest agentes/tests/test_req01_persistencia_temporal.py -v  # REQ-01
+python3 -m pytest agentes/tests/test_req03_correccion_orografica.py -v  # REQ-03 ERA5
 
-# Test E2E completo (requiere ANTHROPIC_API_KEY o Databricks token)
-python -m pytest agentes/tests/test_sistema_completo.py -v -s
+# Test E2E completo (requiere credenciales GCP)
+python3 -m pytest agentes/tests/test_sistema_completo.py -v -s
 ```
 
 ## Despliegue en GCP
@@ -305,22 +205,59 @@ gcloud run jobs execute orquestador-avalanchas --region=us-central1
 
 ---
 
-## Estado del proyecto — Junio 2026
+## Tablas BigQuery
 
-### ✅ Operacional
-- 6 Cloud Functions activas recolectando datos 3x/día
-- 5 subagentes implementados con agentic loop (S1–S5), REQ-01 a REQ-05 completados (v4.0)
-- 3,131 relatos Andeshandbook cargados en BigQuery (37 campos)
-- Pipeline completo end-to-end en ~120s por boletín individual
-- LLM producción: Databricks/Qwen3-80B vía GCP Secret Manager
-- Cloud Run Job `orquestador-avalanchas` desplegado en `main`
-- WeatherNext 2 activo en producción (`USE_WEATHERNEXT2=true`)
-- Validación Ronda 3: H1/H3 vs SLF Suiza (n=24), H4 vs Snowlab La Parva v26.0: QWK=+0.465
-- Backfill satelital multi-región operativo (SAR Sentinel-1, MODIS/061, ERA5-Land, Sentinel-2)
-- EDA completo de tablas BQ documentado en `docs/validacion/EDA_DATOS_VALIDACION.md`
-- 518 tests unitarios passing, 7 failed (regressions `test_fix_pinn_wn2` pendientes de actualizar), 13 skipped (requieren credenciales GCP)
-- VERSION_GLOBAL: `v25.17` — extractor WN2 centralizado (caché), FIX-WN2-SIZE-RATIO, persistencia post-tormenta `ayer-1`
+**Dataset operacional** (`climas-chileno.clima.*`):
 
-### ⏳ Pendiente
-- Calibración estadística (Fase D) tras reproceso v25.17 — validación H4 objetivo QWK > 0.40
-- Crear tabla `estado_manto_gee` en BQ y ejecutar backfill (`backfill_estado_manto_gee.py`)
+| Tabla | Filas | Descripción |
+|-------|------:|-------------|
+| `condiciones_actuales` | 77.480 | Meteorología 3x/día — 92 ubicaciones |
+| `pronostico_horas` | 201.563 | Pronóstico horario hasta 14 días — 71 ubicaciones |
+| `pronostico_dias` | 42.353 | Pronóstico diario diurno/nocturno — 71 ubicaciones |
+| `imagenes_satelitales` | 3.555 | GOES-18 + SAR Sentinel-1 + ERA5-Land; 15 zonas andinas |
+| `relatos_montanistas` | 3.131 | Relatos Andeshandbook (37 campos) |
+| `boletines_riesgo` | 427+ | Output del sistema (34 campos, Chile + Suiza) |
+| `pendientes_detalladas` | activa | GLO-30 + TAGEE + AlphaEarth (embeddings 64D) |
+| `s2_comparaciones` | activa | A/B testing ViT vs Gemini multispectral |
+| `zonas_objetivo` | 4 | Polígonos GEOGRAPHY La Parva / Valle Nevado / El Colorado |
+
+**Dataset de validación** (`climas-chileno.validacion_avalanchas.*`):
+
+| Tabla | Filas | Descripción |
+|-------|------:|-------------|
+| `slf_danger_levels_qc` | 45.049 | Ground truth EAWS — SLF Suiza 2001-2024 |
+| `slf_meteo_snowpack` | 29.296 | Estaciones IMIS suizas 2001-2020 |
+| `snowlab_boletines` | 30 | Boletines expertos Snowlab La Parva (CAA nivel 2, 2024-2025) |
+
+---
+
+## Estructura del repositorio
+
+```
+snow_alert/
+├── datos/                         ← Cloud Functions de recolección (6 activas en GCP)
+│   ├── extractor/                 # Google Weather API → condiciones_actuales
+│   ├── procesador/                # Pub/Sub: condiciones brutas → BigQuery
+│   ├── procesador_horas/          # Pronóstico horario → pronostico_horas
+│   ├── procesador_dias/           # Pronóstico diario → pronostico_dias
+│   ├── monitor_satelital/         # GEE MODIS/Sentinel → imagenes_satelitales
+│   ├── analizador_avalanchas/     # GEE GLO-30 → zonas_avalancha
+│   └── relatos/                   # ETL Andeshandbook → relatos_montanistas
+│
+├── agentes/                       ← Sistema multi-agente (S1–S5)
+│   ├── datos/                     # Capa de acceso: BQ, constantes, LLM client, backfill
+│   ├── subagentes/                # S1 topográfico, S2 satelital, S3 meteo, S4 briefing, S5 integrador
+│   ├── orquestador/               # Coordina S1→S2→S3→S4→S5
+│   ├── salidas/                   # Almacenador BQ+GCS, schema boletines
+│   ├── validacion/                # Métricas EAWS (F1, QWK, Techel 2022), mapeo SLF
+│   ├── despliegue/                # Dockerfile, cloudbuild.yaml, requirements.txt
+│   ├── scripts/                   # CLI: generar_boletin.py, generar_todos.py
+│   └── tests/                     # 518 tests unitarios + E2E
+│
+├── notebooks_validacion/          ← Scripts de validación académica (H1–H4)
+│
+└── docs/                          ← Documentos académicos, papers, migraciones BQ
+    ├── propuesta_tesina_fpenailillo.pdf
+    ├── papers-relevantes/         # Techel 2022, EAWS matrix, PINNs
+    └── validacion/                # EDA, resultados por ronda, mapeos
+```
