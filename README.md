@@ -182,17 +182,6 @@ snow_alert/
 │   ├── baseline_v32_ronda2.json          # Métricas v3.2 preservadas (referencia permanente)
 │   └── RESULTADOS_VALIDACION.md          # Resultados Ronda 1-3 H1/H3/H4
 │
-├── claude/                        ← Guías para sesiones de Claude Code
-│   ├── CLAUDE.md
-│   ├── log_claude.md              # Historial de sesiones y decisiones
-│   └── requirements/              ← Especificaciones técnicas (todas implementadas)
-│       ├── Mejoras04_v1.md        # REQ-01 a REQ-04 (v4.0)
-│       ├── 01-s4-situational-briefing.md
-│       ├── 02-s3-weathernext-aditivo.md
-│       ├── 03-s1-alphaearth-pinn.md
-│       ├── 04-s2-rsfm-paralelo.md
-│       └── 05-cross-cutting-bigquery-st.md
-│
 └── docs/                          ← Documentos de diseño y validación académica
     ├── marco_etico_legal.md
     ├── propuesta_tesina_fpenailillo.pdf
@@ -316,7 +305,7 @@ gcloud run jobs execute orquestador-avalanchas --region=us-central1
 
 ---
 
-## Estado del proyecto — Mayo 2026
+## Estado del proyecto — Junio 2026
 
 ### ✅ Operacional
 - 6 Cloud Functions activas recolectando datos 3x/día
@@ -324,15 +313,14 @@ gcloud run jobs execute orquestador-avalanchas --region=us-central1
 - 3,131 relatos Andeshandbook cargados en BigQuery (37 campos)
 - Pipeline completo end-to-end en ~120s por boletín individual
 - LLM producción: Databricks/Qwen3-80B vía GCP Secret Manager
-- Cloud Run Job `orquestador-avalanchas` desplegado
+- Cloud Run Job `orquestador-avalanchas` desplegado en `main`
 - WeatherNext 2 activo en producción (`USE_WEATHERNEXT2=true`)
-- 529 tests unitarios passing, 8 skipped (requieren credenciales GCP) — versión v25.10
-- Validación Ronda 3: H1/H3 vs SLF Suiza (n=24), H4 vs Snowlab La Parva v25.8: QWK=+0.385
+- Validación Ronda 3: H1/H3 vs SLF Suiza (n=24), H4 vs Snowlab La Parva v26.0: QWK=+0.465
 - Backfill satelital multi-región operativo (SAR Sentinel-1, MODIS/061, ERA5-Land, Sentinel-2)
 - EDA completo de tablas BQ documentado en `docs/validacion/EDA_DATOS_VALIDACION.md`
-- VERSION_GLOBAL: `v25.10` (serie de fixes PINN+WN2, rama `feat/v7.0-fixes`)
+- 518 tests unitarios passing, 7 failed (regressions `test_fix_pinn_wn2` pendientes de actualizar), 13 skipped (requieren credenciales GCP)
+- VERSION_GLOBAL: `v25.17` — extractor WN2 centralizado (caché), FIX-WN2-SIZE-RATIO, persistencia post-tormenta `ayer-1`
 
 ### ⏳ Pendiente
-- Reproceso retroactivo con v25.10 y validación H4 (objetivo: QWK > 0.40)
+- Calibración estadística (Fase D) tras reproceso v25.17 — validación H4 objetivo QWK > 0.40
 - Crear tabla `estado_manto_gee` en BQ y ejecutar backfill (`backfill_estado_manto_gee.py`)
-- Merge `feat/v7.0-fixes` → `main` tras confirmar QWK objetivo

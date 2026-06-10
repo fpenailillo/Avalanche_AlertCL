@@ -80,5 +80,12 @@ logs_validacion/
 # ─── Configuración Claude Code ────────────────────────────────────────────────
 .claude/
 
+# ─── Carpeta de trabajo interno Claude (solo uso local) ───────────────────────
+claude/
+
+# ─── Tarballs / artefactos comprimidos ───────────────────────────────────────
+*.tar.gz
+
 # ─── Documentos académicos (solo uso local) ───────────────────────────────────
 docs/*.pdf
+notebooks_validacion/*.pdf

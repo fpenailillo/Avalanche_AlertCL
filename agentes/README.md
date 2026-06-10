@@ -184,7 +184,7 @@ agentes/
 │   └── agente_principal.py            # Coordina S1→S2→S3→S4→S5; manejo de degradación graceful
 │
 ├── prompts/
-│   └── registro_versiones.py          # Hashes SHA-256 de prompts + VERSION_GLOBAL (actualmente v25.10)
+│   └── registro_versiones.py          # Hashes SHA-256 de prompts + VERSION_GLOBAL (actualmente v25.17)
 │
 ├── salidas/
 │   ├── almacenador.py                 # DELETE+INSERT idempotente en BQ; upload GCS
