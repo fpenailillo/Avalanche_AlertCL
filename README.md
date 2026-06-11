@@ -1,10 +1,9 @@
-# Snow Alert — Sistema de Predicción Automática de Avalanchas
+# Avalanche_AlertCL — Sistema Inteligente de Predicción de Riesgoo de Avalanchas en Chile
 
 Sistema multi-agente de inteligencia artificial que genera boletines EAWS de riesgo de avalanchas para zonas de montaña chilenas, combinando modelos físicos, imágenes satelitales, pronóstico meteorológico de ensemble y análisis contextual basado en LLMs.
 
 > **Tesis de Magíster en Tecnologías de la Información**  
 > Francisco Peñailillo — Universidad Técnica Federico Santa María  
-> Proyecto GCP: `climas-chileno` | BigQuery: `clima` | Región: `us-central1`
 
 ---
 
