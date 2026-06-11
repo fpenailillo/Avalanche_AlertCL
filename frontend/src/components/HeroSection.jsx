@@ -1,5 +1,6 @@
 import { MapPin, Wind, Thermometer, TriangleAlert } from 'lucide-react'
 import { ESTADO_ACTUAL, ESCALA_EAWS } from '../data/mockData'
+import EawsDangerIcon from './EawsDangerIcon'
 
 export default function HeroSection() {
   const nivel = ESCALA_EAWS[ESTADO_ACTUAL.nivelEAWS]
@@ -19,11 +20,17 @@ export default function HeroSection() {
         <span className="text-[11px] font-semibold uppercase tracking-widest text-white/50">
           Peligro de avalanchas · EAWS
         </span>
-        <div
-          className="mt-2 text-6xl font-bold tracking-tight sm:text-7xl"
-          style={{ color: nivel.color, textShadow: '0 2px 24px rgba(0,0,0,0.35)' }}
-        >
-          Nivel {ESTADO_ACTUAL.nivelEAWS}
+        <div className="mt-2 flex items-center gap-4">
+          <EawsDangerIcon
+            nivel={ESTADO_ACTUAL.nivelEAWS}
+            className="h-20 w-20 drop-shadow-lg sm:h-24 sm:w-24"
+          />
+          <div
+            className="text-6xl font-bold tracking-tight sm:text-7xl"
+            style={{ color: nivel.color, textShadow: '0 2px 24px rgba(0,0,0,0.35)' }}
+          >
+            Nivel {ESTADO_ACTUAL.nivelEAWS}
+          </div>
         </div>
         <span
           className="mt-3 inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-bold"

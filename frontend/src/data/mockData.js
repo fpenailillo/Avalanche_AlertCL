@@ -22,6 +22,24 @@ export const ESTADO_ACTUAL = {
   validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
 }
 
+// Problemas de avalancha activos (tipología estándar EAWS)
+export const PROBLEMAS_AVALANCHA = [
+  {
+    id: 'wind-slab',
+    nombre: 'Placas de viento',
+    cotas: 'Sobre 3.000 m',
+    orientaciones: 'S – SE (sotavento)',
+    detalle: 'Acumulaciones recientes por viento NO; reactivas al paso de un esquiador.',
+  },
+  {
+    id: 'new-snow',
+    nombre: 'Nieve nueva',
+    cotas: 'Sobre 2.500 m',
+    orientaciones: 'Todas las orientaciones',
+    detalle: 'Nevadas previstas para las próximas 48 h sin consolidar.',
+  },
+]
+
 // Evolución del riesgo y clima — próximas 72 horas (cada 6 h)
 export const TIMELINE_72H = [
   { hora: 'Ahora', icono: 'sun', temp: -4, nivel: 2 },
