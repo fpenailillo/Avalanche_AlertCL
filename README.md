@@ -2,7 +2,7 @@
 
 Sistema multi-agente de inteligencia artificial que genera boletines de riesgo de avalanchas para zonas de montaña chilenas. El proyecto combina modelos físicos, imágenes satelitales, pronósticos meteorológicos y análisis contextual basado en Inteligencia Artificial (LLMs) para suplir la falta de redes de observación en terreno.
 
-> **Tesis de Magíster en Tecnologías de la Información** > **Autor:** Francisco Peñailillo | **Profesor Guía:** Mauricio Solar  
+> **Tesis de Magíster en Tecnologías de la Información** > **Autor:** Francisco Peñailillo |  
 > Universidad Técnica Federico Santa María (UTFSM) — 2026  
 
 ---
