@@ -27,3 +27,4 @@ desplegar.sh
 tmp/
 logs_validacion/
 .claude/
+frontend/
