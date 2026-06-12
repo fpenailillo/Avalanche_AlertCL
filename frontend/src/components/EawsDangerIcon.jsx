@@ -19,7 +19,7 @@ export default function EawsDangerIcon({ nivel, className = 'h-16 w-16' }) {
     <img
       src={ICONOS_NIVEL[nivel] ?? ICONOS_NIVEL[0]}
       alt={`Ícono EAWS nivel de peligro ${nivel}`}
-      className={className}
+      className={`${className} rounded-[24%] bg-white p-1.5 ring-1 ring-white/40 shadow-xl shadow-black/30`}
       draggable={false}
     />
   )
