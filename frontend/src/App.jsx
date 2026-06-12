@@ -89,10 +89,16 @@ function EstadoBoletin({ boletin, fechaSeleccionada }) {
   }
 
   if (fechaSeleccionada) {
+    const etiqueta = new Date(`${fechaSeleccionada}T12:00:00`).toLocaleDateString('es-CL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
     return (
       <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-[11px] text-sky-200/80 backdrop-blur-sm">
         <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
-        Boletín histórico del {fechaSeleccionada}
+        Estás viendo el boletín histórico del {etiqueta}
       </p>
     )
   }
@@ -113,7 +119,7 @@ function App() {
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null)
   const fechasDisponibles = useIndiceFechas()
   const boletin = useBoletinActivo(fechaSeleccionada)
-  const seriesWN2 = useSeriesWN2()
+  const { series: seriesWN2, esDeFecha: seriesDeFecha } = useSeriesWN2(fechaSeleccionada)
 
   // Fusiona el mock con el boletín y las series en línea, campo por campo
   const centros = useMemo(
@@ -137,7 +143,7 @@ function App() {
           onSeleccionarFecha={setFechaSeleccionada}
         />
 
-        <TimelineCarousel timeline={centro.timeline} />
+        <TimelineCarousel timeline={centro.timeline} esHistorico={!!fechaSeleccionada} />
 
         {/* Grid bento asimétrico */}
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -149,6 +155,7 @@ function App() {
           />
           <ForecastCard
             pronostico={centro.pronostico15}
+            avisoVigente={!!fechaSeleccionada && !seriesDeFecha}
             className="md:row-span-2 lg:order-2"
           />
           <SatelliteCard datos={centro.satelital} className="lg:order-3" />

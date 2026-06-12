@@ -3,9 +3,16 @@ import GlassCard from './GlassCard'
 import WeatherIcon from './WeatherIcon'
 import { ESCALA_EAWS } from '../data/mockData'
 
-export default function TimelineCarousel({ timeline }) {
+export default function TimelineCarousel({ timeline, esHistorico = false }) {
   return (
-    <GlassCard icon={Clock} title="Evolución del riesgo · próximas 72 h">
+    <GlassCard
+      icon={Clock}
+      title={
+        esHistorico
+          ? 'Evolución del riesgo · 24/48/72 h desde el boletín'
+          : 'Evolución del riesgo · próximas 72 h'
+      }
+    >
       <div className="scroll-slim -mx-1 flex snap-x snap-mandatory gap-1 overflow-x-auto pb-1">
         {timeline.map((punto, i) => {
           const nivel = ESCALA_EAWS[punto.nivel]

@@ -15,7 +15,7 @@ function BarraTemp({ min, max, minGlobal, rango }) {
   )
 }
 
-export default function ForecastCard({ pronostico, className = '' }) {
+export default function ForecastCard({ pronostico, avisoVigente = false, className = '' }) {
   const minGlobal = Math.min(...pronostico.map((d) => d.min))
   const maxGlobal = Math.max(...pronostico.map((d) => d.max))
   const rango = maxGlobal - minGlobal
@@ -27,6 +27,12 @@ export default function ForecastCard({ pronostico, className = '' }) {
       title={`Pronóstico ${pronostico.length} días · WeatherNext 2`}
       className={className}
     >
+      {avisoVigente && (
+        <p className="mb-2 rounded-xl border border-sky-300/25 bg-sky-400/10 px-3 py-1.5 text-[10px] leading-snug text-sky-200/80">
+          Pronóstico vigente desde hoy — sin archivo WN2 para la fecha
+          histórica seleccionada.
+        </p>
+      )}
       {/* En md+ el scroll se posiciona absoluto para no estirar las filas del grid */}
       <div className="relative min-h-0 flex-1">
         <div className="scroll-slim max-h-[30rem] divide-y divide-white/10 overflow-y-auto pr-1 md:absolute md:inset-0 md:max-h-none">

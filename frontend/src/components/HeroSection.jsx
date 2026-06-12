@@ -11,8 +11,13 @@ const etiquetaFecha = (fecha) =>
   })
 
 function SelectorFecha({ fechas, fechaSeleccionada, onSeleccionarFecha }) {
+  const estiloActivo = fechaSeleccionada
+    ? 'border-sky-300/40 bg-sky-400/15 text-sky-100'
+    : 'border-white/15 bg-white/10 text-white/80'
   return (
-    <label className="relative mt-1.5 flex cursor-pointer items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur-sm transition-colors hover:bg-white/15">
+    <label
+      className={`relative mt-1.5 flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs backdrop-blur-sm transition-colors hover:bg-white/15 ${estiloActivo}`}
+    >
       <CalendarDays className="h-3.5 w-3.5 shrink-0" />
       <select
         value={fechaSeleccionada ?? ''}

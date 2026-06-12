@@ -459,15 +459,20 @@ class IngestorWN2:
                 "fuente": "ingestor-wn2",
                 "series": series,
             }
-            blob = self.gcs.bucket(BUCKET_SERIES_FRONTEND).blob(OBJETO_SERIES_FRONTEND)
-            blob.cache_control = "public, max-age=300"
-            blob.upload_from_string(
-                json.dumps(contenido, ensure_ascii=False, default=str, indent=2),
-                content_type="application/json",
-                timeout=60,
-            )
+            cuerpo = json.dumps(contenido, ensure_ascii=False, default=str, indent=2)
+            bucket = self.gcs.bucket(BUCKET_SERIES_FRONTEND)
+            # Última versión + copia datada (permite ver el pronóstico que
+            # estaba vigente al consultar boletines históricos en el frontend)
+            rutas = [
+                OBJETO_SERIES_FRONTEND,
+                f"series_wn2/series_{ingestion_ts[:10]}.json",
+            ]
+            for ruta in rutas:
+                blob = bucket.blob(ruta)
+                blob.cache_control = "public, max-age=300"
+                blob.upload_from_string(cuerpo, content_type="application/json", timeout=60)
             logger.info(
-                f"Series WN2 frontend: gs://{BUCKET_SERIES_FRONTEND}/{OBJETO_SERIES_FRONTEND} "
+                f"Series WN2 frontend: gs://{BUCKET_SERIES_FRONTEND}/{{{', '.join(rutas)}}} "
                 f"({len(series)} zonas)"
             )
         except Exception as exc:

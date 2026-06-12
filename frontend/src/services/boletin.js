@@ -138,8 +138,9 @@ export function useIndiceFechas() {
   return fechas
 }
 
-export async function obtenerSeriesWN2() {
-  const respuesta = await fetch(URL_SERIES_WN2, {
+export async function obtenerSeriesWN2(fecha = null) {
+  const url = fecha ? `${URL_BASE}series_wn2/series_${fecha}.json` : URL_SERIES_WN2
+  const respuesta = await fetch(url, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: 'no-store',
   })
@@ -159,25 +160,41 @@ export async function obtenerSeriesWN2() {
   )
 }
 
-// Series del ensemble WN2; ante error devuelve Map vacío (la tarjeta queda demo)
-export function useSeriesWN2() {
-  const [series, setSeries] = useState(new Map())
+const SERIES_VACIAS = { series: new Map(), esDeFecha: true }
+
+// Series del ensemble WN2. Con fecha histórica intenta el archivo datado
+// (series_wn2/series_<fecha>.json) y si no existe cae al pronóstico vigente
+// con esDeFecha=false (la tarjeta lo advierte). Ante error total → demo.
+export function useSeriesWN2(fecha = null) {
+  const [resultado, setResultado] = useState({ paraFecha: undefined, ...SERIES_VACIAS })
 
   useEffect(() => {
     let montado = true
-    obtenerSeriesWN2()
-      .then((datos) => {
-        if (montado) setSeries(datos)
+    obtenerSeriesWN2(fecha)
+      .then((series) => {
+        if (montado) setResultado({ paraFecha: fecha, series, esDeFecha: true })
       })
       .catch((error) => {
-        console.warn('Series WN2 no disponibles, pronóstico demo:', error.message)
+        console.warn('Series WN2 no disponibles para la fecha:', error.message)
+        if (!montado) return
+        if (!fecha) {
+          setResultado({ paraFecha: fecha, ...SERIES_VACIAS })
+          return
+        }
+        obtenerSeriesWN2()
+          .then((series) => {
+            if (montado) setResultado({ paraFecha: fecha, series, esDeFecha: false })
+          })
+          .catch(() => {
+            if (montado) setResultado({ paraFecha: fecha, ...SERIES_VACIAS })
+          })
       })
     return () => {
       montado = false
     }
-  }, [])
+  }, [fecha])
 
-  return series
+  return resultado.paraFecha === fecha ? resultado : SERIES_VACIAS
 }
 
 const BOLETIN_CARGANDO = {
