@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react'
 
 const URL_BOLETIN =
   import.meta.env.VITE_BOLETIN_URL ??
-  'https://storage.googleapis.com/mi-bucket-avalanchas/boletin_activo.json'
+  'https://storage.googleapis.com/avalanche-alertcl-boletines/boletin_activo.json'
 
 const TIMEOUT_MS = 8000
 
