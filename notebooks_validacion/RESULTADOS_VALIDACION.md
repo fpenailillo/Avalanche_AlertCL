@@ -1,8 +1,16 @@
 # Resultados de Validación — AndesAI Sistema Multi-Agente
 
-**Proyecto:** Tesis Doctoral MTI UTFSM — Francisco Peñailillo M.
+**Proyecto:** Tesis de Magíster en Tecnologías de la Información (MTI) UTFSM — Francisco Peñailillo M.
 **Sistema:** AndesAI, predicción de riesgo de avalanchas EAWS (5 subagentes)
 **Última actualización:** 2026-05-03 (Ronda 5 — v6.2)
+
+> ⚠️ **Documento histórico — congelado en la Ronda 5 (v6.2, 2026-05-03).**
+> Las rondas 6–18 (v7.0 → v25.0) están documentadas en
+> `docs/validacion/rondaN_*.md`; el índice completo está en
+> `docs/validacion/RESULTADOS_VALIDACION.md`. El estado más reciente es la
+> **Ronda 18 (v25.0, 2026-05-23)**: `docs/validacion/ronda18_v25_resultados.md`.
+> Las versiones de validación (v3.0 → v25.0) son una única línea evolutiva y
+> corresponden al `VERSION_GLOBAL` de `agentes/prompts/registro_versiones.py`.
 
 ---
 

@@ -1,8 +1,36 @@
 # Resultados de Validación — AndesAI Sistema Multi-Agente
 
-**Proyecto:** Tesis Doctoral MTI UTFSM — Francisco Peñailillo M.
+**Proyecto:** Tesis de Magíster en Tecnologías de la Información (MTI) UTFSM — Francisco Peñailillo M.
 **Sistema:** AndesAI, predicción de riesgo de avalanchas EAWS (5 subagentes)
 **Última actualización:** 2026-05-02
+
+> ⚠️ **Documento histórico — congelado en la Ronda 3 (v4.0, 2026-05-02).**
+> Las rondas posteriores están documentadas en los reportes individuales de este
+> mismo directorio (ver índice abajo). El estado más reciente es la
+> **Ronda 18 (v25.0, 2026-05-23)** en `ronda18_v25_resultados.md`.
+> Nota de versionado: las versiones de validación (v3.0 → v25.0) son una única
+> línea evolutiva; corresponden al `VERSION_GLOBAL` de
+> `agentes/prompts/registro_versiones.py` (v25.17 al momento de esta nota).
+
+## Índice de rondas de validación
+
+| Ronda | Versión | Fecha | Reporte |
+|-------|---------|-------|---------|
+| 1–3 | v3.0 → v4.0 | 2026-04 → 2026-05-02 | este documento |
+| 4–5 | v5.0 → v6.2 | 2026-05-03 | `ronda5_v62_resultados.md`, `notebooks_validacion/RESULTADOS_VALIDACION.md` |
+| 6 | v7.0 | 2026-05-08 | `ronda6_v70_resultados.md` |
+| 7 | v7.5 | 2026-05-08 | `ronda7_v75_resultados.md` |
+| 8 | v8.0 | 2026-05-11 | `ronda8_v80_resultados.md` |
+| 9 | v9.0 | 2026-05-11 | `ronda9_v90_resultados.md` |
+| 10 | v15.0 | 2026-05-16 | `ronda10_v15_resultados.md` |
+| 11 | v16.0 | 2026-05-17 | `ronda11_v16_resultados.md` |
+| 12 | v17.0 | 2026-05-17 | `ronda12_v17_resultados.md` |
+| 13 | v17.0 (H1/H3 DEAPSnow) | 2026-05-18 | `ronda13_v17_suiza_resultados.md` |
+| 14 | v18.0 (H1/H3 Suiza) | 2026-05-18/19 | `ronda14_v18_suiza_resultados.md` |
+| 15 | v19.0 (H1/H3 Suiza) | 2026-05-18/19 | `ronda15_v19_suiza_resultados.md` |
+| 16 | v19.0 (H4 Snowlab) | 2026-05-19 | `ronda16_v19_snowlab_resultados.md` |
+| 17 | v22.0 | 2026-05-22 | `ronda17_v22_resultados.md` |
+| 18 | v25.0 | 2026-05-23 | `ronda18_v25_resultados.md` |
 
 ---
 
