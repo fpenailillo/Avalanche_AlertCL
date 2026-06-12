@@ -2,12 +2,18 @@ import { Map, Mountain } from 'lucide-react'
 import GlassCard from './GlassCard'
 import { ESCALA_EAWS, CENTROS_LISTA } from '../data/mockData'
 
-// Posiciones relativas en el lienzo SVG según geografía real:
-// La Parva al NO, El Colorado al SO, Valle Nevado al E.
+// Posiciones relativas en el lienzo SVG según geografía real (norte arriba):
+// Aconcagua al N (Ski Arpa, Portillo), Farellones al centro (LP/EC/VN),
+// Cajón del Maipo al SE (Lagunillas) y O'Higgins al S (Chapa Verde).
+// labelDy permite subir la etiqueta en los marcadores cercanos al borde inferior.
 const POSICIONES = {
-  'la-parva': { x: 110, y: 115 },
-  'el-colorado': { x: 175, y: 155 },
-  'valle-nevado': { x: 300, y: 95 },
+  'ski-arpa': { x: 110, y: 38 },
+  'portillo': { x: 255, y: 32 },
+  'la-parva': { x: 130, y: 92 },
+  'valle-nevado': { x: 225, y: 102 },
+  'el-colorado': { x: 145, y: 135 },
+  'lagunillas': { x: 280, y: 152 },
+  'chapa-verde': { x: 135, y: 172, labelDy: -18 },
 }
 
 export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
@@ -35,14 +41,14 @@ export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
                 className="cursor-pointer"
               >
                 {activo && (
-                  <circle cx={pos.x} cy={pos.y} r="19" fill="none" stroke="white" strokeWidth="2" opacity="0.9" />
+                  <circle cx={pos.x} cy={pos.y} r="16" fill="none" stroke="white" strokeWidth="2" opacity="0.9" />
                 )}
-                <circle cx={pos.x} cy={pos.y} r="13" fill={nivel.color} opacity="0.95" />
+                <circle cx={pos.x} cy={pos.y} r="11" fill={nivel.color} opacity="0.95" />
                 <text
                   x={pos.x}
-                  y={pos.y + 4.5}
+                  y={pos.y + 4}
                   textAnchor="middle"
-                  fontSize="13"
+                  fontSize="11"
                   fontWeight="bold"
                   fill={nivel.texto}
                 >
@@ -50,9 +56,9 @@ export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
                 </text>
                 <text
                   x={pos.x}
-                  y={pos.y + 33}
+                  y={pos.y + (pos.labelDy ?? 28)}
                   textAnchor="middle"
-                  fontSize="11"
+                  fontSize="10"
                   fontWeight={activo ? 'bold' : 'normal'}
                   fill="white"
                   opacity={activo ? 1 : 0.75}
@@ -67,7 +73,7 @@ export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
         <div className="pointer-events-none absolute inset-x-0 top-2 flex flex-col items-center gap-0.5 text-white">
           <span className="flex items-center gap-1 text-xs font-semibold drop-shadow">
             <Mountain className="h-3.5 w-3.5" />
-            Andes Centrales
+            Andes de Chile Central
           </span>
           <span className="rounded-full bg-black/30 px-2 py-0.5 text-[9px] text-white/80 backdrop-blur-sm">
             Toca un centro para ver su boletín

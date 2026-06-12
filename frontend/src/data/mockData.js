@@ -239,6 +239,236 @@ export const CENTROS = {
       totalReportes48h: 9,
     },
   },
+  'portillo': {
+    id: 'portillo',
+    nombre: 'Portillo',
+    zona: 'Valle del Aconcagua',
+    elevacion: '2.580 – 3.310 m',
+    exposicion: 'NE',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 3,
+      descripcionIA:
+        'Viento intenso en el paso fronterizo forma placas duras en canaletas sobre la Laguna del Inca. Riesgo considerable en terreno empinado fuera de pista; deslizamientos basales en losas lisas de Roca Jack.',
+      vientoKmh: 70,
+      temperatura: -6,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wind-slab',
+        nombre: 'Placas de viento',
+        cotas: 'Sobre 2.900 m',
+        orientaciones: 'E – SE (sotavento)',
+        detalle: 'Placas duras por viento O persistente del paso Los Libertadores.',
+      },
+      {
+        id: 'gliding-snow',
+        nombre: 'Nieve deslizante',
+        cotas: '2.600 – 3.000 m',
+        orientaciones: 'NE (losas rocosas)',
+        detalle: 'Grietas de reptación visibles sobre losas lisas; evitar permanecer debajo.',
+      },
+    ],
+    timeline: ajustarTimeline(-1, [3, 3, 3, 3, 4, 4, 3, 3, 3, 3, 2, 2]),
+    pronostico15: ajustarPronostico(-1, 1.1),
+    satelital: {
+      ndsi: 0.81,
+      coberturaPct: 88,
+      fechaPasada: '09 jun 2026 · 14:32 UTC',
+      tile: 'T19HCD',
+      tendencia: 'En aumento',
+    },
+    topografico: {
+      estadoManto: 'Tensionado',
+      estable: false,
+      profundidadCm: 155,
+      capaDebil: 'Detectada (~45 cm)',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.86,
+    },
+    comunidad: {
+      resumenNLP:
+        'Guías reportan placas que suenan huecas en el Superior C y grietas de reptación sobre la laguna. Tránsito por el paso con viento blanco intermitente.',
+      reportes: [
+        { autor: 'G. Olivares (guía)', hace: 'hace 2 h', texto: 'Placa hueca de 30 cm en la entrada del Superior C.' },
+        { autor: 'Ski Patrol Portillo', hace: 'hace 8 h', texto: 'Control con explosivos en Roca Jack y Cara Cara.' },
+        { autor: 'T. Saavedra', hace: 'hace 1 d', texto: 'Grietas de gliding bajo el Plateau.' },
+      ],
+      totalReportes48h: 17,
+    },
+  },
+
+  'ski-arpa': {
+    id: 'ski-arpa',
+    nombre: 'Ski Arpa',
+    zona: 'Valle del Aconcagua',
+    elevacion: '2.600 – 3.700 m',
+    exposicion: 'S',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 3,
+      descripcionIA:
+        'Terreno de alta montaña sin control: facetas enterradas persisten en umbrías sobre los 3.200 m. La nevada del jueves aumentará la carga sobre capas débiles; viajar con espaciamiento amplio.',
+      vientoKmh: 55,
+      temperatura: -8,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'persistent-weak-layer',
+        nombre: 'Capa débil persistente',
+        cotas: 'Sobre 3.200 m',
+        orientaciones: 'S – SE (umbría)',
+        detalle: 'Facetas de principios de temporada aún reactivas en tests de columna.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 2.800 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Acumulaciones importantes previstas; inestabilidad inicial alta.',
+      },
+    ],
+    timeline: ajustarTimeline(-2, [3, 3, 3, 3, 3, 4, 4, 3, 3, 3, 3, 3]),
+    pronostico15: ajustarPronostico(-2, 1.2),
+    satelital: {
+      ndsi: 0.84,
+      coberturaPct: 92,
+      fechaPasada: '09 jun 2026 · 14:32 UTC',
+      tile: 'T19HCD',
+      tendencia: 'En aumento',
+    },
+    topografico: {
+      estadoManto: 'Frágil',
+      estable: false,
+      profundidadCm: 175,
+      capaDebil: 'Detectada (~70 cm)',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.82,
+    },
+    comunidad: {
+      resumenNLP:
+        'Operación de cat-ski reporta resultados reactivos en tests de estabilidad en El Arpa alto y prefiere laderas de baja inclinación mientras persistan las facetas.',
+      reportes: [
+        { autor: 'Arpa Cats', hace: 'hace 6 h', texto: 'ECTP12 sobre facetas a 70 cm en cara sur, 3.350 m.' },
+        { autor: 'F. Madrid (guía)', hace: 'hace 1 d', texto: 'Buen esquí en lomas suaves; evitamos lo cargado.' },
+        { autor: 'C. Búsquets', hace: 'hace 2 d', texto: 'Viento moderado en el filo, nieve transportada.' },
+      ],
+      totalReportes48h: 7,
+    },
+  },
+
+  'lagunillas': {
+    id: 'lagunillas',
+    nombre: 'Lagunillas',
+    zona: 'Cajón del Maipo',
+    elevacion: '2.250 – 2.700 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 1,
+      descripcionIA:
+        'Manto delgado pero consolidado en cotas medias. Riesgo débil generalizado; humedecimiento superficial hacia el mediodía en solanas. La nevada del jueves mejorará la cobertura.',
+      vientoKmh: 25,
+      temperatura: -1,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 2.500 m',
+        orientaciones: 'N – NO (solanas)',
+        detalle: 'Sluffs superficiales puntuales con el calentamiento diurno.',
+      },
+    ],
+    timeline: ajustarTimeline(3, [1, 1, 1, 2, 2, 2, 2, 2, 1, 1, 1, 1]),
+    pronostico15: ajustarPronostico(3, 0.6),
+    satelital: {
+      ndsi: 0.62,
+      coberturaPct: 68,
+      fechaPasada: '09 jun 2026 · 14:32 UTC',
+      tile: 'T19HCC',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Estable',
+      estable: true,
+      profundidadCm: 74,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.93,
+    },
+    comunidad: {
+      resumenNLP:
+        'Pocos reportes esta semana: cobertura justa en pistas bajas, nieve de primavera temprana en solanas y buena base en los sectores altos del centro.',
+      reportes: [
+        { autor: 'Club Andino', hace: 'hace 7 h', texto: 'Pistas superiores con base firme y pasto asomando abajo.' },
+        { autor: 'V. Carrasco', hace: 'hace 2 d', texto: 'Nieve blanda al mediodía en la ladera norte.' },
+      ],
+      totalReportes48h: 4,
+    },
+  },
+
+  'chapa-verde': {
+    id: 'chapa-verde',
+    nombre: 'Chapa Verde',
+    zona: 'Andes de O’Higgins',
+    elevacion: '2.700 – 3.100 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Condiciones mayormente favorables dentro del centro. Acumulaciones de nieve nueva desde el jueves exigirán precaución en hombros venteados sobre los 2.900 m.',
+      vientoKmh: 35,
+      temperatura: -2,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 2.800 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Acumulaciones moderadas previstas; evaluar tras cada nevada.',
+      },
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 2.900 m',
+        orientaciones: 'O – NO (solanas)',
+        detalle: 'Humedecimiento vespertino con cielos despejados.',
+      },
+    ],
+    timeline: ajustarTimeline(2, [2, 2, 2, 2, 3, 3, 3, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(2, 0.75),
+    satelital: {
+      ndsi: 0.71,
+      coberturaPct: 76,
+      fechaPasada: '09 jun 2026 · 14:32 UTC',
+      tile: 'T19HBB',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Estable',
+      estable: true,
+      profundidadCm: 96,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.9,
+    },
+    comunidad: {
+      resumenNLP:
+        'Reportes de esquiadores locales describen nieve compacta en pistas y acumulación venteada leve cerca del filo superior. Sin incidentes registrados.',
+      reportes: [
+        { autor: 'Ski Patrol Chapa Verde', hace: 'hace 6 h', texto: 'Pistas en buen estado; filo superior con sastrugi.' },
+        { autor: 'L. Moreno', hace: 'hace 1 d', texto: 'Buena nieve a primera hora, pesada en la tarde.' },
+      ],
+      totalReportes48h: 5,
+    },
+  },
 }
 
 export const CENTROS_LISTA = Object.values(CENTROS)
