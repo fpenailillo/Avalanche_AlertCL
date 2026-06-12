@@ -412,4 +412,14 @@ export const CENTROS = {
   },
 }
 
-export const CENTROS_LISTA = Object.values(CENTROS)
+// Orden geográfico norte → sur: Aconcagua, Farellones, Cajón del Maipo, O'Higgins
+const ORDEN_GEOGRAFICO = [
+  'ski-arpa',
+  'portillo',
+  'la-parva',
+  'valle-nevado',
+  'lagunillas',
+  'chapa-verde',
+]
+
+export const CENTROS_LISTA = ORDEN_GEOGRAFICO.map((id) => CENTROS[id])
