@@ -9,7 +9,7 @@ import SnowpackCard from './components/SnowpackCard'
 import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
 import { CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
-import { useBoletinActivo } from './services/boletin'
+import { useBoletinActivo, useSeriesWN2 } from './services/boletin'
 import { fusionarCentros } from './services/fusion'
 
 function BanderaChile({ className = 'h-3.5 w-5' }) {
@@ -102,11 +102,12 @@ function EstadoBoletin({ boletin }) {
 function App() {
   const [centroId, setCentroId] = useState('la-parva')
   const boletin = useBoletinActivo()
+  const seriesWN2 = useSeriesWN2()
 
-  // Fusiona el mock con el boletín en línea, campo por campo (si está disponible)
+  // Fusiona el mock con el boletín y las series en línea, campo por campo
   const centros = useMemo(
-    () => fusionarCentros(CENTROS_LISTA, boletin.boletines),
-    [boletin.boletines]
+    () => fusionarCentros(CENTROS_LISTA, boletin.boletines, seriesWN2),
+    [boletin.boletines, seriesWN2]
   )
 
   const centro = centros.find((c) => c.id === centroId) ?? centros[0]

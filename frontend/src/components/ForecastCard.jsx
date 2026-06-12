@@ -19,11 +19,12 @@ export default function ForecastCard({ pronostico, className = '' }) {
   const minGlobal = Math.min(...pronostico.map((d) => d.min))
   const maxGlobal = Math.max(...pronostico.map((d) => d.max))
   const rango = maxGlobal - minGlobal
+  const esReal = pronostico.some((d) => d.real)
 
   return (
     <GlassCard
       icon={CalendarDays}
-      title="Pronóstico 15 días · WeatherNext 2"
+      title={`Pronóstico ${pronostico.length} días · WeatherNext 2`}
       className={className}
     >
       {/* En md+ el scroll se posiciona absoluto para no estirar las filas del grid */}
@@ -57,17 +58,25 @@ export default function ForecastCard({ pronostico, className = '' }) {
                   <Snowflake className="h-3 w-3" />
                   {dia.nieveCm} cm
                 </span>
-                <span className="flex items-center gap-1 text-[10px] text-white/50">
-                  <MoveVertical className="h-3 w-3" />
-                  {dia.isotermaM.toLocaleString('es-CL')} m
-                </span>
+                {dia.isotermaM != null ? (
+                  <span className="flex items-center gap-1 text-[10px] text-white/50">
+                    <MoveVertical className="h-3 w-3" />
+                    {dia.isotermaM.toLocaleString('es-CL')} m
+                  </span>
+                ) : dia.nieveP95 != null ? (
+                  <span className="text-[10px] text-white/50">
+                    p95: {dia.nieveP95} cm
+                  </span>
+                ) : null}
               </div>
             </div>
           ))}
         </div>
       </div>
       <p className="pt-3 text-[10px] text-white/40">
-        Nieve acumulada e isoterma 0° por día · modelo WeatherNext 2
+        {esReal
+          ? 'Ensemble WeatherNext 2: T° mín/máx p05–p95, nieve mediana y p95 · datos reales'
+          : 'Nieve acumulada e isoterma 0° por día · demo'}
       </p>
     </GlassCard>
   )

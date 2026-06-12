@@ -121,25 +121,68 @@ function fusionarProblemas(problemasMock, detalle) {
   ]
 }
 
-export function fusionarCentros(centrosMock, boletines) {
-  if (!boletines || boletines.size === 0) return centrosMock
+const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+const iconoDia = (dia) => {
+  const nieve = dia.nieve_cm ?? 0
+  if (nieve >= 10) return 'snowflake'
+  if (nieve >= 1) return 'cloud-snow'
+  if (dia.problema === 'wet_snow') return 'cloud'
+  return 'sun'
+}
+
+function fusionarPronostico15(dias) {
+  return dias
+    .filter((dia) => dia.tmin != null && dia.tmax != null)
+    .map((dia, i) => {
+      // T12:00 evita el corrimiento de día por zona horaria al parsear la fecha
+      const fecha = new Date(`${dia.fecha}T12:00:00`)
+      return {
+        dia: i === 0 ? 'Hoy' : DIAS_SEMANA[fecha.getDay()],
+        fecha: `${fecha.getDate()} ${MESES[fecha.getMonth()]}`,
+        icono: iconoDia(dia),
+        min: dia.tmin,
+        max: dia.tmax,
+        nieveCm: Math.round(dia.nieve_cm ?? 0),
+        nieveP95: dia.nieve_cm_p95 ?? null,
+        isotermaM: null,
+        confianza: dia.confianza ?? null,
+        real: true,
+      }
+    })
+}
+
+export function fusionarCentros(centrosMock, boletines, seriesWN2) {
+  const hayBoletin = boletines && boletines.size > 0
+  const haySeries = seriesWN2 && seriesWN2.size > 0
+  if (!hayBoletin && !haySeries) return centrosMock
 
   return centrosMock.map((centro) => {
-    const detalle = boletines.get(centro.id)
-    if (!detalle) return centro
+    const detalle = hayBoletin ? boletines.get(centro.id) : null
+    const dias = haySeries ? seriesWN2.get(centro.id) : null
+    if (!detalle && !dias) return centro
 
-    return {
-      ...centro,
-      enLinea: true,
-      estadoActual: fusionarEstadoActual(centro.estadoActual, detalle),
-      timeline: fusionarTimeline(centro.timeline, detalle),
-      topografico: fusionarTopografico(centro.topografico, detalle.manto, detalle),
-      satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
-      comunidad: fusionarComunidad(centro.comunidad, detalle.comunidad),
-      problemas: fusionarProblemas(centro.problemas, detalle),
-      recomendaciones: detalle.recomendaciones,
-      tituloRecomendacion: detalle.tituloRecomendacion,
-      pronostico3dReal: detalle.pronostico3d,
+    const fusionado = { ...centro }
+
+    if (detalle) {
+      Object.assign(fusionado, {
+        enLinea: true,
+        estadoActual: fusionarEstadoActual(centro.estadoActual, detalle),
+        timeline: fusionarTimeline(centro.timeline, detalle),
+        topografico: fusionarTopografico(centro.topografico, detalle.manto, detalle),
+        satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
+        comunidad: fusionarComunidad(centro.comunidad, detalle.comunidad),
+        problemas: fusionarProblemas(centro.problemas, detalle),
+        recomendaciones: detalle.recomendaciones,
+        tituloRecomendacion: detalle.tituloRecomendacion,
+      })
     }
+
+    if (dias?.length) {
+      fusionado.pronostico15 = fusionarPronostico15(dias)
+    }
+
+    return fusionado
   })
 }

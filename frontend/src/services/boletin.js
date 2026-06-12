@@ -25,6 +25,14 @@ const URL_BOLETIN =
   import.meta.env.VITE_BOLETIN_URL ??
   'https://storage.googleapis.com/avalanche-alertcl-boletines/boletin_activo.json'
 
+// Series diarias del ensemble WeatherNext 2 (publica ingestor-wn2, ~16 días/zona):
+// { "generado", "fuente": "ingestor-wn2",
+//   "series": [{ "zona": "La Parva", "dias": [{ "fecha", "tmin", "tmax",
+//     "nieve_cm", "nieve_cm_p95", "problema", "confianza" }] }] }
+const URL_SERIES_WN2 =
+  import.meta.env.VITE_SERIES_WN2_URL ??
+  'https://storage.googleapis.com/avalanche-alertcl-boletines/series_wn2.json'
+
 const TIMEOUT_MS = 8000
 
 // Nombre de zona (como aparece en BigQuery) → id de centro del frontend
@@ -91,6 +99,48 @@ export async function obtenerBoletinActivo() {
   }
 
   return { generado: cuerpo.generado ?? null, boletines }
+}
+
+export async function obtenerSeriesWN2() {
+  const respuesta = await fetch(URL_SERIES_WN2, {
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!respuesta.ok) {
+    throw new Error(`Series WN2 no disponibles (HTTP ${respuesta.status})`)
+  }
+
+  const cuerpo = await respuesta.json()
+  if (!Array.isArray(cuerpo.series)) {
+    throw new Error('Formato de series WN2 no reconocido')
+  }
+
+  return new Map(
+    cuerpo.series
+      .filter((s) => s.zona && Array.isArray(s.dias) && s.dias.length > 0)
+      .map((s) => [slug(s.zona), s.dias])
+  )
+}
+
+// Series del ensemble WN2; ante error devuelve Map vacío (la tarjeta queda demo)
+export function useSeriesWN2() {
+  const [series, setSeries] = useState(new Map())
+
+  useEffect(() => {
+    let montado = true
+    obtenerSeriesWN2()
+      .then((datos) => {
+        if (montado) setSeries(datos)
+      })
+      .catch((error) => {
+        console.warn('Series WN2 no disponibles, pronóstico demo:', error.message)
+      })
+    return () => {
+      montado = false
+    }
+  }, [])
+
+  return series
 }
 
 // estado: 'cargando' | 'en-linea' | 'demo' (fallback elegante a datos mock)
