@@ -51,6 +51,11 @@ BUCKET       = "climas-chileno-datos-clima-bronce"
 WN2_TABLE    = "climas-chileno.weathernext_2.weathernext_2_0_0"
 SCHEMA_PATH  = os.path.join(os.path.dirname(__file__), "schema_pronostico_wn2.json")
 
+# Series diarias consolidadas para el frontend (bucket público con CORS,
+# mismo bucket que boletin_activo.json — ver gcp_cors.json en la raíz)
+BUCKET_SERIES_FRONTEND = os.environ.get("BUCKET_BOLETIN_ACTIVO", "avalanche-alertcl-boletines")
+OBJETO_SERIES_FRONTEND = "series_wn2.json"
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -366,6 +371,7 @@ class IngestorWN2:
                 _borrar_particion(self.bq, ingestion_date)
 
         stats = {"ok": 0, "sin_datos": 0, "error": 0}
+        series_frontend: dict[str, list] = {}
 
         for nombre in ubicaciones:
             coords = COORDENADAS_ZONAS.get(nombre)
@@ -392,16 +398,80 @@ class IngestorWN2:
 
                 self._insertar_bq(nombre, ingestion_ts, filas)
                 self._guardar_gcs(nombre, ingestion_date, filas)
+                series_frontend[nombre] = [
+                    r for r in filas if r.get("nivel") == "diario"
+                ]
                 stats["ok"] += 1
 
             except Exception as exc:
                 logger.error(f"[{nombre}] — ERROR: {exc}")
                 stats["error"] += 1
 
+        if not self.dry_run:
+            self._exportar_series_frontend(series_frontend, ingestion_ts)
+
         logger.info(f"\n{'='*60}")
         logger.info(f"COMPLETADO: ok={stats['ok']} sin_datos={stats['sin_datos']} error={stats['error']}")
         logger.info(f"{'='*60}")
         return stats
+
+    def _exportar_series_frontend(self, series_por_zona: dict, ingestion_ts: str) -> None:
+        """
+        Publica las series diarias WN2 consolidadas en el bucket público del
+        frontend (zonas chilenas base, sin sectores). Formato por día:
+        fecha, tmin/tmax (p05/p95 ensemble), nieve_cm (p50 corregido), viento,
+        problema dominante y confianza. Nunca aborta la ingesta.
+        """
+        from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
+
+        try:
+            series = []
+            for nombre, diarios in sorted(series_por_zona.items()):
+                # Solo zonas base chilenas: los sectores tienen su serie en BQ/bronce
+                if nombre not in ZONAS_ANDES_CHILE or " Sector " in nombre:
+                    continue
+                if not diarios:
+                    continue
+
+                dias = []
+                for fila in sorted(diarios, key=lambda r: str(r.get("fecha_local"))):
+                    viento_ms = fila.get("wind_100m_mean_ms")
+                    dias.append({
+                        "fecha": str(fila.get("fecha_local")),
+                        "tmin": round(fila["temp_p05_c"]) if fila.get("temp_p05_c") is not None else None,
+                        "tmax": round(fila["temp_p95_c"]) if fila.get("temp_p95_c") is not None else None,
+                        "nieve_cm": round(fila["nieve_24h_cm_p50_corr"], 1) if fila.get("nieve_24h_cm_p50_corr") is not None else None,
+                        "nieve_cm_p95": round(fila["nieve_24h_cm_p95_corr"], 1) if fila.get("nieve_24h_cm_p95_corr") is not None else None,
+                        "viento_kmh": round(viento_ms * 3.6, 1) if viento_ms is not None else None,
+                        "viento_dir": fila.get("wdir_100m_cardinal"),
+                        "prob_nieve_pct": fila.get("prob_snow_pct"),
+                        "problema": fila.get("problema_dominante"),
+                        "confianza": fila.get("confianza_dia"),
+                    })
+                series.append({"zona": nombre, "dias": dias})
+
+            if not series:
+                logger.warning("Series frontend: sin zonas chilenas con datos — no se exporta")
+                return
+
+            contenido = {
+                "generado": ingestion_ts,
+                "fuente": "ingestor-wn2",
+                "series": series,
+            }
+            blob = self.gcs.bucket(BUCKET_SERIES_FRONTEND).blob(OBJETO_SERIES_FRONTEND)
+            blob.cache_control = "public, max-age=300"
+            blob.upload_from_string(
+                json.dumps(contenido, ensure_ascii=False, default=str, indent=2),
+                content_type="application/json",
+                timeout=60,
+            )
+            logger.info(
+                f"Series WN2 frontend: gs://{BUCKET_SERIES_FRONTEND}/{OBJETO_SERIES_FRONTEND} "
+                f"({len(series)} zonas)"
+            )
+        except Exception as exc:
+            logger.error(f"Error exportando series frontend (no bloquea la ingesta): {exc}")
 
     def _consultar_wn2(
         self, lat: float, lon: float, fecha_inicio: str, fecha_fin: str
