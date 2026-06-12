@@ -34,12 +34,11 @@ function BrandHeader() {
           Beta
         </span>
       </div>
-      <h1 className="max-w-2xl text-balance text-xl font-bold leading-snug tracking-tight sm:text-2xl">
-        Sistema Inteligente de Predicción de Riesgo de Avalanchas para Chile
+      <h1 className="text-balance text-2xl font-bold leading-snug tracking-tight sm:text-3xl">
+        Riesgo de Avalanchas Chile
       </h1>
-      <p className="max-w-xl text-balance text-xs italic text-white/60 sm:text-sm">
-        Boletines de Seguridad Zonales mediante Coordinación de Agentes de IA
-        Especializados
+      <p className="max-w-xl text-balance text-xs text-white/60 sm:text-sm">
+        Boletines EAWS por zona, generados por agentes de IA especializados
       </p>
     </div>
   )
