@@ -118,8 +118,11 @@ function App() {
             Boletines de Seguridad Zonales mediante Coordinación de Agentes de IA
             Especializados — desarrollado como parte de la tesis de{' '}
             <strong className="text-white/60">Francisco Peñailillo</strong> para
-            optar al grado de Magíster en Tecnologías de la Información.
-            Los boletines se generan de forma automática, sin revisión humana.
+            optar al grado de Magíster en Tecnologías de la Información de la{' '}
+            <strong className="text-white/60">
+              Universidad Técnica Federico Santa María (UTFSM)
+            </strong>
+            . Los boletines se generan de forma automática, sin revisión humana.
           </p>
           <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
             ⚠️ Mensaje de seguridad: esta es una versión beta con datos de
