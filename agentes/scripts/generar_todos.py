@@ -25,7 +25,7 @@ from typing import Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from agentes.orquestador.agente_principal import AgenteRiesgoAvalancha, ErrorOrquestador
-from agentes.salidas.almacenador import guardar_boletin
+from agentes.salidas.almacenador import guardar_boletin, exportar_boletin_activo
 from agentes.datos.consultor_bigquery import ConsultorBigQuery
 
 
@@ -238,6 +238,13 @@ def main() -> int:
 
         if idx < total:
             time.sleep(PAUSA_ENTRE_UBICACIONES)
+
+    # Exportar boletín activo para el frontend — solo corridas del día con guardado
+    # (en modo histórico --fecha no se sobreescribe el boletín vigente)
+    if args.guardar and exitosos and fecha_referencia is None:
+        uri_activo = exportar_boletin_activo(exitosos)
+        if uri_activo:
+            print(f"\n→ Boletín activo del frontend actualizado: {uri_activo}")
 
     duracion_total = round((datetime.now(timezone.utc) - inicio).total_seconds(), 1)
 

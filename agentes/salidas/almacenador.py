@@ -37,6 +37,11 @@ TABLA_BOLETINES = "boletines_riesgo"
 NOMBRE_BUCKET = "climas-chileno-datos-clima-bronce"
 SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema_boletines.json")
 
+# Boletín activo consolidado que consume el frontend (GitHub Pages).
+# Bucket público con CORS GET restringido a fpenailillo.github.io (gcp_cors.json).
+BUCKET_BOLETIN_ACTIVO = os.environ.get("BUCKET_BOLETIN_ACTIVO", "avalanche-alertcl-boletines")
+OBJETO_BOLETIN_ACTIVO = "boletin_activo.json"
+
 
 class ErrorAlmacenamiento(Exception):
     """Excepción levantada cuando falla el almacenamiento de boletines."""
@@ -508,3 +513,70 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
         "nivel_24h": nivel_24h,
         "confianza": confianza
     }
+
+
+def _zona_base(nombre_ubicacion: str) -> str:
+    """'La Parva Sector Alto' → 'La Parva'; nombres sin sector quedan igual."""
+    return re.sub(r"\s+Sector\s+\S+$", "", nombre_ubicacion).strip()
+
+
+def exportar_boletin_activo(resultados: list) -> Optional[str]:
+    """
+    Publica el boletín activo consolidado que consume el frontend.
+
+    Agrega los sectores de una misma zona con el MÁXIMO nivel (criterio
+    conservador: el peligro publicado nunca subestima al peor sector) y solo
+    incluye zonas chilenas operacionales (las suizas son validación offline).
+
+    Esquema del JSON (contrato con frontend/src/services/boletin.js):
+        { "generado": ISO-8601, "fuente": "pipeline-s5",
+          "boletines": [ { "zona": "La Parva", "nivel_eaws": 2 }, ... ] }
+
+    Nunca levanta excepción: un fallo aquí no debe abortar el pipeline.
+    """
+    from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
+
+    niveles: dict[str, int] = {}
+    for resultado in resultados:
+        if resultado.get("error"):
+            continue
+        zona = _zona_base(resultado.get("ubicacion", ""))
+        if zona not in ZONAS_ANDES_CHILE:
+            continue
+        try:
+            nivel = int(resultado.get("nivel_eaws_24h"))
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= nivel <= 5:
+            continue
+        niveles[zona] = max(nivel, niveles.get(zona, 0))
+
+    if not niveles:
+        logger.warning("Boletín activo: sin zonas chilenas con nivel válido — no se exporta")
+        return None
+
+    contenido = {
+        "generado": datetime.now(timezone.utc).isoformat(),
+        "fuente": "pipeline-s5",
+        "boletines": [
+            {"zona": zona, "nivel_eaws": nivel}
+            for zona, nivel in sorted(niveles.items())
+        ],
+    }
+
+    try:
+        cliente_gcs = storage.Client(project=GCP_PROJECT)
+        blob = cliente_gcs.bucket(BUCKET_BOLETIN_ACTIVO).blob(OBJETO_BOLETIN_ACTIVO)
+        # max-age corto: el frontend debe ver el boletín nuevo en ≤5 min
+        blob.cache_control = "public, max-age=300"
+        blob.upload_from_string(
+            json.dumps(contenido, ensure_ascii=False, indent=2),
+            content_type="application/json",
+            timeout=60,
+        )
+        uri = f"gs://{BUCKET_BOLETIN_ACTIVO}/{OBJETO_BOLETIN_ACTIVO}"
+        logger.info(f"Boletín activo exportado para el frontend: {uri} ({len(niveles)} zonas)")
+        return uri
+    except Exception as e:
+        logger.error(f"Error exportando boletín activo (no bloquea el pipeline): {e}")
+        return None
