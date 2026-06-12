@@ -14,6 +14,11 @@ Variables de entorno:
     DATABRICKS_MODEL    — nombre del modelo (por defecto: qwen3-next-80b-a3b-instruct)
     ANTHROPIC_API_KEY   — clave Anthropic (solo para validación)
     CLAUDE_CODE_OAUTH_TOKEN — token OAuth Claude (alternativa a API key)
+    GOOGLE_CLOUD_PROJECT     — proyecto GCP host (default: climas-chileno)
+    DATABRICKS_SECRET_NAME   — ruta del secreto del token en Secret Manager
+                               (default: projects/<GOOGLE_CLOUD_PROJECT>/secrets/
+                               databricks-token/versions/latest)
+    GEMINI_GCP_PROJECT       — proyecto GCP con créditos Gemini
 """
 
 import json
@@ -23,6 +28,14 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ─── Configuración GCP (sobreescribible por variables de entorno) ─────────────
+
+GCP_PROJECT_HOST = os.environ.get("GOOGLE_CLOUD_PROJECT", "climas-chileno")
+GEMINI_GCP_PROJECT_FALLBACK = "project-c742757f-1731-44cd-a40"
+DATABRICKS_SECRET_NAME_DEFAULT = (
+    f"projects/{GCP_PROJECT_HOST}/secrets/databricks-token/versions/latest"
+)
 
 # ─── Estructuras de respuesta normalizadas (formato Anthropic) ────────────────
 
@@ -117,7 +130,7 @@ class ClienteDatabricks:
     BASE_URL_DEFAULT = (
         "https://dbc-6f162706-efdf.cloud.databricks.com/ai-gateway/mlflow/v1"
     )
-    SECRET_NAME = "projects/climas-chileno/secrets/databricks-token/versions/latest"
+    SECRET_NAME = os.environ.get("DATABRICKS_SECRET_NAME", DATABRICKS_SECRET_NAME_DEFAULT)
 
     def __init__(self):
         try:
@@ -364,7 +377,7 @@ class ClienteGemini:
         GEMINI_MODEL        — nombre del modelo (default: google/gemini-3.1-pro-preview)
     """
 
-    GCP_PROJECT_DEFAULT = "project-c742757f-1731-44cd-a40"
+    GCP_PROJECT_DEFAULT = GEMINI_GCP_PROJECT_FALLBACK
     GCP_LOCATION_DEFAULT = "global"
     MODELO_DEFAULT = "google/gemini-3.1-pro-preview"
 
@@ -598,7 +611,7 @@ class ClienteGeminiNativo:
         GEMINI_MODEL        — modelo (default: gemini-3.1-pro)
     """
 
-    GCP_PROJECT_DEFAULT = "project-c742757f-1731-44cd-a40"
+    GCP_PROJECT_DEFAULT = GEMINI_GCP_PROJECT_FALLBACK
     GCP_LOCATION_DEFAULT = "global"
     MODELO_DEFAULT = "gemini-3.1-pro-preview"
 
@@ -735,7 +748,7 @@ class ClienteGemini3:
         GEMINI_MODEL        — modelo (default: gemini-3.1-pro-preview)
     """
 
-    GCP_PROJECT_DEFAULT = "project-c742757f-1731-44cd-a40"
+    GCP_PROJECT_DEFAULT = GEMINI_GCP_PROJECT_FALLBACK
     GCP_LOCATION_DEFAULT = "global"
     MODELO_DEFAULT = "gemini-3.1-pro-preview"
 
