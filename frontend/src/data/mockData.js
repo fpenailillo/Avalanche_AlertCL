@@ -1,6 +1,6 @@
 // Mock data — Prueba de Concepto Avalanche_AlertCL
 // Temporada invierno 2026 · Andes Centrales (Chile)
-// Centros monitoreados en GCP: La Parva, Valle Nevado, El Colorado
+// Centros monitoreados en GCP: La Parva y Valle Nevado (+ centros mock adicionales)
 // (coherente con agentes/datos/constantes_zonas.py del sistema multi-agente)
 
 export const ESCALA_EAWS = {
@@ -180,65 +180,6 @@ export const CENTROS = {
     },
   },
 
-  'el-colorado': {
-    id: 'el-colorado',
-    nombre: 'El Colorado',
-    zona: 'Andes Centrales',
-    elevacion: '2.400 – 4.100 m',
-    exposicion: 'O',
-    estadoActual: {
-      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
-      nivelEAWS: 2,
-      descripcionIA:
-        'Manto mayormente consolidado en pistas y cotas medias. Humedecimiento superficial en solanas de orientación oeste durante la tarde; nieve nueva esperada desde el jueves.',
-      vientoKmh: 38,
-      temperatura: -3,
-      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
-    },
-    problemas: [
-      {
-        id: 'new-snow',
-        nombre: 'Nieve nueva',
-        cotas: 'Sobre 2.600 m',
-        orientaciones: 'Todas las orientaciones',
-        detalle: 'Acumulaciones moderadas previstas; evaluar tras cada nevada.',
-      },
-      {
-        id: 'wet-snow',
-        nombre: 'Nieve húmeda',
-        cotas: 'Bajo 2.800 m',
-        orientaciones: 'O – NO (solanas)',
-        detalle: 'Humedecimiento superficial vespertino por radiación; sluffs puntuales.',
-      },
-    ],
-    timeline: ajustarTimeline(1, [2, 2, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2]),
-    pronostico15: ajustarPronostico(1, 0.9),
-    satelital: {
-      ndsi: 0.76,
-      coberturaPct: 82,
-      fechaPasada: '09 jun 2026 · 14:32 UTC',
-      tile: 'T19HCC',
-      tendencia: 'Estable',
-    },
-    topografico: {
-      estadoManto: 'Estable',
-      estable: true,
-      profundidadCm: 118,
-      capaDebil: 'No detectada',
-      ultimaCorrida: '10 jun 2026 · 06:00',
-      confianza: 0.89,
-    },
-    comunidad: {
-      resumenNLP:
-        'Los reportes destacan buenas condiciones en pistas y nieve primavera en solanas hacia el mediodía. Sin señales de inestabilidad en cotas medias.',
-      reportes: [
-        { autor: 'P. Salinas', hace: 'hace 4 h', texto: 'Nieve compacta y agarre firme en Cono Este.' },
-        { autor: 'Ski Patrol El Colorado', hace: 'hace 10 h', texto: 'Solanas con costra de rehielo matinal.' },
-        { autor: 'R. Tapia', hace: 'hace 2 d', texto: 'Acumulación venteada leve cerca de la antena.' },
-      ],
-      totalReportes48h: 9,
-    },
-  },
   'portillo': {
     id: 'portillo',
     nombre: 'Portillo',

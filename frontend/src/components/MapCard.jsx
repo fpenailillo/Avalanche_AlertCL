@@ -11,7 +11,6 @@ const POSICIONES = {
   'portillo': { x: 255, y: 32 },
   'la-parva': { x: 130, y: 92 },
   'valle-nevado': { x: 225, y: 102 },
-  'el-colorado': { x: 145, y: 135 },
   'lagunillas': { x: 280, y: 152 },
   'chapa-verde': { x: 135, y: 172, labelDy: -18 },
 }
