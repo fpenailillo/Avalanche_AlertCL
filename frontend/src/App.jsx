@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Mountain } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Mountain, TriangleAlert } from 'lucide-react'
 import HeroSection from './components/HeroSection'
 import TimelineCarousel from './components/TimelineCarousel'
 import ForecastCard from './components/ForecastCard'
@@ -8,7 +8,8 @@ import SatelliteCard from './components/SatelliteCard'
 import SnowpackCard from './components/SnowpackCard'
 import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
-import { CENTROS, CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
+import { CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
+import { useBoletinActivo } from './services/boletin'
 
 function BanderaChile({ className = 'h-3.5 w-5' }) {
   return (
@@ -44,10 +45,10 @@ function BrandHeader() {
   )
 }
 
-function SelectorCentros({ seleccionadoId, onSelect }) {
+function SelectorCentros({ centros, seleccionadoId, onSelect }) {
   return (
     <nav className="sticky top-3 z-10 mx-auto mt-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/15 bg-white/10 p-1 shadow-lg shadow-black/10 backdrop-blur-xl">
-      {CENTROS_LISTA.map((centro) => {
+      {centros.map((centro) => {
         const activo = centro.id === seleccionadoId
         const nivel = ESCALA_EAWS[centro.estadoActual.nivelEAWS]
         return (
@@ -74,15 +75,54 @@ function SelectorCentros({ seleccionadoId, onSelect }) {
   )
 }
 
+function EstadoBoletin({ boletin }) {
+  if (boletin.estado === 'cargando') return null
+
+  if (boletin.estado === 'demo') {
+    return (
+      <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1 text-[11px] text-amber-200/80 backdrop-blur-sm">
+        <TriangleAlert className="h-3 w-3" />
+        Boletín en línea no disponible temporalmente — mostrando datos de demostración
+      </p>
+    )
+  }
+
+  const fecha = boletin.generado
+    ? new Date(boletin.generado).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })
+    : null
+  return (
+    <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 text-[11px] text-white/40">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+      Boletín en línea{fecha ? ` · actualizado ${fecha}` : ' activo'}
+    </p>
+  )
+}
+
 function App() {
   const [centroId, setCentroId] = useState('la-parva')
-  const centro = CENTROS[centroId]
+  const boletin = useBoletinActivo()
+
+  // Fusiona el mock con los niveles del boletín en línea (si está disponible)
+  const centros = useMemo(() => {
+    if (boletin.niveles.size === 0) return CENTROS_LISTA
+    return CENTROS_LISTA.map((centro) => {
+      const nivelEnLinea = boletin.niveles.get(centro.id)
+      if (nivelEnLinea == null) return centro
+      return {
+        ...centro,
+        estadoActual: { ...centro.estadoActual, nivelEAWS: nivelEnLinea },
+      }
+    })
+  }, [boletin.niveles])
+
+  const centro = centros.find((c) => c.id === centroId) ?? centros[0]
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-900 to-sky-700">
       <div className="mx-auto max-w-5xl px-4 pb-12">
         <BrandHeader />
-        <SelectorCentros seleccionadoId={centroId} onSelect={setCentroId} />
+        <SelectorCentros centros={centros} seleccionadoId={centroId} onSelect={setCentroId} />
+        <EstadoBoletin boletin={boletin} />
 
         <HeroSection centro={centro} />
 
@@ -101,6 +141,7 @@ function App() {
           <SatelliteCard datos={centro.satelital} className="lg:order-3" />
           <SnowpackCard datos={centro.topografico} className="lg:order-4" />
           <MapCard
+            centros={centros}
             seleccionadoId={centroId}
             onSelect={setCentroId}
             className="aspect-square md:aspect-auto lg:order-5"

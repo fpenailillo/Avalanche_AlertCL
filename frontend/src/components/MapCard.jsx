@@ -1,6 +1,6 @@
 import { Map, Mountain } from 'lucide-react'
 import GlassCard from './GlassCard'
-import { ESCALA_EAWS, CENTROS_LISTA } from '../data/mockData'
+import { ESCALA_EAWS } from '../data/mockData'
 
 // Posiciones relativas en el lienzo SVG según geografía real (norte arriba):
 // Aconcagua al N (Ski Arpa, Portillo), Farellones al centro (LP/EC/VN),
@@ -15,7 +15,7 @@ const POSICIONES = {
   'chapa-verde': { x: 135, y: 172, labelDy: -18 },
 }
 
-export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
+export default function MapCard({ centros, seleccionadoId, onSelect, className = '' }) {
   return (
     <GlassCard icon={Map} title="Mapa de zonas EAWS" className={className}>
       <div className="relative min-h-44 flex-1 overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-900 via-blue-800 to-sky-600">
@@ -29,7 +29,7 @@ export default function MapCard({ seleccionadoId, onSelect, className = '' }) {
             points="0,200 100,130 180,170 260,90 340,160 400,120 400,200"
             fill="rgba(255,255,255,0.30)"
           />
-          {CENTROS_LISTA.map((centro) => {
+          {centros.map((centro) => {
             const pos = POSICIONES[centro.id]
             const nivel = ESCALA_EAWS[centro.estadoActual.nivelEAWS]
             const activo = centro.id === seleccionadoId
