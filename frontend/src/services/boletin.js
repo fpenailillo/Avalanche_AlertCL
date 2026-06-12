@@ -78,8 +78,11 @@ function normalizarEntrada(entrada) {
   ]
 }
 
-export async function obtenerBoletinActivo() {
-  const respuesta = await fetch(URL_BOLETIN, {
+// Carpeta del bucket (para histórico e índice de fechas)
+const URL_BASE = URL_BOLETIN.replace(/[^/]+$/, '')
+
+async function obtenerBoletinDesde(url) {
+  const respuesta = await fetch(url, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: 'no-store',
   })
@@ -98,7 +101,41 @@ export async function obtenerBoletinActivo() {
     throw new Error('El boletín no contiene zonas válidas')
   }
 
-  return { generado: cuerpo.generado ?? null, boletines }
+  return {
+    generado: cuerpo.generado ?? null,
+    fechaBoletin: cuerpo.fecha_boletin ?? null,
+    boletines,
+  }
+}
+
+export const obtenerBoletinActivo = () => obtenerBoletinDesde(URL_BOLETIN)
+
+export const obtenerBoletinFecha = (fecha) =>
+  obtenerBoletinDesde(`${URL_BASE}historico/boletin_${fecha}.json`)
+
+// Índice de fechas con boletín histórico disponible (orden descendente)
+export function useIndiceFechas() {
+  const [fechas, setFechas] = useState([])
+
+  useEffect(() => {
+    let montado = true
+    fetch(`${URL_BASE}indice_boletines.json`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: 'no-store',
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((cuerpo) => {
+        if (montado && Array.isArray(cuerpo.fechas)) setFechas(cuerpo.fechas)
+      })
+      .catch((error) => {
+        console.warn('Índice de boletines no disponible:', error.message)
+      })
+    return () => {
+      montado = false
+    }
+  }, [])
+
+  return fechas
 }
 
 export async function obtenerSeriesWN2() {
@@ -143,28 +180,36 @@ export function useSeriesWN2() {
   return series
 }
 
+const BOLETIN_CARGANDO = {
+  estado: 'cargando',
+  boletines: new Map(),
+  generado: null,
+  fechaBoletin: null,
+}
+
 // estado: 'cargando' | 'en-linea' | 'demo' (fallback elegante a datos mock)
-export function useBoletinActivo() {
-  const [boletin, setBoletin] = useState({
-    estado: 'cargando',
-    boletines: new Map(),
-    generado: null,
-  })
+// fecha = null → boletín activo; 'YYYY-MM-DD' → boletín histórico de esa fecha
+export function useBoletinActivo(fecha = null) {
+  // paraFecha permite derivar 'cargando' al cambiar de fecha sin setState síncrono
+  const [resultado, setResultado] = useState({ paraFecha: undefined, ...BOLETIN_CARGANDO })
 
   useEffect(() => {
     let montado = true
-    obtenerBoletinActivo()
-      .then(({ generado, boletines }) => {
-        if (montado) setBoletin({ estado: 'en-linea', boletines, generado })
+    const promesa = fecha ? obtenerBoletinFecha(fecha) : obtenerBoletinActivo()
+    promesa
+      .then(({ generado, fechaBoletin, boletines }) => {
+        if (montado) {
+          setResultado({ paraFecha: fecha, estado: 'en-linea', boletines, generado, fechaBoletin })
+        }
       })
       .catch((error) => {
         console.warn('Boletín en línea no disponible, usando datos demo:', error.message)
-        if (montado) setBoletin({ estado: 'demo', boletines: new Map(), generado: null })
+        if (montado) setResultado({ paraFecha: fecha, ...BOLETIN_CARGANDO, estado: 'demo' })
       })
     return () => {
       montado = false
     }
-  }, [])
+  }, [fecha])
 
-  return boletin
+  return resultado.paraFecha === fecha ? resultado : BOLETIN_CARGANDO
 }

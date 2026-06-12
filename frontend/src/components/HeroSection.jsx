@@ -1,8 +1,38 @@
-import { MapPin, Wind, Thermometer, TriangleAlert, MoveVertical } from 'lucide-react'
+import { MapPin, Wind, Thermometer, TriangleAlert, MoveVertical, CalendarDays, ChevronDown } from 'lucide-react'
 import { ESCALA_EAWS } from '../data/mockData'
 import EawsDangerIcon from './EawsDangerIcon'
 
-export default function HeroSection({ centro }) {
+const etiquetaFecha = (fecha) =>
+  new Date(`${fecha}T12:00:00`).toLocaleDateString('es-CL', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+
+function SelectorFecha({ fechas, fechaSeleccionada, onSeleccionarFecha }) {
+  return (
+    <label className="relative mt-1.5 flex cursor-pointer items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs text-white/80 backdrop-blur-sm transition-colors hover:bg-white/15">
+      <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+      <select
+        value={fechaSeleccionada ?? ''}
+        onChange={(e) => onSeleccionarFecha(e.target.value || null)}
+        className="cursor-pointer appearance-none bg-transparent pr-4 outline-none [&>option]:text-slate-900"
+        aria-label="Seleccionar fecha del boletín"
+      >
+        <option value="">Boletín más reciente</option>
+        {fechas.map((fecha) => (
+          <option key={fecha} value={fecha}>
+            {etiquetaFecha(fecha)}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 h-3 w-3" />
+    </label>
+  )
+}
+
+export default function HeroSection({ centro, fechas = [], fechaSeleccionada, onSeleccionarFecha }) {
   const estado = centro.estadoActual
   const nivel = ESCALA_EAWS[estado.nivelEAWS]
 
@@ -15,7 +45,18 @@ export default function HeroSection({ centro }) {
       <h2 className="mt-1 text-4xl font-semibold tracking-tight">
         {centro.nombre}
       </h2>
-      <p className="mt-1 text-xs text-white/50">{estado.fechaBoletin}</p>
+      {fechas.length > 0 ? (
+        <SelectorFecha
+          fechas={fechas}
+          fechaSeleccionada={fechaSeleccionada}
+          onSeleccionarFecha={onSeleccionarFecha}
+        />
+      ) : (
+        <p className="mt-1 text-xs text-white/50">{estado.fechaBoletin}</p>
+      )}
+      {fechas.length > 0 && (
+        <p className="mt-1 text-[11px] text-white/45">{estado.fechaBoletin}</p>
+      )}
       <p className="mt-0.5 flex items-center gap-1 text-[11px] text-white/40">
         <MoveVertical className="h-3 w-3" />
         {centro.elevacion} · exposición {centro.exposicion}

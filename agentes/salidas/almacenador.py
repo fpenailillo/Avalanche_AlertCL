@@ -691,33 +691,68 @@ def _consolidar_registros(registros: list) -> list:
     return boletines
 
 
-def subir_boletin_activo(boletines: list) -> Optional[str]:
-    """Sube el boletín activo consolidado a GCS. Nunca levanta excepción."""
+def _subir_json_publico(bucket, ruta: str, contenido: dict) -> str:
+    """Sube un JSON al bucket público del frontend con caché corto."""
+    blob = bucket.blob(ruta)
+    # max-age corto: el frontend debe ver datos nuevos en ≤5 min
+    blob.cache_control = "public, max-age=300"
+    blob.upload_from_string(
+        json.dumps(contenido, ensure_ascii=False, indent=2),
+        content_type="application/json",
+        timeout=60,
+    )
+    return f"gs://{BUCKET_BOLETIN_ACTIVO}/{ruta}"
+
+
+def _actualizar_indice_fechas(bucket, fecha: str) -> None:
+    """Mantiene indice_boletines.json con las fechas históricas disponibles."""
+    blob = bucket.blob("indice_boletines.json")
+    fechas = []
+    try:
+        fechas = json.loads(blob.download_as_text()).get("fechas", [])
+    except Exception:
+        pass  # índice nuevo o corrupto: se reconstruye desde esta fecha
+    if fecha not in fechas:
+        fechas.append(fecha)
+    _subir_json_publico(bucket, "indice_boletines.json", {"fechas": sorted(fechas, reverse=True)})
+
+
+def subir_boletin_fecha(boletines: list, fecha: str, es_activo: bool = False) -> Optional[str]:
+    """
+    Sube un boletín consolidado a GCS bajo historico/boletin_<fecha>.json y
+    actualiza el índice de fechas. Si es_activo, también sobreescribe
+    boletin_activo.json. Nunca levanta excepción.
+    """
     if not boletines:
-        logger.warning("Boletín activo: sin zonas chilenas con nivel válido — no se exporta")
+        logger.warning("Boletín: sin zonas chilenas con nivel válido — no se exporta")
         return None
 
     contenido = {
         "generado": datetime.now(timezone.utc).isoformat(),
+        "fecha_boletin": fecha,
         "fuente": "pipeline-s5",
         "boletines": boletines,
     }
     try:
-        cliente_gcs = storage.Client(project=GCP_PROJECT)
-        blob = cliente_gcs.bucket(BUCKET_BOLETIN_ACTIVO).blob(OBJETO_BOLETIN_ACTIVO)
-        # max-age corto: el frontend debe ver el boletín nuevo en ≤5 min
-        blob.cache_control = "public, max-age=300"
-        blob.upload_from_string(
-            json.dumps(contenido, ensure_ascii=False, indent=2),
-            content_type="application/json",
-            timeout=60,
+        bucket = storage.Client(project=GCP_PROJECT).bucket(BUCKET_BOLETIN_ACTIVO)
+        uri = _subir_json_publico(bucket, f"historico/boletin_{fecha}.json", contenido)
+        _actualizar_indice_fechas(bucket, fecha)
+        if es_activo:
+            uri = _subir_json_publico(bucket, OBJETO_BOLETIN_ACTIVO, contenido)
+        logger.info(
+            f"Boletín {fecha} exportado para el frontend: {uri} "
+            f"({len(boletines)} zonas, activo={es_activo})"
         )
-        uri = f"gs://{BUCKET_BOLETIN_ACTIVO}/{OBJETO_BOLETIN_ACTIVO}"
-        logger.info(f"Boletín activo exportado para el frontend: {uri} ({len(boletines)} zonas)")
         return uri
     except Exception as e:
-        logger.error(f"Error exportando boletín activo (no bloquea el pipeline): {e}")
+        logger.error(f"Error exportando boletín {fecha} (no bloquea el pipeline): {e}")
         return None
+
+
+def subir_boletin_activo(boletines: list) -> Optional[str]:
+    """Sube el boletín activo (hoy UTC) + copia histórica + índice."""
+    fecha = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return subir_boletin_fecha(boletines, fecha, es_activo=True)
 
 
 def exportar_boletin_activo(resultados: list) -> Optional[str]:

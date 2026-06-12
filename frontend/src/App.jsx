@@ -9,7 +9,7 @@ import SnowpackCard from './components/SnowpackCard'
 import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
 import { CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
-import { useBoletinActivo, useSeriesWN2 } from './services/boletin'
+import { useBoletinActivo, useSeriesWN2, useIndiceFechas } from './services/boletin'
 import { fusionarCentros } from './services/fusion'
 
 function BanderaChile({ className = 'h-3.5 w-5' }) {
@@ -76,7 +76,7 @@ function SelectorCentros({ centros, seleccionadoId, onSelect }) {
   )
 }
 
-function EstadoBoletin({ boletin }) {
+function EstadoBoletin({ boletin, fechaSeleccionada }) {
   if (boletin.estado === 'cargando') return null
 
   if (boletin.estado === 'demo') {
@@ -84,6 +84,15 @@ function EstadoBoletin({ boletin }) {
       <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-amber-300/25 bg-amber-400/10 px-3 py-1 text-[11px] text-amber-200/80 backdrop-blur-sm">
         <TriangleAlert className="h-3 w-3" />
         Boletín en línea no disponible temporalmente — mostrando datos de demostración
+      </p>
+    )
+  }
+
+  if (fechaSeleccionada) {
+    return (
+      <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-sky-300/25 bg-sky-400/10 px-3 py-1 text-[11px] text-sky-200/80 backdrop-blur-sm">
+        <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+        Boletín histórico del {fechaSeleccionada}
       </p>
     )
   }
@@ -101,7 +110,9 @@ function EstadoBoletin({ boletin }) {
 
 function App() {
   const [centroId, setCentroId] = useState('la-parva')
-  const boletin = useBoletinActivo()
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(null)
+  const fechasDisponibles = useIndiceFechas()
+  const boletin = useBoletinActivo(fechaSeleccionada)
   const seriesWN2 = useSeriesWN2()
 
   // Fusiona el mock con el boletín y las series en línea, campo por campo
@@ -117,9 +128,14 @@ function App() {
       <div className="mx-auto max-w-5xl px-4 pb-12">
         <BrandHeader />
         <SelectorCentros centros={centros} seleccionadoId={centroId} onSelect={setCentroId} />
-        <EstadoBoletin boletin={boletin} />
+        <EstadoBoletin boletin={boletin} fechaSeleccionada={fechaSeleccionada} />
 
-        <HeroSection centro={centro} />
+        <HeroSection
+          centro={centro}
+          fechas={fechasDisponibles}
+          fechaSeleccionada={fechaSeleccionada}
+          onSeleccionarFecha={setFechaSeleccionada}
+        />
 
         <TimelineCarousel timeline={centro.timeline} />
 

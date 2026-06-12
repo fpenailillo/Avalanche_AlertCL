@@ -30,21 +30,35 @@ from agentes.salidas.almacenador import (
     _nivel_valido,
     _parsear_boletin_texto,
     subir_boletin_activo,
+    subir_boletin_fecha,
 )
 from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-SQL_ULTIMOS_BOLETINES = f"""
+CAMPOS_BOLETIN = """
 SELECT nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_48h,
        nivel_eaws_72h, confianza, viento_kmh, estado_pinn,
        factor_seguridad_pinn, estado_vit, score_anomalia_vit,
        datos_satelitales_disponibles, relatos_analizados,
        tipo_alud_predominante, indice_riesgo_historico,
        tipo_problema_eaws, wn2_avalanche_problem, boletin_texto
+"""
+
+SQL_ULTIMOS_BOLETINES = f"""
+{CAMPOS_BOLETIN}
 FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
 WHERE DATE(fecha_emision) >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
+) = 1
+"""
+
+SQL_BOLETINES_FECHA = f"""
+{CAMPOS_BOLETIN}
+FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
+WHERE DATE(fecha_emision) = @fecha
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
 ) = 1
@@ -89,11 +103,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dry-run', action='store_true',
                         help='Imprimir el JSON sin subirlo a GCS')
+    parser.add_argument('--fecha', type=str, default=None,
+                        help='Exportar el boletín de una fecha (YYYY-MM-DD) a '
+                             'historico/ sin tocar boletin_activo.json')
     args = parser.parse_args()
 
     cliente = bigquery.Client(project=GCP_PROJECT)
-    filas = list(cliente.query(SQL_ULTIMOS_BOLETINES).result())
-    logger.info(f"Boletines recientes en BQ: {len(filas)} ubicaciones")
+    if args.fecha:
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("fecha", "DATE", args.fecha),
+        ])
+        filas = list(cliente.query(SQL_BOLETINES_FECHA, job_config=job_config).result())
+    else:
+        filas = list(cliente.query(SQL_ULTIMOS_BOLETINES).result())
+    logger.info(f"Boletines en BQ ({args.fecha or 'recientes'}): {len(filas)} ubicaciones")
 
     registros = [_registro_desde_fila_bq(f) for f in filas]
     boletines = _consolidar_registros(registros)
@@ -109,9 +132,12 @@ def main() -> int:
         print(json.dumps({"boletines": boletines}, ensure_ascii=False, indent=2, default=str))
         return 0
 
-    uri = subir_boletin_activo(boletines)
+    if args.fecha:
+        uri = subir_boletin_fecha(boletines, args.fecha, es_activo=False)
+    else:
+        uri = subir_boletin_activo(boletines)
     if uri:
-        print(f"✓ Boletín activo publicado: {uri}")
+        print(f"✓ Boletín publicado: {uri}")
         return 0
     return 1
 
