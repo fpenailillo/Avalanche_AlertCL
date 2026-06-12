@@ -26,13 +26,21 @@ function BanderaChile({ className = 'h-3.5 w-5' }) {
 
 function BrandHeader() {
   return (
-    <div className="flex items-center justify-center gap-2 pt-5 text-white">
-      <Mountain className="h-5 w-5 text-white/80" />
-      <span className="text-lg font-semibold tracking-tight">Avalanche_AlertCL</span>
-      <BanderaChile />
-      <span className="rounded-full border border-amber-300/40 bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
-        Beta
-      </span>
+    <div className="flex flex-col items-center gap-1.5 pt-6 text-center text-white">
+      <div className="flex items-center gap-2">
+        <Mountain className="h-5 w-5 text-white/80" />
+        <BanderaChile />
+        <span className="rounded-full border border-amber-300/40 bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+          Beta
+        </span>
+      </div>
+      <h1 className="max-w-2xl text-balance text-xl font-bold leading-snug tracking-tight sm:text-2xl">
+        Sistema Inteligente de Predicción de Riesgo de Avalanchas para Chile
+      </h1>
+      <p className="max-w-xl text-balance text-xs italic text-white/60 sm:text-sm">
+        Boletines de Seguridad Zonales mediante Coordinación de Agentes de IA
+        Especializados
+      </p>
     </div>
   )
 }
@@ -104,12 +112,13 @@ function App() {
         <footer className="mt-10 flex flex-col items-center gap-2 text-center text-[11px] text-white/40">
           <span className="flex items-center gap-1.5 font-semibold text-white/60">
             <Mountain className="h-3.5 w-3.5" />
-            Avalanche_AlertCL
+            Sistema Inteligente de Predicción de Riesgo de Avalanchas para Chile
             <BanderaChile className="h-2.5 w-4" />
           </span>
           <p className="max-w-xl">
-            Sistema de pronóstico generado por agentes de inteligencia artificial,
-            desarrollado como parte de la tesis de <strong className="text-white/60">Francisco Peñailillo</strong> para
+            Boletines de Seguridad Zonales mediante Coordinación de Agentes de IA
+            Especializados — desarrollado como parte de la tesis de{' '}
+            <strong className="text-white/60">Francisco Peñailillo</strong> para
             optar al grado de Magíster en Tecnologías de la Información.
             Los boletines se generan de forma automática, sin revisión humana.
           </p>

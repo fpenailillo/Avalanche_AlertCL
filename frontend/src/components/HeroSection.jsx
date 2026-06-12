@@ -12,9 +12,9 @@ export default function HeroSection({ centro }) {
         <MapPin className="h-4 w-4" />
         {centro.zona}
       </div>
-      <h1 className="mt-1 text-4xl font-semibold tracking-tight">
+      <h2 className="mt-1 text-4xl font-semibold tracking-tight">
         {centro.nombre}
-      </h1>
+      </h2>
       <p className="mt-1 text-xs text-white/50">{estado.fechaBoletin}</p>
       <p className="mt-0.5 flex items-center gap-1 text-[11px] text-white/40">
         <MoveVertical className="h-3 w-3" />
