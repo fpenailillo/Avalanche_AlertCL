@@ -520,50 +520,188 @@ def _zona_base(nombre_ubicacion: str) -> str:
     return re.sub(r"\s+Sector\s+\S+$", "", nombre_ubicacion).strip()
 
 
-def exportar_boletin_activo(resultados: list) -> Optional[str]:
+def _nivel_valido(valor) -> Optional[int]:
+    """Convierte a int 1-5 o None."""
+    try:
+        nivel = int(valor)
+    except (TypeError, ValueError):
+        return None
+    return nivel if 1 <= nivel <= 5 else None
+
+
+def _primeras_frases(texto: str, n: int = 2) -> Optional[str]:
+    """Recorta un párrafo a sus primeras n frases."""
+    if not texto:
+        return None
+    frases = re.split(r"(?<=[.!?])\s+", texto.strip())
+    recorte = " ".join(frases[:n]).strip()
+    return recorte or None
+
+def _parsear_boletin_texto(texto: str) -> dict:
     """
-    Publica el boletín activo consolidado que consume el frontend.
+    Extrae campos presentables del boletín de texto que redacta S5
+    (plantilla de redactar_boletin_eaws). Cualquier campo que no matchee
+    queda en None y el frontend usa su fallback.
+    """
+    campos = {
+        "descripcion": None,
+        "tendencia": None,
+        "temperatura_c": None,
+        "precip_24h_mm": None,
+        "pronostico_3d": [],
+        "terreno_riesgo": None,
+        "titulo_recomendacion": None,
+        "recomendaciones": [],
+    }
+    if not texto:
+        return campos
 
-    Agrega los sectores de una misma zona con el MÁXIMO nivel (criterio
-    conservador: el peligro publicado nunca subestima al peor sector) y solo
-    incluye zonas chilenas operacionales (las suizas son validación offline).
+    # Narrativa de FACTORES DE RIESGO → descripción del hero (2 frases)
+    m = re.search(r"FACTORES DE RIESGO\n-+\n(.*?)(?:\n[A-ZÁÉÍÓÚÑ ]{5,}\n-+|\Z)", texto, re.S)
+    if m:
+        for linea in m.group(1).splitlines():
+            linea = linea.strip()
+            if len(linea) > 120 and not linea.startswith(("Factor", "Datos", "•", "⚠")):
+                campos["descripcion"] = _primeras_frases(linea, 2)
+                break
 
-    Esquema del JSON (contrato con frontend/src/services/boletin.js):
-        { "generado": ISO-8601, "fuente": "pipeline-s5",
-          "boletines": [ { "zona": "La Parva", "nivel_eaws": 2 }, ... ] }
+    m = re.search(r"Tendencia de riesgo:\s*(\S+)", texto)
+    if m:
+        campos["tendencia"] = m.group(1).strip().rstrip(".")
 
-    Nunca levanta excepción: un fallo aquí no debe abortar el pipeline.
+    m = re.search(r"Temperatura:\s*(-?[\d.]+)°C", texto)
+    if m:
+        campos["temperatura_c"] = float(m.group(1))
+
+    m = re.search(r"Precipitación 24h:\s*([\d.]+)\s*mm", texto)
+    if m:
+        campos["precip_24h_mm"] = float(m.group(1))
+
+    for fecha, tmax, tmin, precip, viento, cielo in re.findall(
+        r"(\d{4}-\d{2}-\d{2})\s*\|\s*T\s*(-?\d+)°C/(-?\d+)°C\s*\|\s*Precip\s*([\d.]+)\s*mm"
+        r"\s*\|\s*Viento\s*([\d.]+)\s*km/h\s*\|\s*(.+)",
+        texto,
+    ):
+        campos["pronostico_3d"].append({
+            "fecha": fecha,
+            "tmax": int(tmax),
+            "tmin": int(tmin),
+            "precip_mm": float(precip),
+            "viento_kmh": float(viento),
+            "cielo": cielo.strip(),
+        })
+
+    m = re.search(r"TERRENO DE MAYOR RIESGO\n-+\n(.+)", texto)
+    if m:
+        campos["terreno_riesgo"] = m.group(1).strip()
+
+    m = re.search(r"RECOMENDACIONES\n-+\n(.*?)(?:\n[A-ZÁÉÍÓÚÑ ]{5,}\n-+|\Z)", texto, re.S)
+    if m:
+        for linea in m.group(1).splitlines():
+            linea = linea.strip()
+            if linea.startswith("•"):
+                campos["recomendaciones"].append(linea.lstrip("• ").strip())
+            elif re.match(r"^[🟢🟡🟠🔴⚫]", linea):
+                campos["titulo_recomendacion"] = linea.lstrip("🟢🟡🟠🔴⚫ ").strip()
+
+    return campos
+
+
+def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
+    """Convierte un resultado del orquestador en el registro del boletín activo."""
+    if resultado.get("error"):
+        return None
+
+    nivel_24h = _nivel_valido(resultado.get("nivel_eaws_24h"))
+    if nivel_24h is None:
+        return None
+
+    tools_llamadas = resultado.get("tools_llamadas", [])
+    boletin_texto = resultado.get("boletin", "")
+    campos_sa = _construir_campos_subagentes(tools_llamadas, resultado)
+    res_boletin_tool = _extraer_resultado_tool(tools_llamadas, "redactar_boletin_eaws")
+    parseado = _parsear_boletin_texto(boletin_texto)
+
+    return {
+        "ubicacion": resultado.get("ubicacion", ""),
+        "nivel_eaws": nivel_24h,
+        "nivel_eaws_48h": _nivel_valido(
+            res_boletin_tool.get("nivel_eaws_48h")
+            or _extraer_nivel(boletin_texto, r'48h\s*[→\-]\s*(\d)')
+        ),
+        "nivel_eaws_72h": _nivel_valido(
+            res_boletin_tool.get("nivel_eaws_72h")
+            or _extraer_nivel(boletin_texto, r'72h\s*[→\-]\s*(\d)')
+        ),
+        "confianza": res_boletin_tool.get("confianza") or _extraer_confianza(boletin_texto),
+        "viento_kmh": campos_sa.get("viento_kmh"),
+        "manto": {
+            "estado": campos_sa.get("estado_pinn"),
+            "factor_seguridad": campos_sa.get("factor_seguridad_pinn"),
+        },
+        "satelital": {
+            "estado": campos_sa.get("estado_vit"),
+            "score_anomalia": campos_sa.get("score_anomalia_vit"),
+            "datos_disponibles": _datos_satelitales_disponibles(tools_llamadas),
+        },
+        "comunidad": {
+            "relatos_analizados": campos_sa.get("relatos_analizados"),
+            "tipo_alud_predominante": campos_sa.get("tipo_alud_predominante"),
+            "indice_riesgo_historico": campos_sa.get("indice_riesgo_historico"),
+        },
+        "problema": campos_sa.get("tipo_problema_eaws") or campos_sa.get("wn2_avalanche_problem"),
+        "emitido": resultado.get("timestamp"),
+        **parseado,
+    }
+
+
+def _consolidar_registros(registros: list) -> list:
+    """
+    Consolida sectores por zona base quedándose con el registro del PEOR
+    sector (máximo nivel — criterio conservador) y elevando también los
+    niveles 48/72h al máximo entre sectores. Solo zonas chilenas.
     """
     from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 
-    niveles: dict[str, int] = {}
-    for resultado in resultados:
-        if resultado.get("error"):
+    por_zona: dict[str, dict] = {}
+    for registro in registros:
+        if not registro:
             continue
-        zona = _zona_base(resultado.get("ubicacion", ""))
+        zona = _zona_base(registro["ubicacion"])
         if zona not in ZONAS_ANDES_CHILE:
             continue
-        try:
-            nivel = int(resultado.get("nivel_eaws_24h"))
-        except (TypeError, ValueError):
-            continue
-        if not 1 <= nivel <= 5:
-            continue
-        niveles[zona] = max(nivel, niveles.get(zona, 0))
 
-    if not niveles:
+        previo = por_zona.get(zona)
+        if previo is None or registro["nivel_eaws"] > previo["nivel_eaws"]:
+            dominante = dict(registro)
+            if previo:
+                for clave in ("nivel_eaws_48h", "nivel_eaws_72h"):
+                    valores = [v for v in (dominante.get(clave), previo.get(clave)) if v]
+                    dominante[clave] = max(valores) if valores else None
+            por_zona[zona] = dominante
+        else:
+            for clave in ("nivel_eaws_48h", "nivel_eaws_72h"):
+                valores = [v for v in (previo.get(clave), registro.get(clave)) if v]
+                previo[clave] = max(valores) if valores else None
+
+    boletines = []
+    for zona, registro in sorted(por_zona.items()):
+        registro.pop("ubicacion", None)
+        boletines.append({"zona": zona, **registro})
+    return boletines
+
+
+def subir_boletin_activo(boletines: list) -> Optional[str]:
+    """Sube el boletín activo consolidado a GCS. Nunca levanta excepción."""
+    if not boletines:
         logger.warning("Boletín activo: sin zonas chilenas con nivel válido — no se exporta")
         return None
 
     contenido = {
         "generado": datetime.now(timezone.utc).isoformat(),
         "fuente": "pipeline-s5",
-        "boletines": [
-            {"zona": zona, "nivel_eaws": nivel}
-            for zona, nivel in sorted(niveles.items())
-        ],
+        "boletines": boletines,
     }
-
     try:
         cliente_gcs = storage.Client(project=GCP_PROJECT)
         blob = cliente_gcs.bucket(BUCKET_BOLETIN_ACTIVO).blob(OBJETO_BOLETIN_ACTIVO)
@@ -575,8 +713,24 @@ def exportar_boletin_activo(resultados: list) -> Optional[str]:
             timeout=60,
         )
         uri = f"gs://{BUCKET_BOLETIN_ACTIVO}/{OBJETO_BOLETIN_ACTIVO}"
-        logger.info(f"Boletín activo exportado para el frontend: {uri} ({len(niveles)} zonas)")
+        logger.info(f"Boletín activo exportado para el frontend: {uri} ({len(boletines)} zonas)")
         return uri
     except Exception as e:
         logger.error(f"Error exportando boletín activo (no bloquea el pipeline): {e}")
+        return None
+
+
+def exportar_boletin_activo(resultados: list) -> Optional[str]:
+    """
+    Publica el boletín activo consolidado que consume el frontend
+    (GitHub Pages), enriquecido con los campos de los subagentes y los
+    bloques presentables del boletín de texto de S5.
+
+    Nunca levanta excepción: un fallo aquí no debe abortar el pipeline.
+    """
+    try:
+        registros = [_registro_desde_resultado(r) for r in resultados]
+        return subir_boletin_activo(_consolidar_registros(registros))
+    except Exception as e:
+        logger.error(f"Error construyendo boletín activo (no bloquea el pipeline): {e}")
         return None

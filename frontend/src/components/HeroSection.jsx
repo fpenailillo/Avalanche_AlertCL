@@ -50,15 +50,25 @@ export default function HeroSection({ centro }) {
         {estado.descripcionIA}
       </p>
 
-      <div className="mt-4 flex items-center gap-5 text-sm text-white/60">
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-white/60">
         <span className="flex items-center gap-1.5">
           <Thermometer className="h-4 w-4" />
           {estado.temperatura}°C
         </span>
         <span className="flex items-center gap-1.5">
           <Wind className="h-4 w-4" />
-          {estado.vientoKmh} km/h NO
+          {estado.vientoKmh} km/h
         </span>
+        {estado.tendencia && (
+          <span className="flex items-center gap-1.5">
+            Tendencia: {estado.tendencia}
+          </span>
+        )}
+        {estado.confianza && (
+          <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-xs">
+            Confianza {estado.confianza}
+          </span>
+        )}
       </div>
       <p className="mt-2 text-[11px] text-white/40">{estado.validoHasta}</p>
     </header>

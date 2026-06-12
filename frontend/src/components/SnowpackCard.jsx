@@ -19,22 +19,41 @@ export default function SnowpackCard({ datos, className = '' }) {
         </div>
 
         <dl className="space-y-2 text-xs">
-          <div className="flex justify-between">
-            <dt className="text-white/60">Profundidad media</dt>
-            <dd className="font-semibold">{datos.profundidadCm} cm</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-white/60">Capa débil</dt>
-            <dd className={`font-semibold ${colorEstado}`}>{datos.capaDebil}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-white/60">Confianza</dt>
-            <dd className="font-semibold">{Math.round(datos.confianza * 100)}%</dd>
-          </div>
+          {datos.factorSeguridad != null && (
+            <div className="flex justify-between">
+              <dt className="text-white/60">Factor de seguridad (Mohr-Coulomb)</dt>
+              <dd className="font-semibold">{Number(datos.factorSeguridad).toFixed(2)}</dd>
+            </div>
+          )}
+          {datos.profundidadCm != null && (
+            <div className="flex justify-between">
+              <dt className="text-white/60">Profundidad media</dt>
+              <dd className="font-semibold">{datos.profundidadCm} cm</dd>
+            </div>
+          )}
+          {datos.capaDebil != null && (
+            <div className="flex justify-between">
+              <dt className="text-white/60">Capa débil</dt>
+              <dd className={`font-semibold ${colorEstado}`}>{datos.capaDebil}</dd>
+            </div>
+          )}
+          {datos.confianza != null && (
+            <div className="flex justify-between">
+              <dt className="text-white/60">Confianza</dt>
+              <dd className="font-semibold">{Math.round(datos.confianza * 100)}%</dd>
+            </div>
+          )}
+          {datos.real && (
+            <div className="flex justify-between">
+              <dt className="text-white/60">Fuente</dt>
+              <dd className="font-semibold text-emerald-300">Pipeline S1 en vivo</dd>
+            </div>
+          )}
         </dl>
 
         <p className="text-[10px] text-white/40">
           Última corrida: {datos.ultimaCorrida}
+          {datos.real ? ' · datos reales' : ' · demo'}
         </p>
       </div>
     </GlassCard>

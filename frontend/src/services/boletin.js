@@ -1,17 +1,25 @@
 import { useEffect, useState } from 'react'
 
 // Boletín activo publicado diariamente por el backend (BigQuery → GCS).
-// Esquema esperado del JSON:
+// Esquema (generado por agentes/salidas/almacenador.py → exportar_boletin_activo):
 // {
-//   "generado": "2026-06-11T08:00:00Z",
-//   "boletines": [
-//     { "zona": "La Parva", "nivel_eaws": 2 },
-//     { "zona": "Valle Nevado", "nivel_eaws": 3 },
-//     ...
-//   ]
+//   "generado": "2026-06-12T03:04:10Z",
+//   "fuente": "pipeline-s5",
+//   "boletines": [{
+//     "zona": "La Parva", "nivel_eaws": 2,
+//     "nivel_eaws_48h": 2, "nivel_eaws_72h": 2, "confianza": "Alta",
+//     "descripcion": "...", "tendencia": "estable",
+//     "temperatura_c": 0.1, "viento_kmh": 10, "precip_24h_mm": 0,
+//     "pronostico_3d": [{ "fecha", "tmax", "tmin", "precip_mm", "viento_kmh", "cielo" }],
+//     "manto": { "estado", "factor_seguridad" },
+//     "satelital": { "estado", "score_anomalia", "datos_disponibles" },
+//     "comunidad": { "relatos_analizados", "tipo_alud_predominante", "indice_riesgo_historico" },
+//     "problema": "low_load", "terreno_riesgo": "...",
+//     "titulo_recomendacion": "...", "recomendaciones": ["..."],
+//     "emitido": "2026-06-12T02:58:10Z"
+//   }]
 // }
-// El normalizador también acepta variantes de campo (centro/id, nivel/nivel_riesgo)
-// y un arreglo en la raíz en lugar de la clave "boletines".
+// Solo "zona" y "nivel_eaws" son obligatorios: todo lo demás cae a mock si falta.
 
 const URL_BOLETIN =
   import.meta.env.VITE_BOLETIN_URL ??
@@ -28,15 +36,38 @@ const slug = (texto) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '-')
 
+const nivelValido = (valor) => {
+  const nivel = Number(valor)
+  return Number.isInteger(nivel) && nivel >= 1 && nivel <= 5 ? nivel : null
+}
+
 function normalizarEntrada(entrada) {
   const zona = entrada.zona ?? entrada.centro ?? entrada.id
-  const nivelCrudo = entrada.nivel_eaws ?? entrada.nivel ?? entrada.nivel_riesgo
-  if (zona == null || nivelCrudo == null) return null
+  const nivel = nivelValido(entrada.nivel_eaws ?? entrada.nivel ?? entrada.nivel_riesgo)
+  if (zona == null || nivel == null) return null
 
-  const nivel = Number(nivelCrudo)
-  if (!Number.isInteger(nivel) || nivel < 1 || nivel > 5) return null
-
-  return [slug(zona), nivel]
+  return [
+    slug(zona),
+    {
+      nivel,
+      nivel48h: nivelValido(entrada.nivel_eaws_48h),
+      nivel72h: nivelValido(entrada.nivel_eaws_72h),
+      confianza: entrada.confianza ?? null,
+      descripcion: entrada.descripcion ?? null,
+      tendencia: entrada.tendencia ?? null,
+      temperaturaC: entrada.temperatura_c ?? null,
+      vientoKmh: entrada.viento_kmh ?? null,
+      pronostico3d: Array.isArray(entrada.pronostico_3d) ? entrada.pronostico_3d : [],
+      manto: entrada.manto ?? {},
+      satelital: entrada.satelital ?? {},
+      comunidad: entrada.comunidad ?? {},
+      problema: entrada.problema ?? null,
+      terrenoRiesgo: entrada.terreno_riesgo ?? null,
+      tituloRecomendacion: entrada.titulo_recomendacion ?? null,
+      recomendaciones: Array.isArray(entrada.recomendaciones) ? entrada.recomendaciones : [],
+      emitido: entrada.emitido ?? null,
+    },
+  ]
 }
 
 export async function obtenerBoletinActivo() {
@@ -54,31 +85,31 @@ export async function obtenerBoletinActivo() {
     throw new Error('Formato de boletín no reconocido')
   }
 
-  const niveles = new Map(entradas.map(normalizarEntrada).filter(Boolean))
-  if (niveles.size === 0) {
+  const boletines = new Map(entradas.map(normalizarEntrada).filter(Boolean))
+  if (boletines.size === 0) {
     throw new Error('El boletín no contiene zonas válidas')
   }
 
-  return { generado: cuerpo.generado ?? null, niveles }
+  return { generado: cuerpo.generado ?? null, boletines }
 }
 
 // estado: 'cargando' | 'en-linea' | 'demo' (fallback elegante a datos mock)
 export function useBoletinActivo() {
   const [boletin, setBoletin] = useState({
     estado: 'cargando',
-    niveles: new Map(),
+    boletines: new Map(),
     generado: null,
   })
 
   useEffect(() => {
     let montado = true
     obtenerBoletinActivo()
-      .then(({ generado, niveles }) => {
-        if (montado) setBoletin({ estado: 'en-linea', niveles, generado })
+      .then(({ generado, boletines }) => {
+        if (montado) setBoletin({ estado: 'en-linea', boletines, generado })
       })
       .catch((error) => {
         console.warn('Boletín en línea no disponible, usando datos demo:', error.message)
-        if (montado) setBoletin({ estado: 'demo', niveles: new Map(), generado: null })
+        if (montado) setBoletin({ estado: 'demo', boletines: new Map(), generado: null })
       })
     return () => {
       montado = false

@@ -22,7 +22,9 @@ export default function CommunityCard({ datos, className = '' }) {
         </ul>
 
         <p className="mt-auto text-[10px] text-white/40">
-          Resumen NLP de {datos.totalReportes48h} reportes en 48 h
+          Resumen NLP de {datos.totalReportes48h} reportes
+          {datos.tipoAludPredominante ? ` · alud predominante: ${datos.tipoAludPredominante}` : ''}
+          {datos.real ? ' · datos reales' : ' · demo'}
         </p>
       </div>
     </GlassCard>

@@ -10,6 +10,7 @@ import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
 import { CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
 import { useBoletinActivo } from './services/boletin'
+import { fusionarCentros } from './services/fusion'
 
 function BanderaChile({ className = 'h-3.5 w-5' }) {
   return (
@@ -102,18 +103,11 @@ function App() {
   const [centroId, setCentroId] = useState('la-parva')
   const boletin = useBoletinActivo()
 
-  // Fusiona el mock con los niveles del boletín en línea (si está disponible)
-  const centros = useMemo(() => {
-    if (boletin.niveles.size === 0) return CENTROS_LISTA
-    return CENTROS_LISTA.map((centro) => {
-      const nivelEnLinea = boletin.niveles.get(centro.id)
-      if (nivelEnLinea == null) return centro
-      return {
-        ...centro,
-        estadoActual: { ...centro.estadoActual, nivelEAWS: nivelEnLinea },
-      }
-    })
-  }, [boletin.niveles])
+  // Fusiona el mock con el boletín en línea, campo por campo (si está disponible)
+  const centros = useMemo(
+    () => fusionarCentros(CENTROS_LISTA, boletin.boletines),
+    [boletin.boletines]
+  )
 
   const centro = centros.find((c) => c.id === centroId) ?? centros[0]
 
@@ -132,6 +126,8 @@ function App() {
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <ProblemsCard
             problemas={centro.problemas}
+            recomendaciones={centro.recomendaciones}
+            tituloRecomendacion={centro.tituloRecomendacion}
             className="md:col-span-2 lg:order-1 lg:col-span-2"
           />
           <ForecastCard
