@@ -5,6 +5,12 @@ Sistema multi-agente de inteligencia artificial que genera boletines de riesgo d
 > **Tesis de Magíster en Tecnologías de la Información** > **Autor:** Francisco Peñailillo |  
 > Universidad Técnica Federico Santa María (UTFSM) — 2026  
 
+### 🌐 Demo en vivo
+
+**[https://fpenailillo.github.io/Avalanche_AlertCL/](https://fpenailillo.github.io/Avalanche_AlertCL/)**
+
+Interfaz web (Prueba de Concepto, beta) con los boletines EAWS por centro de montaña: nivel de peligro con íconos oficiales EAWS, problemas de avalancha, evolución a 72 h, pronóstico a 15 días (WeatherNext 2) y datos de los subagentes S1/S2/S4.
+
 ---
 
 ## El Problema
@@ -107,6 +113,8 @@ Para quienes deseen explorar el código fuente, el proyecto está organizado de 
 /datos: Scripts y funciones en la nube (GCP) encargadas de extraer continuamente la información meteorológica, satelital y los relatos de la comunidad.
 
 /agentes: El motor principal de la IA. Aquí reside la lógica de los 5 subagentes, su orquestación y la comunicación con los Modelos de Lenguaje (LLMs).
+
+/frontend: Interfaz web (React + Vite + Tailwind) que muestra los boletines de riesgo. Se despliega automáticamente en [GitHub Pages](https://fpenailillo.github.io/Avalanche_AlertCL/) con cada push a `main`.
 
 /notebooks_validacion: Entorno de investigación académica utilizado para comparar los resultados de la IA contra boletines de expertos humanos y validar las hipótesis de la tesis.
 
