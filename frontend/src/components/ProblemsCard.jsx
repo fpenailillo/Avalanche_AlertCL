@@ -1,6 +1,5 @@
 import { TriangleAlert, MoveVertical, Compass } from 'lucide-react'
 import GlassCard from './GlassCard'
-import { PROBLEMAS_AVALANCHA } from '../data/mockData'
 import problemNewSnow from '../assets/eaws/problem-new-snow.jpg'
 import problemWindSlab from '../assets/eaws/problem-wind-slab.jpg'
 import problemPersistent from '../assets/eaws/problem-persistent-weak-layer.jpg'
@@ -16,7 +15,7 @@ const ICONOS_PROBLEMA = {
   'gliding-snow': problemGliding,
 }
 
-export default function ProblemsCard({ className = '' }) {
+export default function ProblemsCard({ problemas, className = '' }) {
   return (
     <GlassCard
       icon={TriangleAlert}
@@ -24,7 +23,7 @@ export default function ProblemsCard({ className = '' }) {
       className={className}
     >
       <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
-        {PROBLEMAS_AVALANCHA.map((problema) => (
+        {problemas.map((problema) => (
           <div
             key={problema.id}
             className="flex items-start gap-3 rounded-2xl bg-white/5 p-3 text-white"

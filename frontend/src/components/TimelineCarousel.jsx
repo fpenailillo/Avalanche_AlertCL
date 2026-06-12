@@ -1,13 +1,13 @@
 import { Clock } from 'lucide-react'
 import GlassCard from './GlassCard'
 import WeatherIcon from './WeatherIcon'
-import { TIMELINE_72H, ESCALA_EAWS } from '../data/mockData'
+import { ESCALA_EAWS } from '../data/mockData'
 
-export default function TimelineCarousel() {
+export default function TimelineCarousel({ timeline }) {
   return (
     <GlassCard icon={Clock} title="Evolución del riesgo · próximas 72 h">
       <div className="scroll-slim -mx-1 flex snap-x snap-mandatory gap-1 overflow-x-auto pb-1">
-        {TIMELINE_72H.map((punto, i) => {
+        {timeline.map((punto, i) => {
           const nivel = ESCALA_EAWS[punto.nivel]
           return (
             <div
