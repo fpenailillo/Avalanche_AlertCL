@@ -10,6 +10,33 @@ import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
 import { CENTROS, CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
 
+function BanderaChile({ className = 'h-3.5 w-5' }) {
+  return (
+    <svg viewBox="0 0 24 16" className={`${className} rounded-[2px] shadow`} aria-label="Bandera de Chile">
+      <rect width="24" height="8" fill="#ffffff" />
+      <rect y="8" width="24" height="8" fill="#d52b1e" />
+      <rect width="8" height="8" fill="#0039a6" />
+      <path
+        d="M4 1.6 4.66 3.5l2 .03-1.6 1.2.58 1.93L4 5.5 2.36 6.66l.58-1.93-1.6-1.2 2-.03Z"
+        fill="#ffffff"
+      />
+    </svg>
+  )
+}
+
+function BrandHeader() {
+  return (
+    <div className="flex items-center justify-center gap-2 pt-5 text-white">
+      <Mountain className="h-5 w-5 text-white/80" />
+      <span className="text-lg font-semibold tracking-tight">Avalanche_AlertCL</span>
+      <BanderaChile />
+      <span className="rounded-full border border-amber-300/40 bg-amber-400/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-300">
+        Beta
+      </span>
+    </div>
+  )
+}
+
 function SelectorCentros({ seleccionadoId, onSelect }) {
   return (
     <nav className="sticky top-3 z-10 mx-auto mt-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/15 bg-white/10 p-1 shadow-lg shadow-black/10 backdrop-blur-xl">
@@ -47,6 +74,7 @@ function App() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-blue-900 to-sky-700">
       <div className="mx-auto max-w-5xl px-4 pb-12">
+        <BrandHeader />
         <SelectorCentros seleccionadoId={centroId} onSelect={setCentroId} />
 
         <HeroSection centro={centro} />
@@ -73,16 +101,24 @@ function App() {
           <CommunityCard datos={centro.comunidad} className="lg:order-6 lg:col-span-2" />
         </div>
 
-        <footer className="mt-10 flex flex-col items-center gap-1 text-center text-[11px] text-white/40">
+        <footer className="mt-10 flex flex-col items-center gap-2 text-center text-[11px] text-white/40">
           <span className="flex items-center gap-1.5 font-semibold text-white/60">
             <Mountain className="h-3.5 w-3.5" />
             Avalanche_AlertCL
+            <BanderaChile className="h-2.5 w-4" />
           </span>
-          <p>
-            Prueba de Concepto · Boletines EAWS generados por un sistema
-            multi-agente de IA · Temporada 2026
+          <p className="max-w-xl">
+            Sistema de pronóstico generado por agentes de inteligencia artificial,
+            desarrollado como parte de la tesis de <strong className="text-white/60">Francisco Peñailillo</strong> para
+            optar al grado de Magíster en Tecnologías de la Información.
+            Los boletines se generan de forma automática, sin revisión humana.
           </p>
-          <p>Datos de demostración — no usar para decisiones en terreno.</p>
+          <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
+            ⚠️ Mensaje de seguridad: esta es una versión beta con datos de
+            demostración. No utilices esta información para tomar decisiones en
+            terreno ni planificar actividades en montaña; consulta siempre los
+            boletines oficiales y a las patrullas de cada centro.
+          </p>
           <p>
             Íconos estándar de niveles de peligro y problemas de avalancha ©{' '}
             <a
