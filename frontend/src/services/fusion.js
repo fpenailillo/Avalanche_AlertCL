@@ -7,16 +7,17 @@ import { ESCALA_EAWS } from '../data/mockData'
 const capitalizar = (texto) =>
   texto ? texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase() : texto
 
-// Frase clara por tipo de problema EAWS (sin jerga técnica) para el resumen
+// Frase profesional por tipo de problema EAWS (terminología de boletín, sin
+// jerga de modelo) para el resumen del hero.
 const FRASE_PROBLEMA = {
-  wind_slab: 'El viento acumuló placas de nieve en laderas resguardadas.',
-  storm_slab: 'La nieve reciente de la tormenta aún no se asienta.',
-  drifting_snow: 'El viento sigue transportando nieve en altura.',
-  new_snow: 'Cayó nieve nueva que todavía no se ha consolidado.',
-  heavy_snow: 'Se acumula nieve nueva en cantidad importante.',
-  wet_snow: 'La nieve se humedece con el calor del día.',
-  gliding_snow: 'La nieve podría deslizar sobre el terreno.',
-  persistent_weak_layer: 'Hay una capa débil enterrada en el manto.',
+  wind_slab: 'Placas de viento en laderas a sotavento.',
+  storm_slab: 'Placas de nieve reciente en proceso de estabilización.',
+  drifting_snow: 'Nieve transportada por el viento en cotas altas.',
+  new_snow: 'Nieve reciente aún sin consolidar en el manto.',
+  heavy_snow: 'Acumulación importante de nieve reciente.',
+  wet_snow: 'Humedecimiento del manto por el ascenso térmico.',
+  gliding_snow: 'Posibles deslizamientos del manto sobre el terreno.',
+  persistent_weak_layer: 'Capa débil persistente en el interior del manto.',
 }
 
 // Construye una descripción breve y clara a partir de los datos del boletín:
