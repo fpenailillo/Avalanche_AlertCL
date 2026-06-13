@@ -48,6 +48,11 @@ def main() -> int:
         help="Si no hay corrida WN2 para la fecha exacta, usar la más reciente "
              "dentro de los N días previos (útil por el desfase de publicación)"
     )
+    parser.add_argument(
+        "--actualizar-vigente", action="store_true",
+        help="Además de la copia datada, sobreescribir series_wn2.json (vigente) "
+             "con la última fecha del rango"
+    )
     args = parser.parse_args()
 
     # Zonas base chilenas con coordenadas (sin sectores ni suizas)
@@ -81,18 +86,23 @@ def main() -> int:
             except Exception as exc:
                 logger.error(f"  [{nombre}] ERROR: {exc}")
 
+        # fecha_desde=fecha: la serie arranca en su fecha de referencia, aunque
+        # la corrida usada (por fallback) sea de días previos
         contenido = IngestorWN2.construir_contenido_series(
-            series_por_zona, generado=f"{fecha}T00:00:00+00:00"
+            series_por_zona, generado=f"{fecha}T00:00:00+00:00", fecha_desde=fecha
         )
         if contenido is None:
             logger.warning(f"  Sin series para {fecha} — se omite")
             continue
 
-        ruta = f"series_wn2/series_{fecha}.json"
+        rutas = [f"series_wn2/series_{fecha}.json"]
+        # La última fecha del rango también puede actualizar la serie vigente
+        if args.actualizar_vigente and fecha == args.hasta:
+            rutas.append("series_wn2.json")
         if args.dry_run:
-            logger.info(f"  [dry-run] {ruta}: {len(contenido['series'])} zonas")
+            logger.info(f"  [dry-run] {', '.join(rutas)}: {len(contenido['series'])} zonas")
         else:
-            ingestor.subir_series_frontend(contenido, [ruta])
+            ingestor.subir_series_frontend(contenido, rutas)
 
     logger.info("\nBackfill de series WN2 frontend completado.")
     return 0

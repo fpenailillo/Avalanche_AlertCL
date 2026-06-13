@@ -416,10 +416,15 @@ class IngestorWN2:
         return stats
 
     @staticmethod
-    def construir_contenido_series(series_por_zona: dict, generado: str) -> Optional[dict]:
+    def construir_contenido_series(
+        series_por_zona: dict, generado: str, fecha_desde: Optional[str] = None
+    ) -> Optional[dict]:
         """
         Arma el dict de series diarias WN2 para el frontend (zonas chilenas
         base, sin sectores). Retorna None si no hay zonas con datos.
+
+        fecha_desde (YYYY-MM-DD): descarta los días anteriores a esa fecha
+        (evita mostrar días pasados cuando la corrida usada es de días atrás).
         """
         from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 
@@ -433,9 +438,12 @@ class IngestorWN2:
 
             dias = []
             for fila in sorted(diarios, key=lambda r: str(r.get("fecha_local"))):
+                fecha_fila = str(fila.get("fecha_local"))
+                if fecha_desde and fecha_fila < fecha_desde:
+                    continue
                 viento_ms = fila.get("wind_100m_mean_ms")
                 dias.append({
-                    "fecha": str(fila.get("fecha_local")),
+                    "fecha": fecha_fila,
                     "tmin": round(fila["temp_p05_c"]) if fila.get("temp_p05_c") is not None else None,
                     "tmax": round(fila["temp_p95_c"]) if fila.get("temp_p95_c") is not None else None,
                     "nieve_cm": round(fila["nieve_24h_cm_p50_corr"], 1) if fila.get("nieve_24h_cm_p50_corr") is not None else None,
