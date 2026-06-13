@@ -1,4 +1,4 @@
-## Sistema Inteligente de Predicción de Riesgo de Avalanchas en Chile
+# Sistema Inteligente de Predicción de Riesgo de Avalanchas en Chile
 
 Sistema multi-agente de inteligencia artificial que genera boletines de riesgo de avalanchas para zonas de montaña chilenas. El proyecto combina modelos físicos, imágenes satelitales, pronósticos meteorológicos y análisis contextual basado en Inteligencia Artificial (LLMs) para suplir la falta de redes de observación en terreno.
 
