@@ -124,8 +124,8 @@ function App() {
 
   // Fusiona el mock con el boletín y las series en línea, campo por campo
   const centros = useMemo(
-    () => fusionarCentros(CENTROS_LISTA, boletin.boletines, seriesWN2, seriesHoras),
-    [boletin.boletines, seriesWN2, seriesHoras]
+    () => fusionarCentros(CENTROS_LISTA, boletin.boletines, seriesWN2, seriesHoras, fechaSeleccionada),
+    [boletin.boletines, seriesWN2, seriesHoras, fechaSeleccionada]
   )
 
   const centro = centros.find((c) => c.id === centroId) ?? centros[0]

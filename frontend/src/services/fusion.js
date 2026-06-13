@@ -124,7 +124,17 @@ function muestraHoraria(horas, objetivoMs) {
   return mejorDelta <= 3 * MS_6H ? mejor : null
 }
 
-function fusionarTimeline(timelineMock, detalle, horas) {
+// Instante de anclaje del tramo 0: ahora (vigente) o 00:00 local del día del
+// boletín (histórico, fechaBase = "YYYY-MM-DD").
+function anclaTimeline(fechaBase) {
+  if (fechaBase) {
+    const [y, m, d] = fechaBase.split('-').map(Number)
+    return new Date(y, m - 1, d).getTime()
+  }
+  return Date.now()
+}
+
+function fusionarTimeline(timelineMock, detalle, horas, fechaBase) {
   // La timeline mock tiene 12 tramos de 6 h: 0-3 → 24 h, 4-7 → 48 h, 8-11 → 72 h
   const porTramo = [
     detalle.nivel,
@@ -136,20 +146,20 @@ function fusionarTimeline(timelineMock, detalle, horas) {
     nivel: porTramo[Math.min(Math.floor(i / 4), 2)],
   }))
 
-  // Sin series horarias (offline/histórico): nivel real + ícono/temp mock.
+  // Sin series horarias (offline/sin archivo): nivel real + ícono/temp mock.
   if (!horas || horas.length === 0) return conNivel
 
-  // Con datos horarios reales: el tramo i representa ahora + 6 h·i. Se toma la
+  // Con datos horarios reales: el tramo i representa ancla + 6 h·i. Se toma la
   // hora real más cercana para ícono y temperatura; el día/hora lo resuelve
   // TimelineCarousel a partir de la fecha de referencia.
-  const ahora = Date.now()
+  const ancla = anclaTimeline(fechaBase)
   return conNivel.map((punto, i) => {
-    const muestra = muestraHoraria(horas, ahora + i * MS_6H)
+    const muestra = muestraHoraria(horas, ancla + i * MS_6H)
     if (!muestra) return punto
-    const t = new Date(ahora + i * MS_6H)
+    const t = new Date(ancla + i * MS_6H)
     return {
       ...punto,
-      hora: i === 0 ? 'Ahora' : `${String(t.getHours()).padStart(2, '0')}:00`,
+      hora: i === 0 && !fechaBase ? 'Ahora' : `${String(t.getHours()).padStart(2, '0')}:00`,
       temp: muestra.temp,
       icono: muestra.icono,
       real: true,
@@ -241,7 +251,7 @@ function fusionarPronostico15(dias) {
     })
 }
 
-export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras) {
+export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras, fechaBase = null) {
   const hayBoletin = boletines && boletines.size > 0
   const haySeries = seriesWN2 && seriesWN2.size > 0
   if (!hayBoletin && !haySeries) return centrosMock
@@ -258,7 +268,7 @@ export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras) 
       Object.assign(fusionado, {
         enLinea: true,
         estadoActual: fusionarEstadoActual(centro.estadoActual, detalle, dias),
-        timeline: fusionarTimeline(centro.timeline, detalle, horas),
+        timeline: fusionarTimeline(centro.timeline, detalle, horas, fechaBase),
         topografico: fusionarTopografico(centro.topografico, detalle.manto, detalle),
         satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
         comunidad: fusionarComunidad(centro.comunidad, detalle.comunidad),

@@ -204,8 +204,9 @@ export function useSeriesWN2(fecha = null) {
   return resultado.paraFecha === fecha ? resultado : SERIES_VACIAS
 }
 
-export async function obtenerSeriesHoras() {
-  const respuesta = await fetch(URL_SERIES_HORAS, {
+export async function obtenerSeriesHoras(fecha = null) {
+  const url = fecha ? `${URL_BASE}series_horas/series_${fecha}.json` : URL_SERIES_HORAS
+  const respuesta = await fetch(url, {
     signal: AbortSignal.timeout(TIMEOUT_MS),
     cache: 'no-store',
   })
@@ -228,28 +229,27 @@ export async function obtenerSeriesHoras() {
 const MAPA_HORAS_VACIO = new Map()
 
 // Series horarias reales (Google Weather) para el widget de evolución.
-// Solo aplican al boletín vigente: en modo histórico no hay archivo horario,
-// así que se devuelve vacío y el widget cae al mock con niveles reales.
+// Vigente → series_horas.json; histórico → series_horas/series_<fecha>.json.
+// Si no hay archivo, cae a vacío y el widget usa el mock con niveles reales.
 export function useSeriesHoras(fecha = null) {
-  const [series, setSeries] = useState(MAPA_HORAS_VACIO)
+  const [resultado, setResultado] = useState({ paraFecha: undefined, series: MAPA_HORAS_VACIO })
 
   useEffect(() => {
-    if (fecha) return undefined // histórico: no hay series horarias
     let montado = true
-    obtenerSeriesHoras()
+    obtenerSeriesHoras(fecha)
       .then((mapa) => {
-        if (montado) setSeries(mapa)
+        if (montado) setResultado({ paraFecha: fecha, series: mapa })
       })
       .catch((error) => {
         console.warn('Series horarias no disponibles:', error.message)
-        if (montado) setSeries(MAPA_HORAS_VACIO)
+        if (montado) setResultado({ paraFecha: fecha, series: MAPA_HORAS_VACIO })
       })
     return () => {
       montado = false
     }
   }, [fecha])
 
-  return fecha ? MAPA_HORAS_VACIO : series
+  return resultado.paraFecha === fecha ? resultado.series : MAPA_HORAS_VACIO
 }
 
 const BOLETIN_CARGANDO = {

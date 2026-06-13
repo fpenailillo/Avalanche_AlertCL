@@ -83,8 +83,17 @@ def mapear_icono(condicion: str, es_dia, tipo_precip: str) -> str:
     return "cloud"
 
 
-def consultar_horas(cliente: bigquery.Client, nombre_bq: str, horas: int) -> list:
-    """Trae las próximas `horas` horas (la última extracción por hora)."""
+def consultar_horas(cliente: bigquery.Client, nombre_bq: str, horas: int, fecha: str = None) -> list:
+    """Trae `horas` horas desde el ancla (la última extracción por hora).
+
+    Sin `fecha`: desde CURRENT_TIMESTAMP() (boletín vigente).
+    Con `fecha` (YYYY-MM-DD): desde las 00:00 hora Chile de ese día (histórico).
+    """
+    desde_sql = (
+        "TIMESTAMP(@fecha || ' 00:00:00', 'America/Santiago')"
+        if fecha
+        else "CURRENT_TIMESTAMP()"
+    )
     sql = f"""
         SELECT
           hora_inicio,
@@ -94,19 +103,20 @@ def consultar_horas(cliente: bigquery.Client, nombre_bq: str, horas: int) -> lis
           tipo_precipitacion
         FROM `{GCP_PROJECT}.clima.pronostico_horas`
         WHERE nombre_ubicacion = @ubicacion
-          AND hora_inicio >= CURRENT_TIMESTAMP()
-          AND hora_inicio < TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL @horas HOUR)
+          AND hora_inicio >= {desde_sql}
+          AND hora_inicio < TIMESTAMP_ADD({desde_sql}, INTERVAL @horas HOUR)
         QUALIFY ROW_NUMBER() OVER (
           PARTITION BY hora_inicio ORDER BY marca_tiempo_ingestion DESC
         ) = 1
         ORDER BY hora_inicio
     """
-    cfg = bigquery.QueryJobConfig(
-        query_parameters=[
-            bigquery.ScalarQueryParameter("ubicacion", "STRING", nombre_bq),
-            bigquery.ScalarQueryParameter("horas", "INT64", horas),
-        ]
-    )
+    parametros = [
+        bigquery.ScalarQueryParameter("ubicacion", "STRING", nombre_bq),
+        bigquery.ScalarQueryParameter("horas", "INT64", horas),
+    ]
+    if fecha:
+        parametros.append(bigquery.ScalarQueryParameter("fecha", "STRING", fecha))
+    cfg = bigquery.QueryJobConfig(query_parameters=parametros)
     filas = list(cliente.query(sql, job_config=cfg).result())
     return [
         {
@@ -122,13 +132,17 @@ def consultar_horas(cliente: bigquery.Client, nombre_bq: str, horas: int) -> lis
 def main() -> int:
     parser = argparse.ArgumentParser(description="Exporta series horarias a GCS")
     parser.add_argument("--horas", type=int, default=72, help="Horizonte en horas (default 72)")
+    parser.add_argument(
+        "--fecha",
+        help="YYYY-MM-DD: genera series_horas/series_<fecha>.json para un boletín histórico",
+    )
     parser.add_argument("--dry-run", action="store_true", help="No sube a GCS")
     args = parser.parse_args()
 
     cliente_bq = bigquery.Client(project=GCP_PROJECT)
     series = []
     for zona_salida, nombre_bq in ZONAS:
-        horas = consultar_horas(cliente_bq, nombre_bq, args.horas)
+        horas = consultar_horas(cliente_bq, nombre_bq, args.horas, args.fecha)
         logger.info(f"{zona_salida:14s} ({nombre_bq}): {len(horas)} horas")
         if horas:
             series.append({"zona": zona_salida, "horas": horas})
@@ -142,21 +156,25 @@ def main() -> int:
         "fuente": "google-weather-hours",
         "series": series,
     }
+    if args.fecha:
+        contenido["fecha"] = args.fecha
+
+    destino = f"series_horas/series_{args.fecha}.json" if args.fecha else OBJETO
 
     if args.dry_run:
-        print(json.dumps(contenido, ensure_ascii=False, indent=2)[:1500])
-        logger.info("[dry-run] no se subió a GCS")
+        print(json.dumps(contenido, ensure_ascii=False, indent=2)[:1200])
+        logger.info(f"[dry-run] no se subió a GCS (destino sería {destino})")
         return 0
 
     bucket = storage.Client(project=GCP_PROJECT).bucket(BUCKET)
-    blob = bucket.blob(OBJETO)
+    blob = bucket.blob(destino)
     blob.cache_control = "public, max-age=300"
     blob.upload_from_string(
         json.dumps(contenido, ensure_ascii=False, indent=2),
         content_type="application/json",
         timeout=60,
     )
-    logger.info(f"Subido gs://{BUCKET}/{OBJETO} ({len(series)} zonas)")
+    logger.info(f"Subido gs://{BUCKET}/{destino} ({len(series)} zonas)")
     return 0
 
 
