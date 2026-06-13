@@ -15,6 +15,11 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "La Parva Sector Alto": (-33.344, -70.280),
     "Valle Nevado":         (-33.357, -70.270),
     "El Colorado":          (-33.360, -70.289),
+    # Centros adicionales (coordenadas alineadas con datos/extractor)
+    "Portillo":             (-32.837, -70.129),
+    "Ski Arpa":             (-32.600, -70.390),
+    "Lagunillas":           (-33.680, -70.250),
+    "Chapa Verde":          (-34.170, -70.370),
     # Alpes suizos (validación H1/H3 SLF)
     "Interlaken":           (46.686,   7.863),
     "Matterhorn Zermatt":   (45.977,   7.659),
@@ -29,6 +34,10 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "La Parva Sector Bajo": [-70.40, -33.43, -70.25, -33.32],
     "Valle Nevado":         [-70.38, -33.40, -70.18, -33.25],
     "El Colorado":          [-70.35, -33.43, -70.22, -33.30],
+    "Portillo":             [-70.23, -32.94, -70.03, -32.74],
+    "Ski Arpa":             [-70.49, -32.70, -70.29, -32.50],
+    "Lagunillas":           [-70.35, -33.78, -70.15, -33.58],
+    "Chapa Verde":          [-70.47, -34.27, -70.27, -34.07],
 }
 
 # ─── Polígonos GeoJSON (para BigQuery GEOGRAPHY y ST_REGIONSTATS) ─────────────
@@ -65,6 +74,38 @@ POLIGONOS_ZONAS: dict[str, dict] = {
             [-70.35, -33.43], [-70.22, -33.43],
             [-70.22, -33.30], [-70.35, -33.30],
             [-70.35, -33.43],
+        ]],
+    },
+    "Portillo": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.23, -32.94], [-70.03, -32.94],
+            [-70.03, -32.74], [-70.23, -32.74],
+            [-70.23, -32.94],
+        ]],
+    },
+    "Ski Arpa": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.49, -32.70], [-70.29, -32.70],
+            [-70.29, -32.50], [-70.49, -32.50],
+            [-70.49, -32.70],
+        ]],
+    },
+    "Lagunillas": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.35, -33.78], [-70.15, -33.78],
+            [-70.15, -33.58], [-70.35, -33.58],
+            [-70.35, -33.78],
+        ]],
+    },
+    "Chapa Verde": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.47, -34.27], [-70.27, -34.27],
+            [-70.27, -34.07], [-70.47, -34.07],
+            [-70.47, -34.27],
         ]],
     },
 }
@@ -112,6 +153,34 @@ METADATA_ZONAS: dict[str, dict] = {
         "elevacion_max_m": 4100,
         "exposicion_predominante": "O",
         "region_eaws": "Andes Central Norte",
+        "region": "andes_chile",
+    },
+    "Portillo": {
+        "elevacion_min_m": 2580,
+        "elevacion_max_m": 3310,
+        "exposicion_predominante": "NE",
+        "region_eaws": "Andes del Aconcagua",
+        "region": "andes_chile",
+    },
+    "Ski Arpa": {
+        "elevacion_min_m": 2600,
+        "elevacion_max_m": 3700,
+        "exposicion_predominante": "S",
+        "region_eaws": "Andes del Aconcagua",
+        "region": "andes_chile",
+    },
+    "Lagunillas": {
+        "elevacion_min_m": 2250,
+        "elevacion_max_m": 2700,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes Cajón del Maipo",
+        "region": "andes_chile",
+    },
+    "Chapa Verde": {
+        "elevacion_min_m": 2700,
+        "elevacion_max_m": 3100,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes de O'Higgins",
         "region": "andes_chile",
     },
     # Alpes suizos (validación H1/H3 SLF)

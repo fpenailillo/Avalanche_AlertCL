@@ -36,6 +36,8 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# El Job de Cloud Run genera boletines de validación (La Parva + Suiza)
-# Para generar todas las ubicaciones: agregar --ubicaciones o quitar --preset validacion
-ENTRYPOINT ["python", "agentes/scripts/generar_todos.py", "--guardar", "--preset", "validacion"]
+# El Job de Cloud Run genera el reporte diario de los centros chilenos
+# operacionales que alimentan el frontend (preset 'produccion').
+# Para validación con zonas suizas (H1/H4): --preset validacion
+# Para reprocesar una fecha: --args="--preset,produccion,--fecha,YYYY-MM-DD"
+ENTRYPOINT ["python", "agentes/scripts/generar_todos.py", "--guardar", "--preset", "produccion"]

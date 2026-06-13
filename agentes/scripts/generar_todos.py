@@ -58,6 +58,19 @@ UBICACIONES_LAPARVA = [
     "Valle Nevado",
 ]
 
+# Preset producción: todos los centros chilenos operacionales que alimentan
+# el frontend (boletin_activo.json). Usado por el job diario.
+UBICACIONES_PRODUCCION = [
+    "La Parva Sector Alto",
+    "La Parva Sector Bajo",
+    "La Parva Sector Medio",
+    "Valle Nevado",
+    "Portillo",
+    "Ski Arpa",
+    "Lagunillas",
+    "Chapa Verde",
+]
+
 
 def parsear_argumentos() -> argparse.Namespace:
     """Parsea los argumentos de línea de comando."""
@@ -82,7 +95,7 @@ def parsear_argumentos() -> argparse.Namespace:
     )
     parser.add_argument(
         '--preset',
-        choices=['validacion', 'laparva'],
+        choices=['validacion', 'laparva', 'produccion'],
         default=None,
         help=(
             'Preset de ubicaciones: '
@@ -175,7 +188,10 @@ def main() -> int:
         return 1
 
     # Determinar lista de ubicaciones
-    if args.preset == 'laparva':
+    if args.preset == 'produccion':
+        ubicaciones = UBICACIONES_PRODUCCION
+        logger.info(f"Preset 'produccion': {len(ubicaciones)} centros chilenos operacionales")
+    elif args.preset == 'laparva':
         ubicaciones = UBICACIONES_LAPARVA
         logger.info(f"Preset 'laparva': {len(ubicaciones)} ubicaciones (Chile)")
     elif args.preset == 'validacion':
