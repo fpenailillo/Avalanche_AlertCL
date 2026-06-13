@@ -29,7 +29,7 @@ function descripcionClara(detalle, dias) {
   if (fraseProblema) {
     partes.push(fraseProblema)
   } else if (detalle.manto?.estado?.toUpperCase() === 'ESTABLE') {
-    partes.push('El manto de nieve se mantiene estable.')
+    partes.push('El manto de nieve está estable.')
   }
 
   // Nieve prevista próximos 3 días (mediana del ensemble WN2)
@@ -43,11 +43,11 @@ function descripcionClara(detalle, dias) {
   // Tendencia a 48/72 h derivada de los niveles
   const futuro = Math.max(detalle.nivel48h ?? 0, detalle.nivel72h ?? 0)
   if (futuro > detalle.nivel) {
-    partes.push('El riesgo tiende a aumentar.')
+    partes.push('El riesgo tiende a aumentar en los próximos días.')
   } else if ((detalle.nivel48h ?? detalle.nivel) < detalle.nivel) {
-    partes.push('El riesgo tiende a disminuir.')
+    partes.push('El riesgo tiende a bajar en los próximos días.')
   } else {
-    partes.push('El riesgo se mantiene estable.')
+    partes.push('Sin cambios importantes previstos.')
   }
 
   return partes.join(' ')
