@@ -43,6 +43,11 @@ def main() -> int:
     parser.add_argument("--desde", required=True, help="Fecha inicio (YYYY-MM-DD)")
     parser.add_argument("--hasta", required=True, help="Fecha fin (YYYY-MM-DD)")
     parser.add_argument("--dry-run", action="store_true", help="No subir a GCS")
+    parser.add_argument(
+        "--fallback-dias", type=int, default=0,
+        help="Si no hay corrida WN2 para la fecha exacta, usar la más reciente "
+             "dentro de los N días previos (útil por el desfase de publicación)"
+    )
     args = parser.parse_args()
 
     # Zonas base chilenas con coordenadas (sin sectores ni suizas)
@@ -55,18 +60,24 @@ def main() -> int:
     ingestor = IngestorWN2(dry_run=args.dry_run)
 
     for fecha in _rango_fechas(args.desde, args.hasta):
-        logger.info(f"\n=== Init_time {fecha} ===")
+        # Ventana de búsqueda: fecha exacta, o hasta N días previos si hay desfase
+        inicio_busqueda = (
+            datetime.strptime(fecha, "%Y-%m-%d").date()
+            - timedelta(days=args.fallback_dias)
+        ).isoformat()
+        etiqueta = fecha if args.fallback_dias == 0 else f"{inicio_busqueda}→{fecha} (corrida más reciente)"
+        logger.info(f"\n=== Series {fecha} · init {etiqueta} ===")
         series_por_zona = {}
         for nombre in zonas:
             lat, lon = COORDENADAS_ZONAS[nombre]
             try:
-                filas = ingestor._consultar_wn2(lat, lon, fecha, fecha)
+                filas = ingestor._consultar_wn2(lat, lon, inicio_busqueda, fecha)
                 diarios = [r for r in filas if r.get("nivel") == "diario"]
                 if diarios:
                     series_por_zona[nombre] = diarios
                     logger.info(f"  [{nombre}] {len(diarios)} días")
                 else:
-                    logger.warning(f"  [{nombre}] sin datos WN2 para init {fecha}")
+                    logger.warning(f"  [{nombre}] sin datos WN2 para init {etiqueta}")
             except Exception as exc:
                 logger.error(f"  [{nombre}] ERROR: {exc}")
 
