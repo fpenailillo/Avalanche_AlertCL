@@ -53,7 +53,7 @@ graph LR
             CS -- Mensual --> E5
         end
 
-        BQ[(BigQuery \n clima.*)]
+        BQ[(BigQuery<br/>clima.*)]
 
         E1 --> BQ
         E2 --> BQ
@@ -78,8 +78,8 @@ graph LR
 
         subgraph CapaResultados [Capa de Resultados]
             direction TB
-            BQ_Res[(BigQuery \n boletines_riesgo)]
-            GCS[[Cloud Storage \n JSON files]]
+            BQ_Res[(BigQuery<br/>boletines_riesgo)]
+            GCS[[Cloud Storage<br/>JSON files]]
         end
 
         S5 -- Guarda 34 campos --> BQ_Res
@@ -91,8 +91,7 @@ graph LR
     style CapaAgentes fill:#e6f4ea,stroke:#34a853,stroke-width:2px
     style CapaResultados fill:#fce8e6,stroke:#ea4335,stroke-width:2px
     style BQ fill:#fef7e0,stroke:#fbbc04,stroke-width:2px
-
-````
+```
 
 ## Los 5 Agentes Especializados
 Para replicar el análisis multicapa que hace un experto humano, la IA está dividida en 5 subagentes, cada uno enfocado en una tarea específica:
