@@ -252,6 +252,54 @@ export function useSeriesHoras(fecha = null) {
   return resultado.paraFecha === fecha ? resultado.series : MAPA_HORAS_VACIO
 }
 
+const MAPA_OBS_VACIO = new Map()
+
+export async function obtenerObservaciones() {
+  const respuesta = await fetch(`${URL_BASE}observaciones.json`, {
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!respuesta.ok) {
+    throw new Error(`Observaciones no disponibles (HTTP ${respuesta.status})`)
+  }
+  const cuerpo = await respuesta.json()
+  if (!Array.isArray(cuerpo.observaciones)) {
+    throw new Error('Formato de observaciones no reconocido')
+  }
+  // Agrupa por centro (slug) preservando el orden (más recientes primero).
+  const mapa = new Map()
+  for (const obs of cuerpo.observaciones) {
+    if (!obs.centro || !obs.comentarios) continue
+    const clave = slug(obs.centro)
+    if (!mapa.has(clave)) mapa.set(clave, [])
+    mapa.get(clave).push(obs)
+  }
+  return mapa
+}
+
+// Observaciones reales de la comunidad (envíos del formulario). Independiente
+// de la fecha seleccionada: son reportes vigentes de la comunidad.
+export function useObservaciones() {
+  const [observaciones, setObservaciones] = useState(MAPA_OBS_VACIO)
+
+  useEffect(() => {
+    let montado = true
+    obtenerObservaciones()
+      .then((mapa) => {
+        if (montado) setObservaciones(mapa)
+      })
+      .catch((error) => {
+        console.warn('Observaciones no disponibles:', error.message)
+        if (montado) setObservaciones(MAPA_OBS_VACIO)
+      })
+    return () => {
+      montado = false
+    }
+  }, [])
+
+  return observaciones
+}
+
 const BOLETIN_CARGANDO = {
   estado: 'cargando',
   boletines: new Map(),

@@ -194,13 +194,37 @@ function fusionarSatelital(satMock, satelital, detalle) {
   }
 }
 
-function fusionarComunidad(comMock, comunidad) {
-  if (comunidad?.relatos_analizados == null) return comMock
+// Tiempo relativo legible ("hace 3 h", "hace 2 d") desde una fecha ISO.
+function tiempoRelativo(iso) {
+  const ms = Date.now() - new Date(iso).getTime()
+  if (Number.isNaN(ms)) return ''
+  const min = Math.floor(ms / 60000)
+  if (min < 1) return 'recién'
+  if (min < 60) return `hace ${min} min`
+  const horas = Math.floor(min / 60)
+  if (horas < 24) return `hace ${horas} h`
+  const dias = Math.floor(horas / 24)
+  return `hace ${dias} d`
+}
+
+// Comunidad real: reportes enviados por la comunidad (observaciones_comunidad).
+// Sin envíos para el centro → tarjeta vacía con estado honesto.
+function fusionarComunidad(comMock, observaciones) {
+  if (!Array.isArray(observaciones) || observaciones.length === 0) {
+    return { reportes: [], resumenNLP: null, totalReportes: 0, real: true, vacio: true }
+  }
+  const reportes = observaciones.map((o) => ({
+    autor: o.autor || 'Anónimo',
+    hace: tiempoRelativo(o.fecha),
+    texto: o.comentarios,
+    tieneFotos: !!o.tiene_fotos,
+  }))
   return {
-    ...comMock,
-    totalReportes48h: comunidad.relatos_analizados,
-    tipoAludPredominante: comunidad.tipo_alud_predominante ?? null,
+    reportes,
+    resumenNLP: `${reportes.length} observación${reportes.length === 1 ? '' : 'es'} de la comunidad en los últimos días.`,
+    totalReportes: reportes.length,
     real: true,
+    vacio: false,
   }
 }
 
@@ -251,7 +275,14 @@ function fusionarPronostico15(dias) {
     })
 }
 
-export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras, fechaBase = null) {
+export function fusionarCentros(
+  centrosMock,
+  boletines,
+  seriesWN2,
+  seriesHoras,
+  observaciones = null,
+  fechaBase = null
+) {
   const hayBoletin = boletines && boletines.size > 0
   const haySeries = seriesWN2 && seriesWN2.size > 0
   if (!hayBoletin && !haySeries) return centrosMock
@@ -260,6 +291,7 @@ export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras, 
     const detalle = hayBoletin ? boletines.get(centro.id) : null
     const dias = haySeries ? seriesWN2.get(centro.id) : null
     const horas = seriesHoras ? seriesHoras.get(centro.id) : null
+    const obs = observaciones ? observaciones.get(centro.id) : null
     if (!detalle && !dias) return centro
 
     const fusionado = { ...centro }
@@ -271,7 +303,7 @@ export function fusionarCentros(centrosMock, boletines, seriesWN2, seriesHoras, 
         timeline: fusionarTimeline(centro.timeline, detalle, horas, fechaBase),
         topografico: fusionarTopografico(centro.topografico, detalle.manto, detalle),
         satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
-        comunidad: fusionarComunidad(centro.comunidad, detalle.comunidad),
+        comunidad: fusionarComunidad(centro.comunidad, obs),
         problemas: fusionarProblemas(centro.problemas, detalle),
         recomendaciones: detalle.recomendaciones,
         tituloRecomendacion: detalle.tituloRecomendacion,

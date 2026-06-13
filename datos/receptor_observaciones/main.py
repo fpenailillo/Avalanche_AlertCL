@@ -26,6 +26,11 @@ PROYECTO = os.environ.get("GCP_PROJECT", "climas-chileno")
 DATASET = os.environ.get("DATASET_CLIMA", "clima")
 TABLA = "observaciones_comunidad"
 BUCKET_FOTOS = os.environ.get("BUCKET_FOTOS", "avalanche-alertcl-observaciones")
+# Bucket público del frontend donde se publica el feed de observaciones.
+BUCKET_FRONTEND = os.environ.get("BUCKET_FRONTEND", "avalanche-alertcl-boletines")
+OBJETO_FEED = "observaciones.json"
+DIAS_FEED = 30
+MAX_POR_CENTRO = 8
 
 ORIGEN_PERMITIDO = "https://fpenailillo.github.io"
 
@@ -82,6 +87,57 @@ def _subir_fotos(fotos, id_obs):
         blob.upload_from_string(binario, content_type=tipo, timeout=60)
         rutas.append(f"gs://{BUCKET_FOTOS}/{ruta}")
     return rutas
+
+
+def _regenerar_feed():
+    """Reconstruye observaciones.json (público) con los reportes recientes.
+
+    Solo publica nombre/comentarios/fecha: nunca el contacto ni las fotos.
+    No bloquea la respuesta si falla.
+    """
+    try:
+        bq = bigquery.Client(project=PROYECTO)
+        sql = f"""
+            SELECT
+              centro,
+              COALESCE(NULLIF(TRIM(nombre), ''), 'Anónimo') AS autor,
+              comentarios,
+              fecha_registro,
+              (fotos IS NOT NULL AND fotos != '[]') AS tiene_fotos
+            FROM `{PROYECTO}.{DATASET}.{TABLA}`
+            WHERE comentarios IS NOT NULL
+              AND fecha_registro >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {DIAS_FEED} DAY)
+            QUALIFY ROW_NUMBER() OVER (
+              PARTITION BY centro ORDER BY fecha_registro DESC
+            ) <= {MAX_POR_CENTRO}
+            ORDER BY fecha_registro DESC
+        """
+        observaciones = [
+            {
+                "centro": f.centro,
+                "autor": f.autor,
+                "comentarios": f.comentarios,
+                "fecha": f.fecha_registro.astimezone(timezone.utc).isoformat(),
+                "tiene_fotos": bool(f.tiene_fotos),
+            }
+            for f in bq.query(sql).result()
+        ]
+        contenido = {
+            "generado": datetime.now(timezone.utc).isoformat(),
+            "fuente": "observaciones_comunidad",
+            "observaciones": observaciones,
+        }
+        bucket = storage.Client(project=PROYECTO).bucket(BUCKET_FRONTEND)
+        blob = bucket.blob(OBJETO_FEED)
+        blob.cache_control = "public, max-age=300"
+        blob.upload_from_string(
+            json.dumps(contenido, ensure_ascii=False, indent=2),
+            content_type="application/json",
+            timeout=60,
+        )
+        logger.info("Feed observaciones.json regenerado (%s reportes)", len(observaciones))
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudo regenerar observaciones.json (no bloquea)")
 
 
 @functions_framework.http
@@ -143,4 +199,5 @@ def recibir_observacion(solicitud):
         return _cors(json.dumps({"error": "No se pudo registrar"}), 500)
 
     logger.info("Observación registrada: %s (%s fotos)", id_obs, len(rutas_fotos))
+    _regenerar_feed()  # actualiza el feed público para la tarjeta Comunidad
     return _cors(json.dumps({"ok": True, "id": id_obs, "fotos": len(rutas_fotos)}), 200)
