@@ -1,12 +1,11 @@
+import { useState } from 'react'
 import { Users, MessageSquarePlus } from 'lucide-react'
 import GlassCard from './GlassCard'
+import ObservacionModal from './ObservacionModal'
 
-// Destino del reporte de observaciones. A futuro se reemplaza por la URL del
-// formulario web; por ahora abre un correo al equipo de la tesis.
-const URL_REPORTE =
-  'mailto:Fpenailillom@correo.uss.cl?subject=Observaci%C3%B3n%20de%20terreno%20-%20Avalanche%20AlertCL'
+export default function CommunityCard({ datos, centroNombre, className = '' }) {
+  const [modalAbierto, setModalAbierto] = useState(false)
 
-export default function CommunityCard({ datos, className = '' }) {
   return (
     <GlassCard icon={Users} title="Comunidad · S4" className={className}>
       <div className="flex flex-1 flex-col gap-3 text-white">
@@ -26,13 +25,18 @@ export default function CommunityCard({ datos, className = '' }) {
           ))}
         </ul>
 
-        <a
-          href={URL_REPORTE}
+        <button
+          type="button"
+          onClick={() => setModalAbierto(true)}
           className="flex items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         >
           <MessageSquarePlus className="h-3.5 w-3.5" />
           Reportar una observación
-        </a>
+        </button>
+
+        {modalAbierto && (
+          <ObservacionModal centroNombre={centroNombre} onCerrar={() => setModalAbierto(false)} />
+        )}
 
         <p className="mt-auto text-[10px] text-white/40">
           Resumen NLP de {datos.totalReportes48h} reportes

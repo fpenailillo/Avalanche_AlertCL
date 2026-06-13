@@ -171,7 +171,11 @@ function App() {
             onSelect={setCentroId}
             className="aspect-square md:aspect-auto lg:order-5"
           />
-          <CommunityCard datos={centro.comunidad} className="lg:order-6 lg:col-span-2" />
+          <CommunityCard
+            datos={centro.comunidad}
+            centroNombre={centro.nombre}
+            className="lg:order-6 lg:col-span-2"
+          />
         </div>
 
         <footer className="mt-10 flex flex-col items-center gap-2 text-center text-[11px] text-white/40">
