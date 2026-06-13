@@ -143,7 +143,11 @@ function App() {
           onSeleccionarFecha={setFechaSeleccionada}
         />
 
-        <TimelineCarousel timeline={centro.timeline} esHistorico={!!fechaSeleccionada} />
+        <TimelineCarousel
+          timeline={centro.timeline}
+          esHistorico={!!fechaSeleccionada}
+          fechaBase={fechaSeleccionada}
+        />
 
         {/* Grid bento asimétrico */}
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
