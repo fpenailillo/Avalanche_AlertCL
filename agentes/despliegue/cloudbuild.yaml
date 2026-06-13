@@ -64,6 +64,29 @@ steps:
             --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
             --set-env-vars=GCP_PROJECT=climas-chileno,ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
 
+  # Paso 5: Crear o actualizar el Cloud Run Job exportar-series-horas
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'crear-o-actualizar-series-horas'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run jobs describe exportar-series-horas \
+          --region=us-central1 --project=$PROJECT_ID > /dev/null 2>&1 \
+        && gcloud run jobs update exportar-series-horas \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+        || gcloud run jobs create exportar-series-horas \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+            --memory=512Mi --cpu=1 \
+            --task-timeout=300 \
+            --max-retries=1 \
+            --command=python \
+            --args="agentes/scripts/exportar_series_horas.py,--horas,72" \
+            --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
+            --set-env-vars=GCP_PROJECT=climas-chileno,ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
+
 options:
   logging: CLOUD_LOGGING_ONLY
 
