@@ -186,10 +186,10 @@ function App() {
             . Los boletines se generan de forma automática, sin revisión humana.
           </p>
           <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
-            ⚠️ Mensaje de seguridad: esta es una versión beta con datos de
-            demostración. No utilices esta información para tomar decisiones en
-            terreno ni planificar actividades en montaña; consulta siempre los
-            boletines oficiales y a las patrullas de cada centro.
+            ⚠️ Mensaje de seguridad: esta es una versión beta. No utilices esta
+            información para tomar decisiones en terreno ni planificar
+            actividades en montaña; consulta siempre los boletines oficiales y a
+            las patrullas de cada centro.
           </p>
           <p>
             Íconos estándar de niveles de peligro y problemas de avalancha ©{' '}
