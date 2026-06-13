@@ -70,7 +70,7 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
           'Cobertura de nieve (NDSI ≥ 0.4)': nieve,
           'Zonas de riesgo (nieve + 30–45°)': riesgo,
         },
-        { collapsed: false, position: 'topright' }
+        { collapsed: true, position: 'topright' }
       )
       .addTo(mapa)
 
