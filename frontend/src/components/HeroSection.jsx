@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { MapPin, Wind, Thermometer, TriangleAlert, MoveVertical, CalendarDays, ChevronDown } from 'lucide-react'
 import { ESCALA_EAWS } from '../data/mockData'
 import EawsDangerIcon from './EawsDangerIcon'
@@ -34,6 +35,29 @@ function SelectorFecha({ fechas, fechaSeleccionada, onSeleccionarFecha }) {
       </select>
       <ChevronDown className="pointer-events-none absolute right-2.5 h-3 w-3" />
     </label>
+  )
+}
+
+function AnalisisTecnico({ texto }) {
+  const [abierto, setAbierto] = useState(false)
+  return (
+    <div className="mt-2 max-w-xl">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="mx-auto flex items-center gap-1 text-[11px] text-white/40 transition-colors hover:text-white/70"
+      >
+        {abierto ? 'Ocultar' : 'Ver'} análisis técnico del sistema
+        <ChevronDown
+          className={`h-3 w-3 transition-transform ${abierto ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {abierto && (
+        <p className="mt-2 text-balance text-xs leading-relaxed text-white/55">
+          {texto}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -95,6 +119,9 @@ export default function HeroSection({ centro, fechas = [], fechaSeleccionada, on
       <p className="mt-6 max-w-xl text-balance text-sm leading-relaxed text-white/80 sm:text-base">
         {estado.descripcionIA}
       </p>
+      {estado.descripcionTecnica && (
+        <AnalisisTecnico texto={estado.descripcionTecnica} />
+      )}
 
       <div className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm text-white/60">
         <span className="flex items-center gap-1.5">

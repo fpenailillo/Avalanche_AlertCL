@@ -2,8 +2,56 @@
 // de los centros mock. Campo por campo: lo que el boletín no trae conserva
 // su valor de demostración.
 
+import { ESCALA_EAWS } from '../data/mockData'
+
 const capitalizar = (texto) =>
   texto ? texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase() : texto
+
+// Frase clara por tipo de problema EAWS (sin jerga técnica) para el resumen
+const FRASE_PROBLEMA = {
+  wind_slab: 'El viento acumuló placas de nieve en laderas resguardadas.',
+  storm_slab: 'La nieve reciente de la tormenta aún no se asienta.',
+  drifting_snow: 'El viento sigue transportando nieve en altura.',
+  new_snow: 'Cayó nieve nueva que todavía no se ha consolidado.',
+  heavy_snow: 'Se acumula nieve nueva en cantidad importante.',
+  wet_snow: 'La nieve se humedece con el calor del día.',
+  gliding_snow: 'La nieve podría deslizar sobre el terreno.',
+  persistent_weak_layer: 'Hay una capa débil enterrada en el manto.',
+}
+
+// Construye una descripción breve y clara a partir de los datos del boletín:
+// nivel → problema → nieve prevista → tendencia. Real, sin tecnicismos.
+function descripcionClara(detalle, dias) {
+  const nombreNivel = ESCALA_EAWS[detalle.nivel]?.nombre?.toLowerCase()
+  const partes = nombreNivel ? [`Peligro ${nombreNivel}.`] : []
+
+  const fraseProblema = FRASE_PROBLEMA[detalle.problema]
+  if (fraseProblema) {
+    partes.push(fraseProblema)
+  } else if (detalle.manto?.estado?.toUpperCase() === 'ESTABLE') {
+    partes.push('El manto de nieve se mantiene estable.')
+  }
+
+  // Nieve prevista próximos 3 días (mediana del ensemble WN2)
+  const nieve3d = (dias ?? [])
+    .slice(0, 3)
+    .reduce((suma, d) => suma + (d.nieveCm ?? 0), 0)
+  if (nieve3d >= 5) {
+    partes.push(`Se esperan unos ${Math.round(nieve3d)} cm de nieve en los próximos días.`)
+  }
+
+  // Tendencia a 48/72 h derivada de los niveles
+  const futuro = Math.max(detalle.nivel48h ?? 0, detalle.nivel72h ?? 0)
+  if (futuro > detalle.nivel) {
+    partes.push('El riesgo tiende a aumentar.')
+  } else if ((detalle.nivel48h ?? detalle.nivel) < detalle.nivel) {
+    partes.push('El riesgo tiende a disminuir.')
+  } else {
+    partes.push('El riesgo se mantiene estable.')
+  }
+
+  return partes.join(' ')
+}
 
 const formatearFecha = (iso, opciones) => {
   if (!iso) return null
@@ -27,7 +75,7 @@ const PROBLEMAS_EAWS = {
   no_distinct: { id: 'no-distinct', nombre: 'Sin problema distintivo' },
 }
 
-function fusionarEstadoActual(estadoMock, detalle) {
+function fusionarEstadoActual(estadoMock, detalle, dias) {
   const fechaBoletin = formatearFecha(detalle.emitido, {
     weekday: 'long',
     day: 'numeric',
@@ -46,7 +94,10 @@ function fusionarEstadoActual(estadoMock, detalle) {
   return {
     ...estadoMock,
     nivelEAWS: detalle.nivel,
-    descripcionIA: detalle.descripcion ?? estadoMock.descripcionIA,
+    // Mensaje principal claro (sin jerga); el análisis técnico de la IA
+    // queda disponible aparte como descripcionTecnica.
+    descripcionIA: descripcionClara(detalle, dias),
+    descripcionTecnica: detalle.descripcion ?? null,
     temperatura: detalle.temperaturaC ?? estadoMock.temperatura,
     vientoKmh: detalle.vientoKmh ?? estadoMock.vientoKmh,
     fechaBoletin: fechaBoletin ? capitalizar(fechaBoletin) : estadoMock.fechaBoletin,
@@ -168,7 +219,7 @@ export function fusionarCentros(centrosMock, boletines, seriesWN2) {
     if (detalle) {
       Object.assign(fusionado, {
         enLinea: true,
-        estadoActual: fusionarEstadoActual(centro.estadoActual, detalle),
+        estadoActual: fusionarEstadoActual(centro.estadoActual, detalle, dias),
         timeline: fusionarTimeline(centro.timeline, detalle),
         topografico: fusionarTopografico(centro.topografico, detalle.manto, detalle),
         satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
