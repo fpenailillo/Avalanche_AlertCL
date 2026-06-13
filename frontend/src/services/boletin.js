@@ -33,6 +33,13 @@ const URL_SERIES_WN2 =
   import.meta.env.VITE_SERIES_WN2_URL ??
   'https://storage.googleapis.com/avalanche-alertcl-boletines/series_wn2.json'
 
+// Series horarias de Google Weather (publica exportar_series_horas.py, ~72 h/zona):
+// { "generado", "fuente": "google-weather-hours",
+//   "series": [{ "zona": "La Parva", "horas": [{ "t": ISO_UTC, "temp", "icono" }] }] }
+const URL_SERIES_HORAS =
+  import.meta.env.VITE_SERIES_HORAS_URL ??
+  'https://storage.googleapis.com/avalanche-alertcl-boletines/series_horas.json'
+
 const TIMEOUT_MS = 8000
 
 // Nombre de zona (como aparece en BigQuery) → id de centro del frontend
@@ -195,6 +202,54 @@ export function useSeriesWN2(fecha = null) {
   }, [fecha])
 
   return resultado.paraFecha === fecha ? resultado : SERIES_VACIAS
+}
+
+export async function obtenerSeriesHoras() {
+  const respuesta = await fetch(URL_SERIES_HORAS, {
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+    cache: 'no-store',
+  })
+  if (!respuesta.ok) {
+    throw new Error(`Series horarias no disponibles (HTTP ${respuesta.status})`)
+  }
+
+  const cuerpo = await respuesta.json()
+  if (!Array.isArray(cuerpo.series)) {
+    throw new Error('Formato de series horarias no reconocido')
+  }
+
+  return new Map(
+    cuerpo.series
+      .filter((s) => s.zona && Array.isArray(s.horas) && s.horas.length > 0)
+      .map((s) => [slug(s.zona), s.horas])
+  )
+}
+
+const MAPA_HORAS_VACIO = new Map()
+
+// Series horarias reales (Google Weather) para el widget de evolución.
+// Solo aplican al boletín vigente: en modo histórico no hay archivo horario,
+// así que se devuelve vacío y el widget cae al mock con niveles reales.
+export function useSeriesHoras(fecha = null) {
+  const [series, setSeries] = useState(MAPA_HORAS_VACIO)
+
+  useEffect(() => {
+    if (fecha) return undefined // histórico: no hay series horarias
+    let montado = true
+    obtenerSeriesHoras()
+      .then((mapa) => {
+        if (montado) setSeries(mapa)
+      })
+      .catch((error) => {
+        console.warn('Series horarias no disponibles:', error.message)
+        if (montado) setSeries(MAPA_HORAS_VACIO)
+      })
+    return () => {
+      montado = false
+    }
+  }, [fecha])
+
+  return fecha ? MAPA_HORAS_VACIO : series
 }
 
 const BOLETIN_CARGANDO = {

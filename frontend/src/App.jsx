@@ -9,7 +9,7 @@ import SnowpackCard from './components/SnowpackCard'
 import CommunityCard from './components/CommunityCard'
 import MapCard from './components/MapCard'
 import { CENTROS_LISTA, ESCALA_EAWS } from './data/mockData'
-import { useBoletinActivo, useSeriesWN2, useIndiceFechas } from './services/boletin'
+import { useBoletinActivo, useSeriesWN2, useSeriesHoras, useIndiceFechas } from './services/boletin'
 import { fusionarCentros } from './services/fusion'
 
 function BanderaChile({ className = 'h-3.5 w-5' }) {
@@ -120,11 +120,12 @@ function App() {
   const fechasDisponibles = useIndiceFechas()
   const boletin = useBoletinActivo(fechaSeleccionada)
   const { series: seriesWN2, esDeFecha: seriesDeFecha } = useSeriesWN2(fechaSeleccionada)
+  const seriesHoras = useSeriesHoras(fechaSeleccionada)
 
   // Fusiona el mock con el boletín y las series en línea, campo por campo
   const centros = useMemo(
-    () => fusionarCentros(CENTROS_LISTA, boletin.boletines, seriesWN2),
-    [boletin.boletines, seriesWN2]
+    () => fusionarCentros(CENTROS_LISTA, boletin.boletines, seriesWN2, seriesHoras),
+    [boletin.boletines, seriesWN2, seriesHoras]
   )
 
   const centro = centros.find((c) => c.id === centroId) ?? centros[0]
