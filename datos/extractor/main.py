@@ -727,25 +727,58 @@ def obtener_pronostico_horas(
     """
     Obtiene el pronóstico por hora para una ubicación.
 
+    La Google Weather API entrega un máximo de 24 horas por página junto con
+    un `nextPageToken` para las siguientes. Se sigue la paginación hasta reunir
+    `horas` horas (o agotar las páginas), de modo que el horizonte real
+    coincida con HORAS_PRONOSTICO y no quede recortado a 24 h.
+
     Args:
         latitud: Latitud de la ubicación
         longitud: Longitud de la ubicación
         nombre_ubicacion: Nombre descriptivo
         api_key: API Key
-        horas: Número de horas de pronóstico (default: 24)
+        horas: Número de horas de pronóstico (default: HORAS_PRONOSTICO)
 
     Returns:
-        dict: Pronóstico por hora con array 'forecastHours'
+        dict: Pronóstico por hora con array 'forecastHours' (hasta `horas`)
     """
-    return llamar_weather_api(
-        URL_API_PRONOSTICO_HORAS,
-        latitud,
-        longitud,
-        nombre_ubicacion,
-        api_key,
-        parametros_extra={'hours': horas},
-        tipo_consulta=f"pronóstico {horas}h"
+    forecast_horas: list = []
+    zona_horaria = None
+    page_token = None
+    # Tope de seguridad contra bucles: páginas necesarias + margen.
+    paginas_max = (horas // 24) + 2
+
+    for _ in range(paginas_max):
+        extra = {'hours': horas, 'pageSize': 24}
+        if page_token:
+            extra['pageToken'] = page_token
+
+        datos = llamar_weather_api(
+            URL_API_PRONOSTICO_HORAS,
+            latitud,
+            longitud,
+            nombre_ubicacion,
+            api_key,
+            parametros_extra=extra,
+            tipo_consulta=f"pronóstico {horas}h"
+        )
+
+        forecast_horas.extend(datos.get('forecastHours', []))
+        if zona_horaria is None:
+            zona_horaria = datos.get('timeZone')
+
+        page_token = datos.get('nextPageToken')
+        if not page_token or len(forecast_horas) >= horas:
+            break
+
+    logger.info(
+        f"Pronóstico horario {nombre_ubicacion}: {len(forecast_horas)} horas "
+        f"reunidas (objetivo {horas}h)"
     )
+    return {
+        'forecastHours': forecast_horas[:horas],
+        'timeZone': zona_horaria,
+    }
 
 
 def obtener_pronostico_dias(
@@ -940,7 +973,7 @@ def procesar_ubicacion(
         resultado['fallidos'] += 1
         logger.error(f"Error condiciones actuales {nombre_ubicacion}: {str(e)}")
 
-    # 2. Pronóstico por Horas (próximas 24 horas)
+    # 2. Pronóstico por Horas (próximas ~76 horas, paginado)
     try:
         datos = obtener_pronostico_horas(
             ubicacion['latitud'],
@@ -996,7 +1029,7 @@ def extraer_clima(solicitud: Request) -> Tuple[Dict[str, Any], int]:
     1. Obtener API Key desde Secret Manager
     2. Para cada ubicación, consultar 3 APIs de Weather:
        - currentConditions: Condiciones actuales
-       - forecast/hours: Pronóstico próximas 24 horas
+       - forecast/hours: Pronóstico próximas ~76 horas (paginado de 24 en 24)
        - forecast/days: Pronóstico próximos 5 días
     3. Enriquecer datos con metadata
     4. Publicar a 3 topics de Pub/Sub diferentes
