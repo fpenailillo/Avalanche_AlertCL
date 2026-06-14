@@ -212,7 +212,7 @@ function App() {
           <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
             ⚠️ Recuerda: esta es una versión beta. Por tu seguridad, no la uses
             para tomar decisiones en terreno ni planificar tus salidas a la
-            montaña; consulta siempre la información oficial y lleva siempre tu
+            montaña; consulta siempre la información oficial. Lleva siempre tu
             equipo de seguridad y capacítate en su uso de acuerdo con las
             actividades que realices. ¿Tienes comentarios, dudas o ideas para
             mejorar? Escríbenos a{' '}
