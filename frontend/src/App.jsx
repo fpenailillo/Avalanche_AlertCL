@@ -210,10 +210,18 @@ function App() {
             . Los boletines se generan de forma automática, sin revisión humana.
           </p>
           <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
-            ⚠️ Mensaje de seguridad: esta es una versión beta. No utilices esta
-            información para tomar decisiones en terreno ni planificar
-            actividades en montaña; consulta siempre los boletines oficiales y a
-            las patrullas de cada centro.
+            ⚠️ Recuerda: esta es una versión beta. Por tu seguridad, no la uses
+            para tomar decisiones en terreno ni planificar tus salidas a la
+            montaña; consulta siempre la información oficial y a las patrullas de
+            cada centro. ¿Tienes comentarios, dudas o ideas para mejorar?
+            Escríbenos a{' '}
+            <a
+              href="mailto:fpenailillo@usm.cl"
+              className="font-medium underline hover:text-amber-100"
+            >
+              fpenailillo@usm.cl
+            </a>{' '}
+            🙌
           </p>
           <p>
             Íconos estándar de niveles de peligro y problemas de avalancha ©{' '}
