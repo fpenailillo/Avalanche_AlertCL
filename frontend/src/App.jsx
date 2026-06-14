@@ -213,8 +213,10 @@ function App() {
             ⚠️ Recuerda: esta es una versión beta. Por tu seguridad, no la uses
             para tomar decisiones en terreno ni planificar tus salidas a la
             montaña; consulta siempre la información oficial y a las patrullas de
-            cada centro. ¿Tienes comentarios, dudas o ideas para mejorar?
-            Escríbenos a{' '}
+            cada centro. Lleva siempre tu equipo de seguridad (ARVA, pala y
+            sonda) y capacítate en su uso de acuerdo con las actividades que
+            realices. ¿Tienes comentarios, dudas o ideas para mejorar? Escríbenos
+            a{' '}
             <a
               href="mailto:fpenailillo@usm.cl"
               className="font-medium underline hover:text-amber-100"
