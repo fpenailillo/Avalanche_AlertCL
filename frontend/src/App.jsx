@@ -210,17 +210,18 @@ function App() {
             . Los boletines se generan de forma automática, sin revisión humana.
           </p>
           <p className="max-w-xl rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-2 text-amber-200/90">
-            ⚠️ Versión beta. No la uses para decidir en terreno; consulta
-            siempre la información oficial y a las patrullas de cada centro. Lleva
-            tu equipo de seguridad (ARVA, pala y sonda) y capacítate en su uso.
-            ¿Comentarios o ideas? Escríbenos a{' '}
+            ⚠️ Recuerda: esta es una versión beta. Por tu seguridad, no la uses
+            para tomar decisiones en terreno ni planificar tus salidas a la
+            montaña; consulta siempre la información oficial y lleva siempre tu
+            equipo de seguridad y capacítate en su uso de acuerdo con las
+            actividades que realices. ¿Tienes comentarios, dudas o ideas para
+            mejorar? Escríbenos a{' '}
             <a
               href="mailto:fpenailillo@usm.cl"
               className="font-medium underline hover:text-amber-100"
             >
               fpenailillo@usm.cl
-            </a>{' '}
-            🙌
+            </a>
           </p>
           <p>
             Íconos estándar de niveles de peligro y problemas de avalancha ©{' '}
