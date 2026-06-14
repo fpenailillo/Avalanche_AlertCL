@@ -19,6 +19,24 @@ const COORDS = {
 const CENTRO_DEFECTO = [-33.4, -70.25]
 const ZOOM_DEFECTO = 9
 
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+
+// "2026-05-17" → "17 may". Con año si se pide.
+function fechaCorta(iso, conAnio = false) {
+  if (!iso) return ''
+  const [y, m, d] = iso.split('-').map(Number)
+  return `${d} ${MESES[m - 1]}${conAnio ? ` ${y}` : ''}`
+}
+
+// Rango de fechas de las imágenes del mosaico para la leyenda.
+function rangoFechas(gee) {
+  if (!gee?.fecha_hasta) return ''
+  if (gee.fecha_desde && gee.fecha_desde !== gee.fecha_hasta) {
+    return `${fechaCorta(gee.fecha_desde)}–${fechaCorta(gee.fecha_hasta, true)}`
+  }
+  return fechaCorta(gee.fecha_hasta, true)
+}
+
 export default function MapCard({ centros, seleccionadoId, onSelect, className = '' }) {
   const { datos: gee, estado } = useMapaGEE()
   const refContenedor = useRef(null)
@@ -130,7 +148,7 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
         {estado === 'ok' && gee && (
           <div className="pointer-events-none absolute bottom-2 left-2 z-[400] flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[9px] text-white/85 backdrop-blur-sm">
             <Layers className="h-3 w-3" />
-            Mosaico Sentinel-2 · {gee.imagenes_usadas} imágenes desde {gee.ventana_desde}
+            Sentinel-2 · {gee.imagenes_usadas} imágenes · {rangoFechas(gee)}
           </div>
         )}
       </div>

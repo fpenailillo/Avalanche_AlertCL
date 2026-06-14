@@ -68,7 +68,12 @@ def _construir_capas():
         .filterDate(inicio, hoy)
         .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", MAX_NUBOSIDAD))
     )
-    n_imagenes = coleccion.size().getInfo()
+    # Metadatos reales de las imágenes usadas (1 sola consulta a EE).
+    info = ee.Dictionary({
+        "n": coleccion.size(),
+        "desde": ee.Date(coleccion.aggregate_min("system:time_start")).format("YYYY-MM-dd"),
+        "hasta": ee.Date(coleccion.aggregate_max("system:time_start")).format("YYYY-MM-dd"),
+    }).getInfo()
     imagen = coleccion.median().clip(roi)
 
     # NDSI y máscara de nieve
@@ -90,7 +95,7 @@ def _construir_capas():
         "nieve": _url_tiles(nieve_visual, {"min": 1, "max": 1, "palette": ["cyan"]}),
         "riesgo": _url_tiles(riesgo_visual, {"palette": ["red"]}),
     }
-    return capas, n_imagenes, inicio.format("YYYY-MM-dd").getInfo()
+    return capas, info
 
 
 @functions_framework.http
@@ -99,7 +104,7 @@ def mapa_gee(solicitud):
         return _cors("", 204)
     try:
         _init_ee()
-        capas, n_imagenes, desde = _construir_capas()
+        capas, info = _construir_capas()
     except Exception as exc:  # noqa: BLE001
         logger.exception("Error generando capas GEE")
         return _cors(json.dumps({"error": str(exc)}), 500)
@@ -111,9 +116,13 @@ def mapa_gee(solicitud):
         "bounds": [[sur, oeste], [norte, este]],  # Leaflet: [[S,W],[N,E]]
         "centro": [(sur + norte) / 2, (oeste + este) / 2],
         "zoom": 9,
-        "imagenes_usadas": n_imagenes,
-        "ventana_desde": desde,
+        "imagenes_usadas": info.get("n"),
+        "fecha_desde": info.get("desde"),  # 1ª imagen del mosaico
+        "fecha_hasta": info.get("hasta"),  # imagen más reciente
         "atribucion": "Sentinel-2 (Copernicus) · SRTM · Google Earth Engine",
     }
-    logger.info("Capas GEE generadas (%s imágenes, desde %s)", n_imagenes, desde)
+    logger.info(
+        "Capas GEE generadas (%s imágenes, %s–%s)",
+        info.get("n"), info.get("desde"), info.get("hasta"),
+    )
     return _cors(json.dumps(cuerpo, ensure_ascii=False), 200)
