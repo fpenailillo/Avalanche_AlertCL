@@ -28,13 +28,9 @@ function fechaCorta(iso, conAnio = false) {
   return `${d} ${MESES[m - 1]}${conAnio ? ` ${y}` : ''}`
 }
 
-// Rango de fechas de las imágenes del mosaico para la leyenda.
-function rangoFechas(gee) {
-  if (!gee?.fecha_hasta) return ''
-  if (gee.fecha_desde && gee.fecha_desde !== gee.fecha_hasta) {
-    return `${fechaCorta(gee.fecha_desde)}–${fechaCorta(gee.fecha_hasta, true)}`
-  }
-  return fechaCorta(gee.fecha_hasta, true)
+// Fecha de la imagen más reciente del mosaico para la leyenda.
+function fechaReciente(gee) {
+  return gee?.fecha_hasta ? fechaCorta(gee.fecha_hasta, true) : ''
 }
 
 export default function MapCard({ centros, seleccionadoId, onSelect, className = '' }) {
@@ -148,7 +144,7 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
         {estado === 'ok' && gee && (
           <div className="pointer-events-none absolute bottom-2 left-2 z-[400] flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[9px] text-white/85 backdrop-blur-sm">
             <Layers className="h-3 w-3" />
-            Sentinel-2 · {gee.imagenes_usadas} imágenes · {rangoFechas(gee)}
+            Sentinel-2 · imagen al {fechaReciente(gee)}
           </div>
         )}
       </div>
