@@ -73,6 +73,7 @@ def _construir_capas():
         "n": coleccion.size(),
         "desde": ee.Date(coleccion.aggregate_min("system:time_start")).format("YYYY-MM-dd"),
         "hasta": ee.Date(coleccion.aggregate_max("system:time_start")).format("YYYY-MM-dd"),
+        "hasta_hora": ee.Date(coleccion.aggregate_max("system:time_start")).format("HH:mm"),
     }).getInfo()
     imagen = coleccion.median().clip(roi)
 
@@ -118,7 +119,8 @@ def mapa_gee(solicitud):
         "zoom": 9,
         "imagenes_usadas": info.get("n"),
         "fecha_desde": info.get("desde"),  # 1ª imagen del mosaico
-        "fecha_hasta": info.get("hasta"),  # imagen más reciente
+        "fecha_hasta": info.get("hasta"),      # imagen más reciente
+        "hora_hasta": info.get("hasta_hora"),  # hora UTC del último paso
         "atribucion": "Sentinel-2 (Copernicus) · SRTM · Google Earth Engine",
     }
     logger.info(

@@ -28,9 +28,11 @@ function fechaCorta(iso, conAnio = false) {
   return `${d} ${MESES[m - 1]}${conAnio ? ` ${y}` : ''}`
 }
 
-// Fecha de la imagen más reciente del mosaico para la leyenda.
+// Fecha y hora UTC del último paso satelital para la leyenda.
 function fechaReciente(gee) {
-  return gee?.fecha_hasta ? fechaCorta(gee.fecha_hasta, true) : ''
+  if (!gee?.fecha_hasta) return ''
+  const fecha = fechaCorta(gee.fecha_hasta, true)
+  return gee.hora_hasta ? `${fecha} ${gee.hora_hasta} UTC` : fecha
 }
 
 export default function MapCard({ centros, seleccionadoId, onSelect, className = '' }) {
