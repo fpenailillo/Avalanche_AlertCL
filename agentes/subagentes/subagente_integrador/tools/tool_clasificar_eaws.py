@@ -377,6 +377,33 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         }
 
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
+    # ─── Fase D (H3): estabilidad por capa débil persistente (IMIS, determinista) ──
+    # FIX-PWL-SNOWPACK: análogo al bloque WN2 — consulta los índices de capa débil
+    # persistente (pwl_100/ssi_pwl) para nombre_ubicacion+fecha_ref y deriva una
+    # estabilidad. Captura el peligro persistente en días meteorológicamente tranquilos
+    # que el SLF marca N3-4 pero la meteo de superficie no delata. Solo Alpes histórico
+    # con IMIS; en Andes / sin registro → None (comportamiento actual intacto).
+    _estab_snowpack = None
+    if nombre_ubicacion:
+        try:
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from agentes.datos.snowpack_features import obtener_snowpack_imis
+            _fref = obtener_fecha_referencia_global()
+            if _fref:
+                _sp = obtener_snowpack_imis(nombre_ubicacion, _fref.strftime("%Y-%m-%d"))
+                if _sp["disponible"]:
+                    _estab_snowpack = _estabilidad_desde_snowpack(
+                        _sp["pwl_100"], _sp["ssi_pwl"], _sp["sk38_pwl"]
+                    )
+                    if _estab_snowpack:
+                        logger.info(
+                            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: capa débil IMIS "
+                            f"(pwl={_sp['pwl_100']}, ssi={_sp['ssi_pwl']}) → "
+                            f"estabilidad_snowpack={_estab_snowpack}"
+                        )
+        except Exception as _exc_sp:
+            logger.warning(f"[ClasificarEAWS] FIX-PWL-SNOWPACK: fallback falló — {_exc_sp}")
+
     estabilidad_final = _determinar_estabilidad_dominante(
         estabilidad_topografica=estabilidad_topografica,
         estabilidad_satelital=estabilidad_satelital,
@@ -384,6 +411,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         dias_consecutivos_nivel_bajo=dias_consecutivos_nivel_bajo,
         nombre_ubicacion=nombre_ubicacion,
         ventanas_criticas_detectadas=ventanas_criticas_detectadas,
+        estabilidad_snowpack=_estab_snowpack,
     )
 
     # ─── 2. Ajustar frecuencia ───────────────────────────────────────────────
@@ -596,6 +624,35 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     }
 
 
+def _estabilidad_desde_snowpack(pwl_100, ssi_pwl, sk38_pwl) -> str | None:
+    """
+    Mapea índices de capa débil persistente (IMIS) → estabilidad EAWS.
+    Fase D (H3). Solo aporta cuando hay capa débil persistente significativa
+    (pwl_100 ≥ 0.5); el índice de estabilidad (SSI sobre la pwl, fallback sk38)
+    determina la severidad (umbral de inestabilidad SSI<1.5; Schweizer & Jamieson 2003).
+
+    Returns 'good'|'fair'|'poor'|'very_poor' o None si no aplica.
+    """
+    try:
+        pwl = float(pwl_100) if pwl_100 is not None else None
+    except (ValueError, TypeError):
+        pwl = None
+    if pwl is None or pwl < 0.5:
+        return None  # sin capa débil persistente significativa → no aporta señal
+    idx = ssi_pwl if ssi_pwl is not None else sk38_pwl
+    try:
+        idx = float(idx)
+    except (ValueError, TypeError):
+        return None
+    if idx < 1.0:
+        return "very_poor"
+    if idx < 1.5:
+        return "poor"
+    if idx < 2.5:
+        return "fair"
+    return "good"
+
+
 def _determinar_estabilidad_dominante(
     estabilidad_topografica: str,
     estabilidad_satelital: str,
@@ -603,6 +660,7 @@ def _determinar_estabilidad_dominante(
     dias_consecutivos_nivel_bajo: int = 0,
     nombre_ubicacion: str = None,
     ventanas_criticas_detectadas: int = 0,
+    estabilidad_snowpack: str = None,
 ) -> str:
     """
     Determina la estabilidad dominante combinando todas las fuentes.
@@ -648,6 +706,16 @@ def _determinar_estabilidad_dominante(
                 f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
                 f"default 'poor' (region={_region_sat})"
             )
+
+    # FIX-PWL-SNOWPACK (Fase D, H3): la capa débil persistente (IMIS) es una fuente
+    # de inestabilidad real; eleva el piso como las demás fuentes (tomar la peor).
+    _idx_snowpack = escala.index(estabilidad_snowpack) if estabilidad_snowpack in escala else None
+    if _idx_snowpack is not None and _idx_snowpack > idx_base:
+        logger.info(
+            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: estabilidad_snowpack='{estabilidad_snowpack}' "
+            f"eleva idx_base {idx_base}→{_idx_snowpack} (capa débil persistente IMIS)"
+        )
+        idx_base = _idx_snowpack
 
     _factor_activo = bool(
         factor_meteorologico
@@ -703,6 +771,15 @@ def _determinar_estabilidad_dominante(
             f"[ClasificarEAWS] Calma sostenida confirmada ({dias_consecutivos_nivel_bajo} días "
             f"nivel≤2, factor={factor_meteorologico}) — estabilidad capada en 'fair'"
         )
+
+    # FIX-PWL-SNOWPACK (Fase D): la capa débil persistente mantiene el peligro pese a la
+    # calma de superficie — actúa como piso que las atenuaciones/cap de calma no bajan.
+    if _idx_snowpack is not None and _idx_snowpack > idx_final:
+        logger.info(
+            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: piso por capa débil persistente "
+            f"idx_final {idx_final}→{_idx_snowpack} (no atenuable por calma)"
+        )
+        idx_final = _idx_snowpack
 
     return escala[idx_final]
 

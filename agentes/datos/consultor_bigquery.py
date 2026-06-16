@@ -241,6 +241,10 @@ class ConsultorBigQuery:
                         ("hs_cm",      "HS_meas_cm",  0,   600),
                         ("ta_imis_c",  "TA_c",      -40,    30),
                         ("vw_imis_ms", "VW_ms",       0,    60),
+                        # Fase D (H3): índices de capa débil persistente para estabilidad
+                        ("pwl_100",    "pwl_100",     0,     1),
+                        ("ssi_pwl",    "ssi_pwl",     0,    20),
+                        ("sk38_pwl",   "sk38_pwl",    0,    20),
                     ]:
                         v = crudo.get(k_imis)
                         if v is not None:

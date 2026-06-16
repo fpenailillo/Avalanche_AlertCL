@@ -148,6 +148,7 @@ def _consultar_imis(
             TA, TSS_mod, TSS_meas, RH, VW, DW,
             HN24, HS_meas, HS_mod, SWE,
             wind_trans24, hoar_size, Sclass2, pwl_100, base_pwl,
+            ssi_pwl, sk38_pwl,
             dangerLevel, station_code, elevation_station, `set`
         FROM `{GCP_PROJECT}.{DATASET_VALIDACION}.{TABLA_ORIGEN}`
         WHERE sector_id = @sector_id
@@ -245,6 +246,9 @@ def _construir_fila(
             "Sclass2":         imis.get("Sclass2"),
             "pwl_100":         imis.get("pwl_100"),
             "base_pwl":        imis.get("base_pwl"),
+            # Índices de estabilidad de capa débil persistente (Fase D, H3)
+            "ssi_pwl":         imis.get("ssi_pwl"),
+            "sk38_pwl":        imis.get("sk38_pwl"),
             "wind_trans24":    imis.get("wind_trans24"),
             "hoar_size":       imis.get("hoar_size"),
             # Ground truth (para referencia, no usado por AndesAI)
@@ -257,17 +261,49 @@ def _construir_fila(
 
 # ── Ejecución principal ───────────────────────────────────────────────────────
 
+def _estaciones_por_anio(cliente: bigquery.Client, anio: int) -> dict:
+    """
+    Construye la config de estaciones con las fechas del `anio` que tienen
+    snowpack (HS_meas) + GT publicado (slf_danger_levels_qc). Fase D / H3:
+    permite ingestar cualquier año con datos IMIS de capa débil, no solo 2018-2020.
+    """
+    sql = f"""
+        SELECT m.sector_id,
+               ARRAY_AGG(DISTINCT CAST(DATE(m.datum) AS STRING)
+                         ORDER BY CAST(DATE(m.datum) AS STRING)) AS fechas
+        FROM `{GCP_PROJECT}.{DATASET_VALIDACION}.{TABLA_ORIGEN}` m
+        JOIN `{GCP_PROJECT}.{DATASET_VALIDACION}.slf_danger_levels_qc` q
+          ON m.sector_id = q.sector_id AND DATE(m.datum) = q.date
+        WHERE m.sector_id IN (4113, 2223, 6113)
+          AND EXTRACT(YEAR FROM m.datum) = @anio
+          AND m.HS_meas IS NOT NULL
+        GROUP BY m.sector_id
+    """
+    config = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("anio", "INTEGER", anio),
+    ])
+    por_sector = {int(r["sector_id"]): list(r["fechas"]) for r in cliente.query(sql, job_config=config).result()}
+    estaciones = {}
+    for nombre, cfg in ESTACIONES.items():
+        fechas = por_sector.get(cfg["sector_id"])
+        if fechas:
+            estaciones[nombre] = {**cfg, "fechas": fechas}
+    return estaciones
+
+
 def ejecutar_backfill(
     dry_run: bool = False,
     estacion_filtro: str | None = None,
+    estaciones_override: dict | None = None,
 ) -> None:
     cliente = bigquery.Client(project=GCP_PROJECT)
     tabla_destino = f"{GCP_PROJECT}.{DATASET_CLIMA}.{TABLA_DESTINO}"
 
+    base = estaciones_override if estaciones_override is not None else ESTACIONES
     estaciones = (
-        {k: v for k, v in ESTACIONES.items() if k == estacion_filtro}
+        {k: v for k, v in base.items() if k == estacion_filtro}
         if estacion_filtro
-        else ESTACIONES
+        else base
     )
 
     total = sum(len(v["fechas"]) for v in estaciones.values())
@@ -347,13 +383,24 @@ def main():
                         help="Filtrar a una estación: 'Interlaken', 'Matterhorn Zermatt', 'St Moritz'")
     parser.add_argument("--verificar", action="store_true",
                         help="Verifica registros ya insertados (no inserta)")
+    parser.add_argument("--anio", type=int, default=None,
+                        help="Fase D: ingestar todas las fechas con snowpack+GT del año "
+                             "(ej. --anio 2014), en lugar de las fechas 2018-2020 fijas.")
     args = parser.parse_args()
 
     if args.verificar:
         _verificar_inserciones()
         return
 
-    ejecutar_backfill(dry_run=args.dry_run, estacion_filtro=args.estacion)
+    override = None
+    if args.anio:
+        cliente = bigquery.Client(project=GCP_PROJECT)
+        override = _estaciones_por_anio(cliente, args.anio)
+        n = sum(len(v["fechas"]) for v in override.values())
+        print(f"--anio {args.anio}: {n} fechas con snowpack+GT en {len(override)} estaciones")
+
+    ejecutar_backfill(dry_run=args.dry_run, estacion_filtro=args.estacion,
+                      estaciones_override=override)
 
 
 def _verificar_inserciones() -> None:

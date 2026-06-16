@@ -12,7 +12,44 @@ import pytest
 from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
     ejecutar_clasificar_riesgo_eaws_integrado,
     _determinar_estabilidad_dominante,
+    _estabilidad_desde_snowpack,
 )
+
+
+class TestSnowpackPWL:
+    """Fase D (H3): capa débil persistente IMIS → estabilidad (FIX-PWL-SNOWPACK)."""
+
+    def test_mapeo_ssi_a_estabilidad(self):
+        assert _estabilidad_desde_snowpack(0.8, 0.8, None) == "very_poor"
+        assert _estabilidad_desde_snowpack(0.8, 1.2, None) == "poor"
+        assert _estabilidad_desde_snowpack(0.8, 2.0, None) == "fair"
+        assert _estabilidad_desde_snowpack(0.8, 3.0, None) == "good"
+
+    def test_sin_capa_debil_no_aplica(self):
+        # pwl_100 < 0.5 → no hay capa persistente significativa
+        assert _estabilidad_desde_snowpack(0.3, 0.5, None) is None
+        assert _estabilidad_desde_snowpack(None, 0.5, None) is None
+
+    def test_fallback_sk38_si_falta_ssi(self):
+        assert _estabilidad_desde_snowpack(0.8, None, 1.2) == "poor"
+
+    def test_piso_robusto_a_calma_sostenida(self):
+        """La capa débil persistente mantiene el peligro pese a calma sostenida (Alpes)."""
+        est = _determinar_estabilidad_dominante(
+            estabilidad_topografica="good", estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE", dias_consecutivos_nivel_bajo=5,
+            nombre_ubicacion="Interlaken", estabilidad_snowpack="poor",
+        )
+        assert est == "poor"
+
+    def test_sin_snowpack_no_regresiona_andes(self):
+        """Andes sin snowpack mantiene el comportamiento A1 (good)."""
+        est = _determinar_estabilidad_dominante(
+            estabilidad_topografica="good", estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE", nombre_ubicacion="La Parva Sector Alto",
+            estabilidad_snowpack=None,
+        )
+        assert est == "good"
 
 
 class TestFixH:
