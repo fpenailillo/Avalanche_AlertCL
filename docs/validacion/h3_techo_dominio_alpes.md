@@ -10,9 +10,20 @@
 |---------|----|----|---|-------|
 | v25.11 Qwen | IMIS DEAPSnow 2018-19 | 0.040 | 29 | +0.83 |
 | v26.0 Gemini | IMIS DEAPSnow 2018-19 | 0.101 | 28 | +1.00 |
-| **v25.18 Qwen** | **slf_danger_levels_qc 2023-24** | **0.268** | 38 | −0.42 |
+| v25.18 Qwen (calibrado +0.7 obsoleto) | slf_danger_levels_qc 2023-24 | 0.229 | 38 | +0.58 |
+| v25.18 Qwen (recalibrado identidad, B2) | slf_danger_levels_qc 2023-24 | 0.268 | 38 | −0.42 |
+| **v25.19 Qwen (FIX-STORM/SIZE-ALPES)** | **slf_danger_levels_qc 2023-24** | **0.444** | 41 | −0.20 |
 
-La mejora (0.04/0.10 → 0.27) proviene de: GT correcto (niveles QC publicados, el de Techel), WN2 histórico (2022+) como señal meteo, y n mayor. Aun así no cruza 0.59.
+La mejora (0.04/0.10 → **0.444**) proviene de: GT correcto (niveles QC publicados, el de Techel), WN2 histórico (2022+) como señal meteo, recalibración (eliminar shift +0.7 obsoleto), y **FIX-STORM/SIZE-ALPES** (extender graduación WN2 de tamaño/frecuencia a Alpes sin IMIS → captura días de tormenta). Aun así no cruza 0.59.
+
+### Matriz v25.19 (n=41)
+```
+      AI2  AI3  AI4  AI5
+GT2   17    0    0    0    ← 17/17 aciertos (días tranquilos)
+GT3   12    2    0    2    ← 12 subestimados (capa persistente, gap dominio) + 2 sobre N5
+GT4    2    1    0    2
+```
+El fix captura tormentas (GT=3-4 antes en N2 ahora suben). Residual: (a) ~4 casos sobreestiman a N5 en tormenta (Zermatt; capar N5→N4 da QWK 0.431/acc 0.51 — intercambiable con n pequeño); (b) **12 casos GT=3→N2 son días sin tormenta = capa débil persistente**, el techo real (gap de dominio, sin datos IMIS de snowpack).
 
 ## La calibración existente era contraproducente (corregido en B2)
 
