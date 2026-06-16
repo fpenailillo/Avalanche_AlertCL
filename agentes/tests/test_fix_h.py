@@ -120,6 +120,47 @@ class TestFixH:
         # El nivel Alpes debe ser ≥ nivel Andes (default más conservador)
         assert r_alpes["nivel_eaws_24h"] >= r_andes["nivel_eaws_24h"]
 
+    def test_alpes_tormenta_wn2_sube_nivel(self):
+        """FIX-STORM-FREQ-ALPES + FIX-WN2-SIZE-ALPES (v25.19): en Alpes con tormenta
+        (NEVADA_RECIENTE + manto inestable + nieve WN2) sin IMIS, la frecuencia sube a
+        'some' y el tamaño se gradúa → nivel ≥ 3 (antes quedaba en N2)."""
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estado_pinn="INESTABLE",
+            estabilidad_satelital=None,
+            factor_meteorologico="NEVADA_RECIENTE",
+            ventanas_criticas_detectadas=1,
+            nieve_nueva_cm_wn2=30,
+            nombre_ubicacion="St Moritz",
+        )
+        assert r["nivel_eaws_24h"] >= 3
+        assert r["factores_eaws"]["frecuencia"] == "some"
+
+    def test_alpes_calma_no_sube(self):
+        """El fix no sobreestima en calma: Alpes sin tormenta (factor neutro) se mantiene
+        en frecuencia baja y nivel ≤ 2 pese al default satelital 'poor'."""
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estado_pinn="ESTABLE",
+            estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE",
+            ventanas_criticas_detectadas=0,
+            nombre_ubicacion="Interlaken",
+        )
+        assert r["factores_eaws"]["frecuencia"] == "a_few"
+        assert r["nivel_eaws_24h"] <= 2
+
+    def test_andes_no_afectado_por_fix_alpes(self):
+        """El fix Alpes no regresiona Andes: La Parva en tormenta sigue su propia ruta
+        (FIX-WN2-SIZE-ANDES / FIX-STORM-FREQ-WN2 ya existentes)."""
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estado_pinn="INESTABLE",
+            estabilidad_satelital=None,
+            factor_meteorologico="NEVADA_RECIENTE",
+            ventanas_criticas_detectadas=1,
+            nieve_nueva_cm_wn2=30,
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        assert r["nivel_eaws_24h"] >= 3
+
     def test_h4_andes_sin_cambio_retrocompat(self):
         """FIX-H: la llamada sin nombre_ubicacion produce el mismo resultado que antes."""
         r_sin = ejecutar_clasificar_riesgo_eaws_integrado(

@@ -445,7 +445,15 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     _factor_activo_tamano_pre = bool(
         factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
     )
-    if _region == "andes_chile" and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
+    # FIX-WN2-SIZE-ALPES (v25.19): en Alpes, cuando no hay HN24 IMIS (reproceso
+    # histórico / sin estación cercana), usar WN2 como fallback para graduar tamaño,
+    # igual que en Andes. Con WN2 histórico (2022+) disponible, esto cierra el gap de
+    # días de tormenta suizos que quedaban en tamaño 2 (subestimación GT=3-4).
+    _aplica_wn2_size = (
+        _region == "andes_chile"
+        or (_region == "alpes_swiss" and nieve_nueva_cm_imis is None)
+    )
+    if _aplica_wn2_size and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
         if _factor_activo_tamano_pre:
             if   nieve_nueva_cm_wn2 >= 60: tamano_min_wn2 = 5
             elif nieve_nueva_cm_wn2 >= 40: tamano_min_wn2 = 4
@@ -762,9 +770,12 @@ def _determinar_frecuencia(
     #   · CRITICO  (very_poor) → many  (todos los terrenos >28° se movilizan)
     #   · INESTABLE (poor)     → some  (múltiples corredores activos, no todos)
     # Esto cierra el gap nivel 3→5 que saltaba el nivel 4 para zonas INESTABLE en tormenta.
-    # Solo Andes Chile; en Alpes el mecanismo equivalente es FIX-CR18-CH-2 + IMIS.
+    # FIX-STORM-FREQ-ALPES (v25.19): extendido a Alpes. Antes solo Andes (en Alpes se
+    # confiaba en FIX-CR18-CH-2 + IMIS), pero sin IMIS histórico los días de tormenta
+    # suizos quedaban en a_few → N2 (subestimación GT=3-4). Con WN2 histórico, el mismo
+    # mecanismo aplica: NEVADA_RECIENTE + ventanas≥1 + manto inestable → frecuencia some/many.
     _storm_activa = (
-        _region_freq == "andes_chile"
+        _region_freq in ("andes_chile", "alpes_swiss")
         and "NEVADA_RECIENTE" in factor_meteorologico
         and ventanas_criticas >= 1
     )
