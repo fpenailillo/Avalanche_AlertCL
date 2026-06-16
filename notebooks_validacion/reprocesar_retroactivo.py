@@ -102,6 +102,28 @@ FECHAS_SUIZA_POR_ESTACION = {
 # Alias plano para compatibilidad con funciones auxiliares
 ESTACIONES_SUIZA = list(FECHAS_SUIZA_POR_ESTACION.keys())
 
+# B1 (v25.18): temporada invernal 2023-24 con GT slf_danger_levels_qc (niveles QC
+# publicados SLF, alineados con Techel 2022). Amplía n vs el set IMIS 2018-19.
+# Fechas muestreadas (~cada 6 días) solo donde existe GT por sector_id.
+FECHAS_SUIZA_2324_POR_ESTACION = {
+    "Interlaken": [  # sector_id 4113
+        "2023-12-01", "2023-12-08", "2023-12-14", "2023-12-23",
+        "2024-01-03", "2024-01-16", "2024-01-23",
+        "2024-02-14", "2024-02-21", "2024-02-29",
+        "2024-03-13", "2024-03-26", "2024-04-04", "2024-05-03",
+    ],
+    "Matterhorn Zermatt": [  # sector_id 2223
+        "2023-12-01", "2023-12-22", "2024-01-14", "2024-03-10", "2024-04-01",
+    ],
+    "St Moritz": [  # sector_id 6113
+        "2023-12-02", "2023-12-08", "2023-12-16", "2023-12-23", "2023-12-30",
+        "2024-01-05", "2024-01-12", "2024-01-18", "2024-01-24", "2024-01-30",
+        "2024-02-08", "2024-02-15", "2024-02-21", "2024-02-27",
+        "2024-03-07", "2024-03-11", "2024-03-19", "2024-03-25",
+        "2024-04-01", "2024-04-07", "2024-04-14", "2024-04-21", "2024-04-27",
+    ],
+}
+
 # fecha_inicio de cada boletín Snowlab → fecha de referencia para AndesAI
 FECHAS_SNOWLAB = [
     "2024-06-15", "2024-06-21", "2024-06-28",
@@ -178,6 +200,7 @@ def construir_lista_runs(
     solo_suiza: bool,
     solo_snowlab: bool,
     fechas_filtro: list[str] | None = None,
+    suiza_2324: bool = False,
 ) -> list[tuple[str, str]]:
     """
     Construye la lista de (ubicacion, fecha_str) a procesar, ordenada
@@ -186,11 +209,14 @@ def construir_lista_runs(
     Args:
         fechas_filtro: si se provee, solo incluye runs cuya fecha_str esté en esta lista.
                        Útil para reproceso focalizado (ej. 6 fechas GT≥3 de Snowlab).
+        suiza_2324: si True, usa la temporada 2023-24 (GT slf_danger_levels_qc, B1)
+                    en lugar del set IMIS 2018-19.
     """
     runs: list[tuple[str, str]] = []
 
     if not solo_snowlab:
-        for est, fechas in FECHAS_SUIZA_POR_ESTACION.items():
+        _fechas_suiza = FECHAS_SUIZA_2324_POR_ESTACION if suiza_2324 else FECHAS_SUIZA_POR_ESTACION
+        for est, fechas in _fechas_suiza.items():
             for fecha in fechas:
                 runs.append((est, fecha))
 
@@ -216,12 +242,13 @@ def ejecutar_replay(
     generar_cache: bool = False,
     fechas_filtro: list[str] | None = None,
     force: bool = False,
+    suiza_2324: bool = False,
 ) -> None:
     from agentes.validacion.cache_subagentes import existe_cache
 
     cliente = bigquery.Client(project=GCP_PROJECT)
 
-    runs = construir_lista_runs(solo_suiza, solo_snowlab, fechas_filtro)
+    runs = construir_lista_runs(solo_suiza, solo_snowlab, fechas_filtro, suiza_2324=suiza_2324)
     total = len(runs)
 
     modo = "solo-S5 (cache)" if solo_s5 else ("generar-cache" if generar_cache else "completo")
@@ -372,6 +399,9 @@ def main():
     parser.add_argument("--force", action="store_true",
                         help="Forzar reproceso incluso si ya existe v25.x en BQ (sobreescribe). "
                              "Útil al corregir bugs entre sub-versiones.")
+    parser.add_argument("--suiza-2324", action="store_true",
+                        help="B1: usar temporada 2023-24 (GT slf_danger_levels_qc) en lugar "
+                             "del set IMIS 2018-19. Combinar con --solo-suiza.")
     args = parser.parse_args()
 
     if (args.solo_s5 or args.generar_cache) and not args.cache_dir:
@@ -389,6 +419,7 @@ def main():
         generar_cache=args.generar_cache,
         fechas_filtro=args.fechas,
         force=args.force,
+        suiza_2324=args.suiza_2324,
     )
 
 

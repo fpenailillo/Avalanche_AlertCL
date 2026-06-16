@@ -615,15 +615,31 @@ def _determinar_estabilidad_dominante(
     # En Alpes suizos, ViT no tiene datos de entrenamiento → default conservador 'poor'.
     if estabilidad_satelital in escala:
         idx_sat = escala.index(estabilidad_satelital)
+        idx_base = max(idx_topo, idx_sat)
     else:
         _region_sat = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
-        _default_sat = "fair" if _region_sat == "andes_chile" else "poor"
-        idx_sat = escala.index(_default_sat)
-        logger.info(
-            f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
-            f"default '{_default_sat}' (region={_region_sat})"
-        )
-    idx_base = max(idx_topo, idx_sat)
+        if _region_sat == "andes_chile":
+            # FIX-SAT-DEFAULT-NO-ELEVA (v26.1): sin imágenes ViT el satélite no aporta
+            # señal real. En Andes (donde el ViT fue entrenado), el default 'fair' NO debe
+            # ELEVAR el piso por encima de un PINN explícitamente estable (good): el
+            # max(good, fair) inflaba ~21 días calmos de nivel 1 a nivel 2 — el error
+            # dominante GT=1→AI=2 de H4 La Parva. Se confía en la estabilidad topográfica
+            # del PINN; el ajuste meteorológico posterior sigue elevando el peligro cuando
+            # hay un factor activo (tormenta), por lo que no se pierde sensibilidad real.
+            idx_base = idx_topo
+            logger.info(
+                f"[ClasificarEAWS] FIX-SAT-DEFAULT-NO-ELEVA: estabilidad_satelital ausente "
+                f"→ idx_base=topografica_pinn ('{estabilidad_topografica}') (region=andes_chile)"
+            )
+        else:
+            # Alpes: ViT no fue entrenado aquí → asumir peor caso 'poor' (FIX-H, conservador,
+            # alineado con la praxis SLF de asumir lo peor sin datos).
+            idx_sat = escala.index("poor")
+            idx_base = max(idx_topo, idx_sat)
+            logger.info(
+                f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
+                f"default 'poor' (region={_region_sat})"
+            )
 
     _factor_activo = bool(
         factor_meteorologico

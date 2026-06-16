@@ -1,7 +1,9 @@
 """
 Tests para FIX-H (v7.0): default estabilidad_satelital por región cuando ViT retorna sin_datos.
 
-En Andes Chile: default 'fair' (ViT entrenado aquí, sin_datos es raro → incertidumbre baja).
+En Andes Chile: el satélite ausente NO eleva el piso → se confía en el PINN topográfico
+  (FIX-SAT-DEFAULT-NO-ELEVA v26.1; antes default 'fair', que inflaba good→fair y subía
+  ~21 días calmos de nivel 1 a nivel 2 — el error GT=1→AI=2 dominante en H4).
 En Alpes suizos: default 'poor' (ViT fuera de dominio → incertidumbre alta, conservador).
 """
 
@@ -14,16 +16,55 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
 
 
 class TestFixH:
-    def test_andes_sin_datos_default_fair(self):
-        """FIX-H: La Parva sin estabilidad satelital → usa default 'fair' (Andes)."""
+    def test_andes_sin_datos_respeta_topo_fair(self):
+        """Andes sin satélite: la dominante sigue el PINN topográfico ('fair')."""
         estabilidad = _determinar_estabilidad_dominante(
             estabilidad_topografica="fair",
             estabilidad_satelital=None,
             factor_meteorologico="ESTABLE",
             nombre_ubicacion="La Parva Sector Alto",
         )
-        # Con topo='fair' e idx_sat='fair' (default Andes), la dominante es 'fair'
+        # Sin señal satelital, idx_base = idx_topo → 'fair'
         assert estabilidad == "fair"
+
+    def test_andes_good_sin_datos_no_eleva(self):
+        """FIX-SAT-DEFAULT-NO-ELEVA: Andes con PINN ESTABLE (good) y satélite ausente
+        debe quedar 'good' (no 'fair'). Es la causa raíz del error GT=1→AI=2 en H4."""
+        estabilidad = _determinar_estabilidad_dominante(
+            estabilidad_topografica="good",
+            estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE",
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        assert estabilidad == "good"
+
+    def test_andes_good_sin_datos_calmo_da_nivel_1(self):
+        """Día calmo en La Parva con PINN ESTABLE y sin satélite → nivel EAWS 1
+        (antes nivel 2 por el piso 'fair' espurio)."""
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estabilidad_topografica="good",
+            estabilidad_satelital=None,
+            factor_meteorologico="CICLO_DIURNO_NORMAL",
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        assert r["nivel_eaws_24h"] == 1
+
+    def test_andes_good_con_factor_activo_sigue_elevando(self):
+        """El fix no anula la sensibilidad: con un factor meteorológico activo el nivel
+        sube aunque el PINN sea ESTABLE y no haya satélite."""
+        r_calmo = ejecutar_clasificar_riesgo_eaws_integrado(
+            estabilidad_topografica="good",
+            estabilidad_satelital=None,
+            factor_meteorologico="CICLO_DIURNO_NORMAL",
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        r_activo = ejecutar_clasificar_riesgo_eaws_integrado(
+            estabilidad_topografica="good",
+            estabilidad_satelital=None,
+            factor_meteorologico="NEVADA_RECIENTE",
+            nombre_ubicacion="La Parva Sector Alto",
+        )
+        assert r_activo["nivel_eaws_24h"] >= r_calmo["nivel_eaws_24h"]
 
     def test_alpes_sin_datos_default_poor(self):
         """FIX-H: Interlaken sin estabilidad satelital → usa default 'poor' (Alpes)."""

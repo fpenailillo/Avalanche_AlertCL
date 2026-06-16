@@ -131,7 +131,7 @@ def cargar_datos(cliente, version: str = "v25.2"):
     return df_eaws, df_snow
 
 
-def emparejar(df_eaws, df_snow, nivel_ref: str = "banda", tolerancia_dias: int = 7):
+def emparejar(df_eaws, df_snow, nivel_ref: str = "banda", tolerancia_dias: int = 3):
     """
     Para cada boletín Snowlab busca el boletín AndesAI más cercano a la
     fecha de inicio de validez, dentro de `tolerancia_dias`.
@@ -221,9 +221,14 @@ def calcular_metricas(df_pares, verbose=False):
     print(f"  Distancia media (d)  : {dist_media:.1f} días")
     print(f"  Sectores             : {sorted(df_pares['sector'].unique())}")
 
+    acc_exacta = float(np.mean(np.array(y_true) == np.array(y_pred)))
+    acc_adyacente = float(np.mean(np.abs(np.array(y_true) - np.array(y_pred)) <= 1))
+
     print(f"\n  MAE                  : {mae:.3f}")
     print(f"  Sesgo (EAWS−Snowlab) : {sesgo:+.3f}")
     print(f"  QWK                  : {kappa_qw:.3f}")
+    print(f"  Accuracy exacta      : {acc_exacta:.3f}")
+    print(f"  Accuracy ±1          : {acc_adyacente:.3f}")
 
     if SKLEARN:
         kappa_lin = cohen_kappa_score(y_true, y_pred, weights=None)
@@ -316,8 +321,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--verbose", action="store_true",
                         help="Mostrar todos los pares individuales")
-    parser.add_argument("--tolerancia", type=int, default=7,
-                        help="Máximo de días de distancia para emparejar (default: 7)")
+    parser.add_argument("--tolerancia", type=int, default=3,
+                        help="Máximo de días de distancia para emparejar (default: 3). "
+                             "≤3d evita comparar boletines a >validez (~2-3d) entre estados de "
+                             "manto distintos; los pares restantes quedan a distancia media ~1d.")
     parser.add_argument("--nivel-ref", choices=["banda", "max"], default="banda",
                         help="'banda' usa el nivel por elevación; 'max' usa nivel_max global")
     parser.add_argument("--exportar", type=str, default=None,
