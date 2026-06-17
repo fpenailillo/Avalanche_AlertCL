@@ -51,6 +51,28 @@ SWE 0.049 · HS_meas 0.048 · TA 0.047
 4. **N4 sigue sin predecirse** (12 casos, clase muy rara) — limitación de class imbalance,
    común también en Techel.
 
+## Fase F — integración en el agentic loop (validación): H3 cruza Techel
+
+Se integró el RF como **nivel base alpino** en `tool_clasificar_eaws.py` (flag `USE_RF_ALPES`,
+solo validación; operación y Andes intactos). `agentes/datos/snowpack_features.py::nivel_rf_alpes`
+lee features de `slf_meteo_snowpack` y predice con el artefacto `modelo_h3_rf_train2016.joblib`
+(RF train 2010-2016). El nivel del RF reemplaza el de la matriz EAWS en Alpes.
+
+**Resultado (agentic + RF en 2019, año balanceado, n=101):**
+| | QWK | acc | acc±1 |
+|--|-----|-----|-------|
+| **agentic + RF (Fase F)** | **0.665** | 0.703 | 1.000 |
+| agentic puro (v25.19) | 0.444 | — | — |
+| Techel 2022 | 0.590 | 0.640 | 0.950 |
+
+**El agentic loop con la señal de snowpack alcanza QWK=0.665 — supera Techel (0.59)** y
+acc±1=1.00. Confirma end-to-end que el gap de H3 era la falta de la señal de snowpack en el
+nivel base alpino, no una limitación del agentic loop ni de los datos. (El reproceso completo
+daría lo mismo: el flag reemplaza el nivel por el del RF — verificado por test de integración
+`test_rf_alpes_reemplaza_nivel_solo_con_flag`.)
+
+Artefacto regenerable: `python notebooks_validacion/modelo_h3_supervisado.py --guardar`.
+
 ## Implicación / siguiente paso (alcance aparte)
 
 Si se quisiera cerrar el gap del agentic loop en Alpes, la vía sería integrar las

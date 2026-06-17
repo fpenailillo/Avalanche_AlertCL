@@ -14,7 +14,9 @@ Uso: python notebooks_validacion/modelo_h3_supervisado.py
 """
 import os
 import sys
+import argparse
 import numpy as np
+import joblib
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.dirname(__file__))
@@ -27,6 +29,7 @@ mod7 = __import__("07_validacion_slf_suiza", fromlist=["calcular_kappa_ponderado
 _qwk = mod7.calcular_kappa_ponderado_cuadratico
 
 GCP_PROJECT = "climas-chileno"
+GUARDAR = False
 FEATURES = [
     "HS_meas", "HN24", "HN72_24", "HN24_7d", "SWE", "TA", "TSS_mod", "RH", "VW", "DW",
     "wind_trans24", "hoar_size", "pwl_100", "base_pwl", "ssi_pwl", "sk38_pwl",
@@ -96,6 +99,14 @@ def main():
     rf.fit(Xtr.fillna(med), ytr)
     reporte("RandomForest (class_weight=balanced)", yte, rf.predict(Xte.fillna(med)))
 
+    if GUARDAR:
+        ruta = os.path.join(os.path.dirname(__file__), "..", "agentes", "validacion",
+                            "modelo_h3_rf_train2016.joblib")
+        joblib.dump({"model": rf, "features": FEATURES,
+                     "medianas": med.to_dict()}, ruta)
+        print(f"\n  Artefacto guardado: {os.path.abspath(ruta)} "
+              f"(RF train 2010-2016, {len(FEATURES)} features)")
+
     # 2) HistGradientBoosting (maneja NaN nativamente)
     hgb = HistGradientBoostingClassifier(random_state=42, max_iter=400)
     hgb.fit(Xtr, ytr)
@@ -124,4 +135,8 @@ def main():
 
 
 if __name__ == "__main__":
+    _ap = argparse.ArgumentParser()
+    _ap.add_argument("--guardar", action="store_true",
+                     help="Serializar el RF (train 2010-2016) a artefacto joblib para inferencia")
+    GUARDAR = _ap.parse_args().guardar
     main()

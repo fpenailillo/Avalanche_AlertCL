@@ -542,6 +542,27 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     )
     nivel_24h = nivel_d1  # Nivel primario
 
+    # FIX-RF-ALPES (Fase F, SOLO VALIDACIÓN — flag USE_RF_ALPES): en Alpes con IMIS,
+    # reemplazar el nivel base por el del modelo supervisado de snowpack (RF), que
+    # alcanza H3≈Techel. La matriz EAWS andina subestima la base N3 alpina. Operación
+    # (sin el flag) y Andes quedan intactos.
+    if os.environ.get("USE_RF_ALPES") == "true" and nombre_ubicacion \
+            and _obtener_region(nombre_ubicacion) == "alpes_swiss":
+        try:
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from agentes.datos.snowpack_features import nivel_rf_alpes
+            _fref_rf = obtener_fecha_referencia_global()
+            if _fref_rf:
+                _nivel_rf = nivel_rf_alpes(nombre_ubicacion, _fref_rf.strftime("%Y-%m-%d"))
+                if _nivel_rf is not None:
+                    logger.info(
+                        f"[ClasificarEAWS] FIX-RF-ALPES: nivel base {nivel_24h}→{_nivel_rf} "
+                        f"(RF snowpack, {nombre_ubicacion})"
+                    )
+                    nivel_24h = _nivel_rf
+        except Exception as _e_rf:
+            logger.warning(f"[ClasificarEAWS] FIX-RF-ALPES: fallback falló — {_e_rf}")
+
     # Información del nivel desde NIVELES_PELIGRO
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, {})
 

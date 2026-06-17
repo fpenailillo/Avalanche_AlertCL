@@ -9,6 +9,7 @@ en Andes / fechas sin IMIS retorna disponible=False.
 """
 import json
 import logging
+import os
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -71,3 +72,58 @@ def obtener_snowpack_imis(nombre_ubicacion: str, fecha: str) -> dict:
 
 def invalidar_cache_snowpack() -> None:
     obtener_snowpack_imis.cache_clear()
+
+
+# ─── Fase F: nivel base alpino por modelo supervisado (RF features IMIS) ──────────
+# Solo VALIDACIÓN (flag USE_RF_ALPES). Lee las features directo de slf_meteo_snowpack
+# (mismos nombres que el entrenamiento) y predice el nivel con el artefacto RF
+# train-2010-2016. No operacional (requiere IMIS histórico).
+
+_RF_ARTIFACT = None
+_SECTOR_IDS_RF = {"Interlaken": 4113, "Matterhorn Zermatt": 2223, "St Moritz": 6113}
+
+
+def _cargar_rf():
+    global _RF_ARTIFACT
+    if _RF_ARTIFACT is None:
+        import joblib
+        ruta = os.path.join(os.path.dirname(__file__), "..", "validacion",
+                            "modelo_h3_rf_train2016.joblib")
+        _RF_ARTIFACT = joblib.load(ruta)
+    return _RF_ARTIFACT
+
+
+@lru_cache(maxsize=512)
+def nivel_rf_alpes(nombre_ubicacion: str, fecha: str):
+    """Nivel EAWS predicho por el RF de snowpack para una estación alpina/fecha.
+    Retorna int 1-5, o None si no es estación alpina, no hay datos o falta el artefacto."""
+    sid = _SECTOR_IDS_RF.get(nombre_ubicacion)
+    if sid is None or not fecha:
+        return None
+    try:
+        art = _cargar_rf()
+        feats, med, model = art["features"], art["medianas"], art["model"]
+        from google.cloud import bigquery
+        cli = bigquery.Client(project=GCP_PROJECT)
+        cols = ", ".join(feats)
+        sql = f"""
+            SELECT {cols}
+            FROM `{GCP_PROJECT}.validacion_avalanchas.slf_meteo_snowpack`
+            WHERE sector_id = @sid AND DATE(datum) = @f AND HS_meas IS NOT NULL
+            LIMIT 1
+        """
+        cfg = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("sid", "INT64", sid),
+            bigquery.ScalarQueryParameter("f", "DATE", fecha),
+        ])
+        filas = list(cli.query(sql, job_config=cfg).result())
+        if not filas:
+            return None
+        row = dict(filas[0])
+        x = [[float(row[f]) if row.get(f) is not None else float(med[f]) for f in feats]]
+        nivel = int(model.predict(x)[0])
+        logger.info(f"[NivelRF-Alpes] {nombre_ubicacion} {fecha} → nivel RF={nivel}")
+        return nivel
+    except Exception as exc:
+        logger.warning(f"[NivelRF-Alpes] error {nombre_ubicacion} {fecha}: {exc}")
+        return None

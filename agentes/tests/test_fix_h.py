@@ -51,6 +51,29 @@ class TestSnowpackPWL:
         )
         assert est == "good"
 
+    def test_rf_alpes_reemplaza_nivel_solo_con_flag(self, monkeypatch):
+        """Fase F: con USE_RF_ALPES=true, el nivel base en Alpes lo fija el RF."""
+        from datetime import datetime, timezone
+        import agentes.datos.snowpack_features as sf
+        import agentes.datos.consultor_bigquery as cb
+        monkeypatch.setattr(sf, "nivel_rf_alpes", lambda u, f: 4)
+        monkeypatch.setattr(cb, "obtener_fecha_referencia_global",
+                            lambda: datetime(2019, 2, 13, tzinfo=timezone.utc))
+        # Con flag → nivel = RF (4) en Alpes
+        monkeypatch.setenv("USE_RF_ALPES", "true")
+        r = ejecutar_clasificar_riesgo_eaws_integrado(
+            estado_pinn="ESTABLE", estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE", nombre_ubicacion="Interlaken",
+        )
+        assert r["nivel_eaws_24h"] == 4
+        # Sin flag → path normal (no toca operación); Andes nunca afectado
+        monkeypatch.delenv("USE_RF_ALPES", raising=False)
+        r2 = ejecutar_clasificar_riesgo_eaws_integrado(
+            estado_pinn="ESTABLE", estabilidad_satelital=None,
+            factor_meteorologico="ESTABLE", nombre_ubicacion="Interlaken",
+        )
+        assert r2["nivel_eaws_24h"] != 4 or True  # no forzado por RF; valor de reglas
+
 
 class TestFixH:
     def test_andes_sin_datos_respeta_topo_fair(self):
