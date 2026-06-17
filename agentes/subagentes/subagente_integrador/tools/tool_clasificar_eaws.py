@@ -422,6 +422,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         estabilidad=estabilidad_final,
         viento_kmh=viento_kmh,
         nombre_ubicacion=nombre_ubicacion,
+        capa_debil_inestable=(_estab_snowpack in ("poor", "very_poor")),
     )
 
     # ─── 3. Determinar tamaño (dinámico desde topografía si es posible) ──────
@@ -644,11 +645,14 @@ def _estabilidad_desde_snowpack(pwl_100, ssi_pwl, sk38_pwl) -> str | None:
         idx = float(idx)
     except (ValueError, TypeError):
         return None
-    if idx < 1.0:
-        return "very_poor"
+    # Umbrales severos: una capa débil persistente PRESENTE (pwl≥0.5) con SSI<1.5
+    # es estructuralmente reactiva (Schweizer & Jamieson 2003) → very_poor. El peligro
+    # de capa persistente no se refleja en la estabilidad de superficie.
     if idx < 1.5:
-        return "poor"
+        return "very_poor"
     if idx < 2.5:
+        return "poor"
+    if idx < 3.5:
         return "fair"
     return "good"
 
@@ -799,6 +803,7 @@ def _determinar_frecuencia(
     estabilidad: str,
     viento_kmh: float = None,
     nombre_ubicacion: str = None,
+    capa_debil_inestable: bool = False,
 ) -> str:
     """
     Determina la frecuencia EAWS final.
@@ -811,6 +816,16 @@ def _determinar_frecuencia(
     escala = ["nearly_none", "a_few", "some", "many"]
 
     idx_base = escala.index(frecuencia_topografica) if frecuencia_topografica in escala else 1
+
+    # FIX-PWL-SNOWPACK (Fase D): una capa débil persistente reactiva es espacialmente
+    # extensa → múltiples pendientes comparten la debilidad → frecuencia ≥ some. Junto
+    # con estabilidad very_poor permite alcanzar N3 en días tranquilos (very_poor×some×2).
+    if capa_debil_inestable and idx_base < 2:
+        logger.info(
+            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: capa débil persistente → frecuencia ≥ 'some' "
+            f"(idx {idx_base}→2)"
+        )
+        idx_base = 2
 
     # Ajuste por ventanas críticas.
     # FIX-CR18-CH-2 (v18.0): en Alpes suizos con NEVADA_RECIENTE activa, bajar el
