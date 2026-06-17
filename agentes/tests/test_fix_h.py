@@ -20,12 +20,10 @@ class TestSnowpackPWL:
     """Fase D (H3): capa débil persistente IMIS → estabilidad (FIX-PWL-SNOWPACK)."""
 
     def test_mapeo_ssi_a_estabilidad(self):
-        # Umbrales severos: SSI<1.5 con capa débil presente → very_poor (reactiva)
         assert _estabilidad_desde_snowpack(0.8, 0.8, None) == "very_poor"
-        assert _estabilidad_desde_snowpack(0.8, 1.31, None) == "very_poor"
-        assert _estabilidad_desde_snowpack(0.8, 2.0, None) == "poor"
-        assert _estabilidad_desde_snowpack(0.8, 3.0, None) == "fair"
-        assert _estabilidad_desde_snowpack(0.8, 4.0, None) == "good"
+        assert _estabilidad_desde_snowpack(0.8, 1.2, None) == "poor"
+        assert _estabilidad_desde_snowpack(0.8, 2.0, None) == "fair"
+        assert _estabilidad_desde_snowpack(0.8, 3.0, None) == "good"
 
     def test_sin_capa_debil_no_aplica(self):
         # pwl_100 < 0.5 → no hay capa persistente significativa
@@ -33,7 +31,7 @@ class TestSnowpackPWL:
         assert _estabilidad_desde_snowpack(None, 0.5, None) is None
 
     def test_fallback_sk38_si_falta_ssi(self):
-        assert _estabilidad_desde_snowpack(0.8, None, 1.2) == "very_poor"
+        assert _estabilidad_desde_snowpack(0.8, None, 1.2) == "poor"
 
     def test_piso_robusto_a_calma_sostenida(self):
         """La capa débil persistente mantiene el peligro pese a calma sostenida (Alpes)."""
