@@ -308,6 +308,7 @@ def ejecutar_backfill(
 
     total = sum(len(v["fechas"]) for v in estaciones.values())
     ok = skip = err = 0
+    filas_a_insertar: list[dict] = []
 
     print(f"\n{'='*60}")
     print(f"BACKFILL IMIS → condiciones_actuales  ({total} inserciones)")
@@ -351,16 +352,30 @@ def ejecutar_backfill(
                 ok += 1
                 continue
 
-            errores = cliente.insert_rows_json(tabla_destino, [fila])
-            if errores:
-                logger.error(f"ERROR BQ — {etiqueta}: {errores}")
-                err += 1
-            else:
-                logger.info(
-                    f"OK — {etiqueta}  "
-                    f"TA={ta_str} {hn_str} {sc_str}  GT_nivel={nivel_gt}"
-                )
-                ok += 1
+            filas_a_insertar.append(fila)
+            logger.info(
+                f"PREPARADO — {etiqueta}  "
+                f"TA={ta_str} {hn_str} {sc_str}  GT_nivel={nivel_gt}"
+            )
+            ok += 1
+
+    # Inserción vía LOAD JOB (no streaming): permite escribir a particiones de
+    # cualquier fecha. El streaming insert_rows_json falla para particiones de
+    # >3650 días atrás (condiciones_actuales particionada por hora_actual).
+    if not dry_run and filas_a_insertar:
+        tabla_ref = cliente.get_table(tabla_destino)
+        job_config = bigquery.LoadJobConfig(
+            schema=tabla_ref.schema,
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+        )
+        job = cliente.load_table_from_json(filas_a_insertar, tabla_destino, job_config=job_config)
+        job.result()
+        if job.errors:
+            logger.error(f"ERROR load job: {job.errors}")
+            err += len(filas_a_insertar)
+            ok -= len(filas_a_insertar)
+        else:
+            logger.info(f"LOAD JOB OK — {len(filas_a_insertar)} filas insertadas")
 
     print(f"\n{'='*60}")
     print(f"COMPLETADO")
