@@ -102,6 +102,53 @@ SECTOR_IDS_IMIS = {
     "St Moritz":          6113,
 }
 
+# B1 (v25.18): temporada 2023-24 por estación, GT slf_danger_levels_qc (niveles QC
+# publicados SLF). Amplía n vs el set IMIS 2018-19. Mismas fechas que en
+# reprocesar_retroactivo.FECHAS_SUIZA_2324_POR_ESTACION.
+FECHAS_QC_2324_POR_ESTACION = {
+    "Interlaken": [
+        "2023-12-01", "2023-12-08", "2023-12-14", "2023-12-23",
+        "2024-01-03", "2024-01-16", "2024-01-23",
+        "2024-02-14", "2024-02-21", "2024-02-29",
+        "2024-03-13", "2024-03-26", "2024-04-04", "2024-05-03",
+    ],
+    "Matterhorn Zermatt": [
+        "2023-12-01", "2023-12-22", "2024-01-14", "2024-03-10", "2024-04-01",
+    ],
+    "St Moritz": [
+        "2023-12-02", "2023-12-08", "2023-12-16", "2023-12-23", "2023-12-30",
+        "2024-01-05", "2024-01-12", "2024-01-18", "2024-01-24", "2024-01-30",
+        "2024-02-08", "2024-02-15", "2024-02-21", "2024-02-27",
+        "2024-03-07", "2024-03-11", "2024-03-19", "2024-03-25",
+        "2024-04-01", "2024-04-07", "2024-04-14", "2024-04-21", "2024-04-27",
+    ],
+}
+
+
+def _fechas_historico_por_estacion(cliente: bigquery.Client, anio: int) -> dict:
+    """Fase D: fechas con snowpack (HS_meas) + GT publicado del año, por estación."""
+    sql = f"""
+        SELECT m.sector_id,
+               ARRAY_AGG(DISTINCT CAST(DATE(m.datum) AS STRING)
+                         ORDER BY CAST(DATE(m.datum) AS STRING)) AS fechas
+        FROM `{GCP_PROJECT}.validacion_avalanchas.slf_meteo_snowpack` m
+        JOIN `{GCP_PROJECT}.validacion_avalanchas.slf_danger_levels_qc` q
+          ON m.sector_id = q.sector_id AND DATE(m.datum) = q.date
+        WHERE m.sector_id IN (4113, 2223, 6113)
+          AND EXTRACT(YEAR FROM m.datum) = @anio AND m.HS_meas IS NOT NULL
+        GROUP BY m.sector_id
+    """
+    cfg = bigquery.QueryJobConfig(query_parameters=[
+        bigquery.ScalarQueryParameter("anio", "INTEGER", anio),
+    ])
+    sector_a_est = {4113: "Interlaken", 2223: "Matterhorn Zermatt", 6113: "St Moritz"}
+    out = {}
+    for r in cliente.query(sql, job_config=cfg).result():
+        est = sector_a_est.get(int(r["sector_id"]))
+        if est:
+            out[est] = list(r["fechas"])
+    return out
+
 
 def obtener_nuestros_boletines(
     cliente: bigquery.Client,
@@ -422,6 +469,15 @@ def main():
         "--imis-gt", action="store_true",
         help="v14.0+: usar DEAPSnow test set 2018-2020 como ground truth (slf_meteo_snowpack)"
     )
+    parser.add_argument(
+        "--qc-2324", action="store_true",
+        help="B1: temporada 2023-24 por estación, GT slf_danger_levels_qc (amplía n)"
+    )
+    parser.add_argument(
+        "--qc-historico", type=int, default=None, metavar="ANIO",
+        help="Fase D: validar un año histórico con snowpack IMIS (ej. --qc-historico 2014). "
+             "Fechas dinámicas (snowpack+GT), GT slf_danger_levels_qc."
+    )
     args = parser.parse_args()
 
     if args.verbose:
@@ -470,6 +526,50 @@ def main():
             return
 
         fechas_por_estacion_iter = FECHAS_IMIS_POR_ESTACION
+    elif args.qc_2324:
+        # ── B1: fechas per-estación 2023-24, GT desde slf_danger_levels_qc (sector preciso) ──
+        ubicaciones = list(FECHAS_QC_2324_POR_ESTACION.keys())
+        todas_fechas = sorted({f for fs in FECHAS_QC_2324_POR_ESTACION.values() for f in fs})
+        n_total = sum(len(v) for v in FECHAS_QC_2324_POR_ESTACION.values())
+        print(f"\n[1/4] Obteniendo boletines AndesAI ({n_total} pares per-estación, 2023-24)...")
+        nuestros = obtener_nuestros_boletines(cliente, ubicaciones, todas_fechas, version=args.version)
+        print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
+
+        if not nuestros:
+            print("ERROR: Sin boletines — ejecutar reprocesar_retroactivo.py --solo-suiza --suiza-2324 primero")
+            return
+
+        print("\n      Boletines por estación:")
+        for estacion in ubicaciones:
+            boletines_est = {k: v for k, v in nuestros.items() if k[0] == estacion}
+            print(f"      {estacion}: {len(boletines_est)} boletines")
+
+        print(f"\n[2/4] Obteniendo ground truth slf_danger_levels_qc (sector preciso, 2023-24)...")
+        niveles_gt, meta_slf = obtener_niveles_slf_preciso(cliente, todas_fechas)
+        fechas_por_estacion_iter = FECHAS_QC_2324_POR_ESTACION
+    elif args.qc_historico:
+        # ── Fase D: año histórico con snowpack IMIS, GT slf_danger_levels_qc ──
+        anio = args.qc_historico
+        fechas_hist = _fechas_historico_por_estacion(cliente, anio)
+        ubicaciones = list(fechas_hist.keys())
+        todas_fechas = sorted({f for fs in fechas_hist.values() for f in fs})
+        n_total = sum(len(v) for v in fechas_hist.values())
+        print(f"\n[1/4] Obteniendo boletines AndesAI ({n_total} pares per-estación, {anio})...")
+        nuestros = obtener_nuestros_boletines(cliente, ubicaciones, todas_fechas, version=args.version)
+        print(f"      {len(nuestros)} boletines encontrados (versión={args.version})")
+
+        if not nuestros:
+            print(f"ERROR: Sin boletines — ejecutar reprocesar_retroactivo.py --solo-suiza --suiza-{str(anio)[2:]} primero")
+            return
+
+        print("\n      Boletines por estación:")
+        for estacion in ubicaciones:
+            boletines_est = {k: v for k, v in nuestros.items() if k[0] == estacion}
+            print(f"      {estacion}: {len(boletines_est)} boletines")
+
+        print(f"\n[2/4] Obteniendo ground truth slf_danger_levels_qc (sector preciso, {anio})...")
+        niveles_gt, meta_slf = obtener_niveles_slf_preciso(cliente, todas_fechas)
+        fechas_por_estacion_iter = fechas_hist
     else:
         # ── Modo clásico: fechas comunes 2023-2024, GT desde slf_danger_levels_qc ──
         if not args.mapeo_canton:

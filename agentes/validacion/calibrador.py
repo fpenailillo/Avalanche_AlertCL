@@ -367,11 +367,15 @@ def entrenar_calibracion(
 
 def _cargar_pares_suiza(version_prefix: str = "v20") -> Tuple[List[str], List[float], List[int]]:
     """
-    Pares (pred, GT) para H3 Suiza desde boletines_riesgo + slf_meteo_snowpack.
-    GT = DEAPSnow RF2 dangerLevel (test set 2018-2020).
+    Pares (pred, GT) para H3 Suiza desde boletines_riesgo + slf_danger_levels_qc.
+    GT = niveles QC publicados SLF, temporada 2023-24 (consistente con la
+    validación B1 de 07_validacion_slf_suiza.py --qc-2324; el GT de Techel 2022).
 
-    Dos queries separadas (boletines_riesgo y slf_meteo_snowpack pueden estar
-    en distintas ubicaciones BQ); el join se hace en Python.
+    Antes usaba slf_meteo_snowpack (DEAPSnow 2018-20), pero la validación se
+    estandarizó en slf_danger_levels_qc → se alinea la fuente para evitar medir
+    calibración y validación sobre GTs distintos.
+
+    Dos queries separadas; el join se hace en Python.
     """
     from google.cloud import bigquery
 
@@ -407,11 +411,12 @@ def _cargar_pares_suiza(version_prefix: str = "v20") -> Tuple[List[str], List[fl
     query_gt = f"""
     SELECT
       sector_id,
-      CAST(DATE(datum) AS STRING) AS fecha_str,
-      CAST(ROUND(dangerLevel) AS INT64) AS nivel_gt
-    FROM `{GCP_PROJECT}.validacion_avalanchas.slf_meteo_snowpack`
+      CAST(date AS STRING) AS fecha_str,
+      CAST(ROUND(danger_level_qc) AS INT64) AS nivel_gt
+    FROM `{GCP_PROJECT}.validacion_avalanchas.slf_danger_levels_qc`
     WHERE ({sector_cond})
-      AND dangerLevel IS NOT NULL AND dangerLevel BETWEEN 1 AND 5
+      AND danger_level_qc IS NOT NULL AND danger_level_qc BETWEEN 1 AND 5
+      AND date BETWEEN '2023-12-01' AND '2024-05-31'
     ORDER BY fecha_str, sector_id
     """
 

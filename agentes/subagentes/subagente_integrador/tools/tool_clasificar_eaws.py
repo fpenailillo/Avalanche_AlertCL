@@ -377,6 +377,33 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         }
 
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
+    # ─── Fase D (H3): estabilidad por capa débil persistente (IMIS, determinista) ──
+    # FIX-PWL-SNOWPACK: análogo al bloque WN2 — consulta los índices de capa débil
+    # persistente (pwl_100/ssi_pwl) para nombre_ubicacion+fecha_ref y deriva una
+    # estabilidad. Captura el peligro persistente en días meteorológicamente tranquilos
+    # que el SLF marca N3-4 pero la meteo de superficie no delata. Solo Alpes histórico
+    # con IMIS; en Andes / sin registro → None (comportamiento actual intacto).
+    _estab_snowpack = None
+    if nombre_ubicacion:
+        try:
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from agentes.datos.snowpack_features import obtener_snowpack_imis
+            _fref = obtener_fecha_referencia_global()
+            if _fref:
+                _sp = obtener_snowpack_imis(nombre_ubicacion, _fref.strftime("%Y-%m-%d"))
+                if _sp["disponible"]:
+                    _estab_snowpack = _estabilidad_desde_snowpack(
+                        _sp["pwl_100"], _sp["ssi_pwl"], _sp["sk38_pwl"]
+                    )
+                    if _estab_snowpack:
+                        logger.info(
+                            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: capa débil IMIS "
+                            f"(pwl={_sp['pwl_100']}, ssi={_sp['ssi_pwl']}) → "
+                            f"estabilidad_snowpack={_estab_snowpack}"
+                        )
+        except Exception as _exc_sp:
+            logger.warning(f"[ClasificarEAWS] FIX-PWL-SNOWPACK: fallback falló — {_exc_sp}")
+
     estabilidad_final = _determinar_estabilidad_dominante(
         estabilidad_topografica=estabilidad_topografica,
         estabilidad_satelital=estabilidad_satelital,
@@ -384,6 +411,7 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         dias_consecutivos_nivel_bajo=dias_consecutivos_nivel_bajo,
         nombre_ubicacion=nombre_ubicacion,
         ventanas_criticas_detectadas=ventanas_criticas_detectadas,
+        estabilidad_snowpack=_estab_snowpack,
     )
 
     # ─── 2. Ajustar frecuencia ───────────────────────────────────────────────
@@ -445,7 +473,15 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     _factor_activo_tamano_pre = bool(
         factor_meteorologico and factor_meteorologico not in _FACTORES_NEUTROS
     )
-    if _region == "andes_chile" and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
+    # FIX-WN2-SIZE-ALPES (v25.19): en Alpes, cuando no hay HN24 IMIS (reproceso
+    # histórico / sin estación cercana), usar WN2 como fallback para graduar tamaño,
+    # igual que en Andes. Con WN2 histórico (2022+) disponible, esto cierra el gap de
+    # días de tormenta suizos que quedaban en tamaño 2 (subestimación GT=3-4).
+    _aplica_wn2_size = (
+        _region == "andes_chile"
+        or (_region == "alpes_swiss" and nieve_nueva_cm_imis is None)
+    )
+    if _aplica_wn2_size and nieve_nueva_cm_wn2 is not None and nieve_nueva_cm_wn2 > 0:
         if _factor_activo_tamano_pre:
             if   nieve_nueva_cm_wn2 >= 60: tamano_min_wn2 = 5
             elif nieve_nueva_cm_wn2 >= 40: tamano_min_wn2 = 4
@@ -505,6 +541,27 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         tamano=tamano_final
     )
     nivel_24h = nivel_d1  # Nivel primario
+
+    # FIX-RF-ALPES (Fase F, SOLO VALIDACIÓN — flag USE_RF_ALPES): en Alpes con IMIS,
+    # reemplazar el nivel base por el del modelo supervisado de snowpack (RF), que
+    # alcanza H3≈Techel. La matriz EAWS andina subestima la base N3 alpina. Operación
+    # (sin el flag) y Andes quedan intactos.
+    if os.environ.get("USE_RF_ALPES") == "true" and nombre_ubicacion \
+            and _obtener_region(nombre_ubicacion) == "alpes_swiss":
+        try:
+            from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+            from agentes.datos.snowpack_features import nivel_rf_alpes
+            _fref_rf = obtener_fecha_referencia_global()
+            if _fref_rf:
+                _nivel_rf = nivel_rf_alpes(nombre_ubicacion, _fref_rf.strftime("%Y-%m-%d"))
+                if _nivel_rf is not None:
+                    logger.info(
+                        f"[ClasificarEAWS] FIX-RF-ALPES: nivel base {nivel_24h}→{_nivel_rf} "
+                        f"(RF snowpack, {nombre_ubicacion})"
+                    )
+                    nivel_24h = _nivel_rf
+        except Exception as _e_rf:
+            logger.warning(f"[ClasificarEAWS] FIX-RF-ALPES: fallback falló — {_e_rf}")
 
     # Información del nivel desde NIVELES_PELIGRO
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, {})
@@ -588,6 +645,35 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     }
 
 
+def _estabilidad_desde_snowpack(pwl_100, ssi_pwl, sk38_pwl) -> str | None:
+    """
+    Mapea índices de capa débil persistente (IMIS) → estabilidad EAWS.
+    Fase D (H3). Solo aporta cuando hay capa débil persistente significativa
+    (pwl_100 ≥ 0.5); el índice de estabilidad (SSI sobre la pwl, fallback sk38)
+    determina la severidad (umbral de inestabilidad SSI<1.5; Schweizer & Jamieson 2003).
+
+    Returns 'good'|'fair'|'poor'|'very_poor' o None si no aplica.
+    """
+    try:
+        pwl = float(pwl_100) if pwl_100 is not None else None
+    except (ValueError, TypeError):
+        pwl = None
+    if pwl is None or pwl < 0.5:
+        return None  # sin capa débil persistente significativa → no aporta señal
+    idx = ssi_pwl if ssi_pwl is not None else sk38_pwl
+    try:
+        idx = float(idx)
+    except (ValueError, TypeError):
+        return None
+    if idx < 1.0:
+        return "very_poor"
+    if idx < 1.5:
+        return "poor"
+    if idx < 2.5:
+        return "fair"
+    return "good"
+
+
 def _determinar_estabilidad_dominante(
     estabilidad_topografica: str,
     estabilidad_satelital: str,
@@ -595,6 +681,7 @@ def _determinar_estabilidad_dominante(
     dias_consecutivos_nivel_bajo: int = 0,
     nombre_ubicacion: str = None,
     ventanas_criticas_detectadas: int = 0,
+    estabilidad_snowpack: str = None,
 ) -> str:
     """
     Determina la estabilidad dominante combinando todas las fuentes.
@@ -615,15 +702,41 @@ def _determinar_estabilidad_dominante(
     # En Alpes suizos, ViT no tiene datos de entrenamiento → default conservador 'poor'.
     if estabilidad_satelital in escala:
         idx_sat = escala.index(estabilidad_satelital)
+        idx_base = max(idx_topo, idx_sat)
     else:
         _region_sat = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
-        _default_sat = "fair" if _region_sat == "andes_chile" else "poor"
-        idx_sat = escala.index(_default_sat)
+        if _region_sat == "andes_chile":
+            # FIX-SAT-DEFAULT-NO-ELEVA (v26.1): sin imágenes ViT el satélite no aporta
+            # señal real. En Andes (donde el ViT fue entrenado), el default 'fair' NO debe
+            # ELEVAR el piso por encima de un PINN explícitamente estable (good): el
+            # max(good, fair) inflaba ~21 días calmos de nivel 1 a nivel 2 — el error
+            # dominante GT=1→AI=2 de H4 La Parva. Se confía en la estabilidad topográfica
+            # del PINN; el ajuste meteorológico posterior sigue elevando el peligro cuando
+            # hay un factor activo (tormenta), por lo que no se pierde sensibilidad real.
+            idx_base = idx_topo
+            logger.info(
+                f"[ClasificarEAWS] FIX-SAT-DEFAULT-NO-ELEVA: estabilidad_satelital ausente "
+                f"→ idx_base=topografica_pinn ('{estabilidad_topografica}') (region=andes_chile)"
+            )
+        else:
+            # Alpes: ViT no fue entrenado aquí → asumir peor caso 'poor' (FIX-H, conservador,
+            # alineado con la praxis SLF de asumir lo peor sin datos).
+            idx_sat = escala.index("poor")
+            idx_base = max(idx_topo, idx_sat)
+            logger.info(
+                f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
+                f"default 'poor' (region={_region_sat})"
+            )
+
+    # FIX-PWL-SNOWPACK (Fase D, H3): la capa débil persistente (IMIS) es una fuente
+    # de inestabilidad real; eleva el piso como las demás fuentes (tomar la peor).
+    _idx_snowpack = escala.index(estabilidad_snowpack) if estabilidad_snowpack in escala else None
+    if _idx_snowpack is not None and _idx_snowpack > idx_base:
         logger.info(
-            f"[ClasificarEAWS] FIX-H: estabilidad_satelital='{estabilidad_satelital}' → "
-            f"default '{_default_sat}' (region={_region_sat})"
+            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: estabilidad_snowpack='{estabilidad_snowpack}' "
+            f"eleva idx_base {idx_base}→{_idx_snowpack} (capa débil persistente IMIS)"
         )
-    idx_base = max(idx_topo, idx_sat)
+        idx_base = _idx_snowpack
 
     _factor_activo = bool(
         factor_meteorologico
@@ -679,6 +792,15 @@ def _determinar_estabilidad_dominante(
             f"[ClasificarEAWS] Calma sostenida confirmada ({dias_consecutivos_nivel_bajo} días "
             f"nivel≤2, factor={factor_meteorologico}) — estabilidad capada en 'fair'"
         )
+
+    # FIX-PWL-SNOWPACK (Fase D): la capa débil persistente mantiene el peligro pese a la
+    # calma de superficie — actúa como piso que las atenuaciones/cap de calma no bajan.
+    if _idx_snowpack is not None and _idx_snowpack > idx_final:
+        logger.info(
+            f"[ClasificarEAWS] FIX-PWL-SNOWPACK: piso por capa débil persistente "
+            f"idx_final {idx_final}→{_idx_snowpack} (no atenuable por calma)"
+        )
+        idx_final = _idx_snowpack
 
     return escala[idx_final]
 
@@ -746,9 +868,12 @@ def _determinar_frecuencia(
     #   · CRITICO  (very_poor) → many  (todos los terrenos >28° se movilizan)
     #   · INESTABLE (poor)     → some  (múltiples corredores activos, no todos)
     # Esto cierra el gap nivel 3→5 que saltaba el nivel 4 para zonas INESTABLE en tormenta.
-    # Solo Andes Chile; en Alpes el mecanismo equivalente es FIX-CR18-CH-2 + IMIS.
+    # FIX-STORM-FREQ-ALPES (v25.19): extendido a Alpes. Antes solo Andes (en Alpes se
+    # confiaba en FIX-CR18-CH-2 + IMIS), pero sin IMIS histórico los días de tormenta
+    # suizos quedaban en a_few → N2 (subestimación GT=3-4). Con WN2 histórico, el mismo
+    # mecanismo aplica: NEVADA_RECIENTE + ventanas≥1 + manto inestable → frecuencia some/many.
     _storm_activa = (
-        _region_freq == "andes_chile"
+        _region_freq in ("andes_chile", "alpes_swiss")
         and "NEVADA_RECIENTE" in factor_meteorologico
         and ventanas_criticas >= 1
     )

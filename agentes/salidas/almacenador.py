@@ -458,7 +458,23 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
                 else:
                     raise
 
-        errores_bq = cliente_bq.insert_rows_json(tabla_ref, [fila])
+        # Fechas históricas (>3640 días): el streaming insert falla en tablas
+        # particionadas por fecha_emision ("outside allowed bounds"). Usar load job,
+        # que escribe a cualquier partición (Fase D: reproceso IMIS 2010-2020).
+        _fe = fecha_emision
+        if _fe is not None and _fe.tzinfo is None:
+            _fe = _fe.replace(tzinfo=timezone.utc)
+        _dias_atras = (datetime.now(timezone.utc) - _fe).days if _fe else 0
+        if _dias_atras > 3640:
+            job_config = bigquery.LoadJobConfig(
+                schema=cliente_bq.get_table(tabla_ref).schema,
+                write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
+            )
+            job = cliente_bq.load_table_from_json([fila], tabla_ref, job_config=job_config)
+            job.result()
+            errores_bq = job.errors or []
+        else:
+            errores_bq = cliente_bq.insert_rows_json(tabla_ref, [fila])
 
         if errores_bq:
             msg = f"Error al insertar en BigQuery: {errores_bq}"

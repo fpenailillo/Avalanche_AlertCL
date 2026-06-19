@@ -86,6 +86,10 @@ claude/
 # ─── Tarballs / artefactos comprimidos ───────────────────────────────────────
 *.tar.gz
 
+# ─── Artefactos de modelos serializados (regenerables) ────────────────────────
+# RF snowpack H3: regenerar con `modelo_h3_supervisado.py --guardar`
+*.joblib
+
 # ─── Documentos académicos (solo uso local) ───────────────────────────────────
 docs/*.pdf
 notebooks_validacion/*.pdf
