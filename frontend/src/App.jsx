@@ -234,6 +234,11 @@ function App() {
               EAWS
             </a>
           </p>
+          <img
+            src="https://visitor-badge.laobi.icu/badge?page_id=fpenailillo.avalanche-alertcl"
+            alt="Contador de visitas"
+            className="h-5 opacity-70"
+          />
         </footer>
       </div>
     </div>
