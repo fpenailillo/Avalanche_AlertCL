@@ -18,7 +18,7 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     # Centros adicionales (coordenadas alineadas con datos/extractor)
     "Portillo":             (-32.837, -70.129),
     "Ski Arpa":             (-32.600, -70.390),
-    "Lagunillas":           (-33.680, -70.250),
+    "Lagunillas":           (-33.610, -70.290),
     "Chapa Verde":          (-34.170, -70.370),
     # Alpes suizos (validación H1/H3 SLF)
     "Interlaken":           (46.686,   7.863),
@@ -36,7 +36,7 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "El Colorado":          [-70.35, -33.43, -70.22, -33.30],
     "Portillo":             [-70.23, -32.94, -70.03, -32.74],
     "Ski Arpa":             [-70.49, -32.70, -70.29, -32.50],
-    "Lagunillas":           [-70.35, -33.78, -70.15, -33.58],
+    "Lagunillas":           [-70.39, -33.71, -70.19, -33.51],
     "Chapa Verde":          [-70.47, -34.27, -70.27, -34.07],
 }
 
@@ -95,9 +95,9 @@ POLIGONOS_ZONAS: dict[str, dict] = {
     "Lagunillas": {
         "type": "Polygon",
         "coordinates": [[
-            [-70.35, -33.78], [-70.15, -33.78],
-            [-70.15, -33.58], [-70.35, -33.58],
-            [-70.35, -33.78],
+            [-70.39, -33.71], [-70.19, -33.71],
+            [-70.19, -33.51], [-70.39, -33.51],
+            [-70.39, -33.71],
         ]],
     },
     "Chapa Verde": {

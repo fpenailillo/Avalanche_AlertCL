@@ -110,8 +110,8 @@ UBICACIONES_MONITOREO = [
     },
     {
         'nombre': 'Lagunillas',
-        'latitud': -33.6800,
-        'longitud': -70.2500,
+        'latitud': -33.6100,
+        'longitud': -70.2900,
         'descripcion': 'Lagunillas, San José de Maipo, Chile - Centro familiar, 3 remontes (base 2200m / cima 2550m)'
     },
 

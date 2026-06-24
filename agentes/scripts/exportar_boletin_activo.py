@@ -16,6 +16,7 @@ import json
 import logging
 import os
 import sys
+from typing import Optional
 
 # Agregar raíz del proyecto al path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
@@ -99,6 +100,40 @@ def _registro_desde_fila_bq(fila) -> dict | None:
     }
 
 
+def regenerar_boletin_activo_desde_bq(fecha: str = None) -> Optional[dict]:
+    """
+    Re-consulta BigQuery por el boletín más reciente de cada zona chilena y
+    consolida el resultado, sin subir nada a GCS.
+
+    Usado tanto por este script (CLI) como por generar_todos.py, para que
+    cualquier corrida — incluso con --ubicaciones parcial — republique el
+    consolidado completo de producción en vez de solo lo que generó esa
+    corrida (evita sobrescribir boletin_activo.json con un subconjunto).
+
+    Returns:
+        dict con {"boletines": [...], "zonas": [...]} o None si no hay datos.
+    """
+    cliente = bigquery.Client(project=GCP_PROJECT)
+    if fecha:
+        job_config = bigquery.QueryJobConfig(query_parameters=[
+            bigquery.ScalarQueryParameter("fecha", "DATE", fecha),
+        ])
+        filas = list(cliente.query(SQL_BOLETINES_FECHA, job_config=job_config).result())
+    else:
+        filas = list(cliente.query(SQL_ULTIMOS_BOLETINES).result())
+    logger.info(f"Boletines en BQ ({fecha or 'recientes'}): {len(filas)} ubicaciones")
+
+    registros = [_registro_desde_fila_bq(f) for f in filas]
+    boletines = _consolidar_registros(registros)
+
+    if not boletines:
+        return None
+
+    zonas = [b["zona"] for b in boletines]
+    logger.info(f"Zonas consolidadas ({ZONAS_ANDES_CHILE and 'andes_chile'}): {zonas}")
+    return {"boletines": boletines, "zonas": zonas}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dry-run', action='store_true',
@@ -108,25 +143,11 @@ def main() -> int:
                              'historico/ sin tocar boletin_activo.json')
     args = parser.parse_args()
 
-    cliente = bigquery.Client(project=GCP_PROJECT)
-    if args.fecha:
-        job_config = bigquery.QueryJobConfig(query_parameters=[
-            bigquery.ScalarQueryParameter("fecha", "DATE", args.fecha),
-        ])
-        filas = list(cliente.query(SQL_BOLETINES_FECHA, job_config=job_config).result())
-    else:
-        filas = list(cliente.query(SQL_ULTIMOS_BOLETINES).result())
-    logger.info(f"Boletines en BQ ({args.fecha or 'recientes'}): {len(filas)} ubicaciones")
-
-    registros = [_registro_desde_fila_bq(f) for f in filas]
-    boletines = _consolidar_registros(registros)
-
-    if not boletines:
+    resultado = regenerar_boletin_activo_desde_bq(args.fecha)
+    if not resultado:
         logger.error("Sin boletines chilenos recientes para exportar")
         return 1
-
-    zonas = [b["zona"] for b in boletines]
-    logger.info(f"Zonas consolidadas ({ZONAS_ANDES_CHILE and 'andes_chile'}): {zonas}")
+    boletines = resultado["boletines"]
 
     if args.dry_run:
         print(json.dumps({"boletines": boletines}, ensure_ascii=False, indent=2, default=str))

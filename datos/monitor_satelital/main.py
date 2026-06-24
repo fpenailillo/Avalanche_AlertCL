@@ -104,7 +104,7 @@ UBICACIONES_MONITOREO = [
         {'nombre': 'La Parva Sector Alto', 'latitud': -33.3440, 'longitud': -70.2800, 'descripcion': 'La Parva - Sector Alto, Chile (3574m)'},
         {'nombre': 'El Colorado', 'latitud': -33.3600, 'longitud': -70.3000, 'descripcion': 'El Colorado / Farellones, Chile'},
         {'nombre': 'Valle Nevado', 'latitud': -33.3547, 'longitud': -70.2498, 'descripcion': 'Valle Nevado, Chile'},
-        {'nombre': 'Lagunillas', 'latitud': -33.6800, 'longitud': -70.2500, 'descripcion': 'Lagunillas, San José de Maipo, Chile'},
+        {'nombre': 'Lagunillas', 'latitud': -33.6100, 'longitud': -70.2900, 'descripcion': 'Lagunillas, San José de Maipo, Chile'},
         {'nombre': 'Chapa Verde', 'latitud': -34.1700, 'longitud': -70.3700, 'descripcion': 'Chapa Verde, Rancagua, Chile'},
         {'nombre': 'Nevados de Chillán', 'latitud': -36.8580, 'longitud': -71.3727, 'descripcion': 'Nevados de Chillán, Chile'},
         {'nombre': 'Antuco', 'latitud': -37.4100, 'longitud': -71.4200, 'descripcion': 'Ski Antuco, Los Ángeles, Chile'},

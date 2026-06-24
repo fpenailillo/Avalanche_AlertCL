@@ -25,8 +25,9 @@ from typing import Optional
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from agentes.orquestador.agente_principal import AgenteRiesgoAvalancha, ErrorOrquestador
-from agentes.salidas.almacenador import guardar_boletin, exportar_boletin_activo
+from agentes.salidas.almacenador import guardar_boletin, subir_boletin_activo
 from agentes.datos.consultor_bigquery import ConsultorBigQuery
+from agentes.scripts.exportar_boletin_activo import regenerar_boletin_activo_desde_bq
 
 
 logging.basicConfig(
@@ -256,11 +257,18 @@ def main() -> int:
             time.sleep(PAUSA_ENTRE_UBICACIONES)
 
     # Exportar boletín activo para el frontend — solo corridas del día con guardado
-    # (en modo histórico --fecha no se sobreescribe el boletín vigente)
+    # (en modo histórico --fecha no se sobreescribe el boletín vigente).
+    # Re-consulta BQ por TODAS las zonas recientes (no solo `exitosos` de esta corrida):
+    # con --ubicaciones parcial (ej. una sola zona), usar solo `exitosos` sobrescribía
+    # boletin_activo.json dejando únicamente esa zona y borrando las demás publicadas.
     if args.guardar and exitosos and fecha_referencia is None:
-        uri_activo = exportar_boletin_activo(exitosos)
-        if uri_activo:
-            print(f"\n→ Boletín activo del frontend actualizado: {uri_activo}")
+        resultado_bq = regenerar_boletin_activo_desde_bq()
+        if resultado_bq:
+            uri_activo = subir_boletin_activo(resultado_bq["boletines"])
+            if uri_activo:
+                print(f"\n→ Boletín activo del frontend actualizado: {uri_activo}")
+        else:
+            logger.warning("No se pudo regenerar boletín activo: sin datos recientes en BQ")
 
     duracion_total = round((datetime.now(timezone.utc) - inicio).total_seconds(), 1)
 

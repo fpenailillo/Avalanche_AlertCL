@@ -697,6 +697,52 @@ def _determinar_estabilidad_dominante(
     # Estabilidad base: la peor entre topo y satelital
     idx_topo = escala.index(estabilidad_topografica) if estabilidad_topografica in escala else 1
 
+    # FIX-SAT-EAWS-MAP: el LLM de S2 narra estabilidad_satelital a partir del contexto de
+    # texto y es inconsistente entre corridas idénticas (visto en Lagunillas 2026-06-23:
+    # mismo dato BQ → "ESTABLE" en una corrida, "sin_datos" en otra). Igual que
+    # FIX-PINN-EAWS-MAP hace con estado_pinn, se recalcula determinísticamente desde las
+    # métricas crudas de BigQuery + la función pura ya usada por S2
+    # (ejecutar_detectar_anomalias_satelitales), ignorando lo que el LLM haya narrado.
+    # Solo aplica con lectura óptica real (ndsi_medio y pct_cobertura_nieve no NULL);
+    # si faltan, se deja estabilidad_satelital tal cual para que el camino "ausente"
+    # de abajo (FIX-SAT-DEFAULT-NO-ELEVA / FIX-H) decida.
+    if nombre_ubicacion:
+        try:
+            from agentes.datos.consultor_bigquery import (
+                ConsultorBigQuery as _ConsultorBQ_sat,
+                obtener_fecha_referencia_global as _obtener_fref_sat,
+            )
+            from agentes.subagentes.subagente_satelital.tools.tool_detectar_anomalias import (
+                ejecutar_detectar_anomalias_satelitales as _detectar_anomalias_sat,
+            )
+            _est_sat = _ConsultorBQ_sat().obtener_estado_satelital(
+                nombre_ubicacion, _obtener_fref_sat()
+            )
+            if (
+                _est_sat.get("disponible")
+                and _est_sat.get("ndsi_medio") is not None
+                and _est_sat.get("pct_cobertura_nieve") is not None
+            ):
+                _resultado_sat_det = _detectar_anomalias_sat(
+                    ndsi_medio=_est_sat["ndsi_medio"],
+                    pct_cobertura_nieve=_est_sat["pct_cobertura_nieve"],
+                    delta_pct_nieve_24h=_est_sat.get("delta_pct_nieve_24h") or 0.0,
+                    estado_vit=None,
+                    lst_dia_celsius=_est_sat.get("lst_dia_celsius"),
+                    lst_noche_celsius=_est_sat.get("lst_noche_celsius"),
+                    ciclo_diurno_amplitud=_est_sat.get("ciclo_diurno_amplitud"),
+                )
+                _estab_sat_determinista = _resultado_sat_det.get("estabilidad_superficial_eaws")
+                if _estab_sat_determinista and _estab_sat_determinista != estabilidad_satelital:
+                    logger.info(
+                        f"[ClasificarEAWS] FIX-SAT-EAWS-MAP: estabilidad_satelital "
+                        f"{estabilidad_satelital!r}→{_estab_sat_determinista!r} "
+                        f"(ndsi={_est_sat['ndsi_medio']}, cobertura={_est_sat['pct_cobertura_nieve']}%)"
+                    )
+                estabilidad_satelital = _estab_sat_determinista
+        except Exception as _exc_sat_det:
+            logger.warning(f"[ClasificarEAWS] FIX-SAT-EAWS-MAP: fallback falló — {_exc_sat_det}")
+
     # FIX-H (v7.0): cuando ViT no tiene datos, el default de estabilidad satelital
     # depende de la región. En Andes Chile, ViT fue entrenado aquí → default 'fair'.
     # En Alpes suizos, ViT no tiene datos de entrenamiento → default conservador 'poor'.

@@ -59,6 +59,25 @@ def ejecutar_procesar_ndsi(nombre_ubicacion: str) -> dict:
             "metricas_agregadas": {}
         }
 
+    # FIX-SAT-SIN-LECTURA-OPTICA: la fila puede existir (viento/LST de otra fuente)
+    # pero sin NDSI/cobertura óptica real (ndsi_medio y pct_cobertura_nieve = NULL).
+    # El default `or 0.0` de abajo fabricaba un "0% confirmado" que el LLM interpretaba
+    # como "sin nieve presente" en vez de "sin dato" (visto en Lagunillas 2026-06-23:
+    # ambos NULL en BQ → reportado como cobertura nival nula confirmada). Sin lectura
+    # óptica real, tratar igual que "sin imágenes satelitales" para que el integrador
+    # active FIX-SAT-DEFAULT-NO-ELEVA en lugar de confiar en una estabilidad fabricada.
+    if datos.get("ndsi_medio") is None and datos.get("pct_cobertura_nieve") is None:
+        return {
+            "disponible": False,
+            "ubicacion": nombre_ubicacion,
+            "mensaje": (
+                "Fila satelital sin lectura óptica real (NDSI/cobertura ausentes) — "
+                "posiblemente nubosidad o sin imagen reciente para estas coordenadas"
+            ),
+            "serie_temporal": [],
+            "metricas_agregadas": {}
+        }
+
     # Extraer métricas clave de los datos satelitales
     # El consultor retorna datos del último registro disponible
     ndsi_actual = datos.get("ndsi_medio", 0.0) or 0.0

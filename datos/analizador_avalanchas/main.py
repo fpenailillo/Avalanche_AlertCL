@@ -86,7 +86,7 @@ UBICACIONES_ANALISIS = [
     {'nombre': 'La Parva Sector Alto', 'latitud': -33.3440, 'longitud': -70.2800},
     {'nombre': 'El Colorado', 'latitud': -33.3600, 'longitud': -70.3000},
     {'nombre': 'Valle Nevado', 'latitud': -33.3547, 'longitud': -70.2498},
-    {'nombre': 'Lagunillas', 'latitud': -33.6800, 'longitud': -70.2500},
+    {'nombre': 'Lagunillas', 'latitud': -33.6100, 'longitud': -70.2900},
     {'nombre': 'Chapa Verde', 'latitud': -34.1700, 'longitud': -70.3700},
     {'nombre': 'Nevados de Chillán', 'latitud': -36.8580, 'longitud': -71.3727},
     {'nombre': 'Antuco', 'latitud': -37.4100, 'longitud': -71.4200},
