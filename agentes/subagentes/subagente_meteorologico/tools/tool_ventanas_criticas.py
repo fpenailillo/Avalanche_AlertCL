@@ -191,9 +191,26 @@ def ejecutar_detectar_ventanas_criticas(
     # NOTA FIX-CR16A (revertido R11): restringir a Alpes empeoró sesgo +0.770→+1.023
     # porque S5 se apoya más en S1 (topográfico) cuando S3 entrega señal neutral.
     # La causa real del sesgo es v7.5/S1 + integración S5, no este fallback.
+    # FIX-CR10A-MODO-VIVO: el fallback solo tiene sentido para ERA5 (snapshot
+    # instantáneo a las 12:00 UTC). En corridas en vivo (Google Weather, sin
+    # --fecha) un 0.0mm actual es una medición real confiable, no un artefacto
+    # de snapshot — no debe sustituirse por el promedio de 72h (visto en
+    # Lagunillas 2026-06-23: día despejado confirmado, factor LLUVIA_SOBRE_NIEVE
+    # disparado artificialmente por lluvia de hace 2-3 días). Distinto del
+    # FIX-CR16A revertido arriba: ese restringía por REGIÓN (Alpes), este por
+    # MODO (histórico/ERA5 vs vivo) — eje ortogonal no probado/revertido antes.
+    try:
+        from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global as _fref_cr10a
+        _modo_historico_cr10a = _fref_cr10a() is not None
+    except Exception:
+        _modo_historico_cr10a = True  # conservador: ante falla, mantener comportamiento previo
+
     _precip_diaria_72h = (precipitacion_72h_mm or 0) / 3
-    precip_efectiva = precipitacion_actual_mm if precipitacion_actual_mm > 0 else _precip_diaria_72h
-    if _precip_diaria_72h > precipitacion_actual_mm:
+    if _modo_historico_cr10a:
+        precip_efectiva = precipitacion_actual_mm if precipitacion_actual_mm > 0 else _precip_diaria_72h
+    else:
+        precip_efectiva = precipitacion_actual_mm
+    if _modo_historico_cr10a and _precip_diaria_72h > precipitacion_actual_mm:
         logger.info(
             f"[VentanasCriticas] CR-10A: precip_efectiva={precip_efectiva:.1f}mm "
             f"(actual={precipitacion_actual_mm}mm, 72h/3={_precip_diaria_72h:.1f}mm, "
