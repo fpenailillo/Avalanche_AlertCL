@@ -27,7 +27,7 @@ const COORDS = {
 }
 
 const CENTRO_DEFECTO = [-39.0, -71.2]
-const ZOOM_DEFECTO = 5
+const ZOOM_DEFECTO = 4
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
@@ -90,6 +90,10 @@ function iniciarMapa(contenedor, gee, centros, seleccionadoId, onSelect, zoom) {
       .on('click', () => onSelect?.(centro.id))
   })
 
+  if (!gee?.bounds) {
+    const coordsVisibles = centros.map((c) => COORDS[c.id]).filter(Boolean)
+    if (coordsVisibles.length > 1) mapa.fitBounds(L.latLngBounds(coordsVisibles), { padding: [30, 30] })
+  }
   setTimeout(() => mapa.invalidateSize(), 0)
   return mapa
 }
@@ -159,6 +163,8 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
       { attribution: 'Esri, Maxar', maxZoom: 17 }
     ).addTo(mapa)
+    const todasCoords = Object.values(COORDS)
+    if (todasCoords.length > 1) mapa.fitBounds(L.latLngBounds(todasCoords), { padding: [30, 30] })
     refMapa.current = mapa
     setTimeout(() => mapa.invalidateSize(), 0)
     return () => {
