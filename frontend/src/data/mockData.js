@@ -410,9 +410,585 @@ export const CENTROS = {
       totalReportes48h: 5,
     },
   },
+
+  'laguna-del-maule': {
+    id: 'laguna-del-maule',
+    nombre: 'Laguna del Maule',
+    zona: 'Andes del Maule',
+    elevacion: '2.100 – 3.200 m',
+    exposicion: 'E',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Complejo volcánico con excelente manto nival. Alta actividad de esquí de travesía y backcountry. Nuevas nevadas desde el jueves reforzarán la cobertura existente; precaución en pendientes volcánicas abruptas orientadas al este.',
+      vientoKmh: 38,
+      temperatura: -3,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 2.400 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Acumulaciones moderadas en sector cumbrero del complejo volcánico; evaluar pendientes abruptas.',
+      },
+      {
+        id: 'wind-slab',
+        nombre: 'Placa de viento',
+        cotas: 'Sobre 2.800 m',
+        orientaciones: 'E – SE (orientación dominante)',
+        detalle: 'Vientos del oeste consolidan placas en hombros volcánicos orientados al este.',
+      },
+    ],
+    timeline: ajustarTimeline(3, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(3, 1.3),
+    satelital: {
+      ndsi: 0.74,
+      coberturaPct: 80,
+      fechaPasada: '09 jun 2026 · 14:25 UTC',
+      tile: 'T19HAC',
+      tendencia: 'Mejorando',
+    },
+    topografico: {
+      estadoManto: 'Estable',
+      estable: true,
+      profundidadCm: 92,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.91,
+    },
+    comunidad: {
+      resumenNLP:
+        'Alta actividad de esquiadores de travesía y montañistas en Laguna del Maule. Temporada con excelente cobertura nival en el complejo volcánico.',
+      reportes: [
+        { autor: 'Grupo Travesía Maule', hace: 'hace 4 h', texto: 'Nieve excelente en el borde de la laguna. Calzado de crampones sobre los 2.800 m.' },
+        { autor: 'F. Leiva', hace: 'hace 2 d', texto: 'Paisaje volcánico único, manto profundo y compacto. Recomendado para ski touring.' },
+      ],
+      totalReportes48h: 7,
+    },
+  },
+
+  'nevados-de-chillan': {
+    id: 'nevados-de-chillan',
+    nombre: 'Nevados de Chillán',
+    zona: 'Andes de Biobío',
+    elevacion: '1.530 – 2.400 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Manto húmedo en cotas bajas. Las nevadas previstas desde el jueves generarán problemas de nieve nueva sobre los 1.800 m, especialmente en vertientes suroeste. Vigilar lluvia sobre nieve en el sector base del volcán.',
+      vientoKmh: 30,
+      temperatura: -1,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.800 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Precipitaciones intensas esperadas desde el jueves; evaluar estabilidad tras cada evento.',
+      },
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 2.000 m',
+        orientaciones: 'NO – O (solanas del volcán)',
+        detalle: 'Lluvia sobre nieve posible en base; riesgo de aludes de nieve húmeda en pendientes.',
+      },
+    ],
+    timeline: ajustarTimeline(4, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(4, 1.5),
+    satelital: {
+      ndsi: 0.62,
+      coberturaPct: 68,
+      fechaPasada: '09 jun 2026 · 14:20 UTC',
+      tile: 'T19HAB',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 78,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.88,
+    },
+    comunidad: {
+      resumenNLP:
+        'Reportes de esquiadores destacan buena cobertura en pistas altas del volcán. Base húmeda y pesada en sectores bajos de las termas.',
+      reportes: [
+        { autor: 'Ski Patrol Chillán', hace: 'hace 5 h', texto: 'Pistas en buen estado desde la mitad hacia arriba. Base blanda abajo.' },
+        { autor: 'Club Andino Chillán', hace: 'hace 1 d', texto: 'Acceso a cumbre con nieve compacta desde los 2.200 m.' },
+      ],
+      totalReportes48h: 6,
+    },
+  },
+
+  antuco: {
+    id: 'antuco',
+    nombre: 'Antuco',
+    zona: 'Andes de Biobío',
+    elevacion: '1.400 – 1.850 m',
+    exposicion: 'NO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Condiciones moderadas en el Volcán Antuco. Cobertura nival justa en pistas bajas; mejora sobre los 1.600 m. Lluvia sobre nieve posible por debajo del centro en caso de alzas térmicas.',
+      vientoKmh: 25,
+      temperatura: 0,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 1.600 m',
+        orientaciones: 'N – NE (solanas)',
+        detalle: 'Humedecimiento durante las horas cálidas; aludes espontáneos posibles en pendientes orientadas al norte.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.700 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas moderadas en los próximos días; precaución en hombros venteados.',
+      },
+    ],
+    timeline: ajustarTimeline(5, [2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(5, 1.4),
+    satelital: {
+      ndsi: 0.58,
+      coberturaPct: 64,
+      fechaPasada: '09 jun 2026 · 14:15 UTC',
+      tile: 'T19HAA',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 62,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.85,
+    },
+    comunidad: {
+      resumenNLP:
+        'Pocos reportes esta semana. Esquiadores mencionan nieve pesada en pistas bajas y mejor calidad en las zonas altas del volcán.',
+      reportes: [
+        { autor: 'Club de Montaña Los Ángeles', hace: 'hace 8 h', texto: 'Buena base en zona cumbre; base gruesa abajo.' },
+        { autor: 'J. Muñoz', hace: 'hace 2 d', texto: 'Nieve pesada en la bajada, cuidado con zonas de lluvia.' },
+      ],
+      totalReportes48h: 3,
+    },
+  },
+
+  corralco: {
+    id: 'corralco',
+    nombre: 'Corralco',
+    zona: 'Andes de La Araucanía',
+    elevacion: '1.550 – 2.400 m',
+    exposicion: 'NE',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Condiciones favorables en Corralco con nevadas recientes que mejoran la cobertura. Placas de viento posibles en hombros del Volcán Lonquimay sobre los 2.000 m; cotas altas con excelente calidad de nieve.',
+      vientoKmh: 35,
+      temperatura: -1,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.800 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Acumulaciones significativas en últimas 48 h; evaluar estabilidad en pendientes abruptas.',
+      },
+      {
+        id: 'wind-slab',
+        nombre: 'Placa de viento',
+        cotas: 'Sobre 2.000 m',
+        orientaciones: 'NE – E (sotavento del oeste)',
+        detalle: 'Vientos del oeste consolidan placas frágiles en hombros del volcán.',
+      },
+    ],
+    timeline: ajustarTimeline(4, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(4, 1.8),
+    satelital: {
+      ndsi: 0.67,
+      coberturaPct: 73,
+      fechaPasada: '09 jun 2026 · 14:10 UTC',
+      tile: 'T19GVV',
+      tendencia: 'Mejorando',
+    },
+    topografico: {
+      estadoManto: 'Estable',
+      estable: true,
+      profundidadCm: 84,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.9,
+    },
+    comunidad: {
+      resumenNLP:
+        'Temporada con buen inicio en Corralco. Reportes positivos sobre la calidad de nieve en cotas altas del Lonquimay.',
+      reportes: [
+        { autor: 'Ski Patrol Corralco', hace: 'hace 4 h', texto: 'Excelente nieve polvo sobre los 2.000 m. Cuidado con hombros venteados.' },
+        { autor: 'C. Ríos', hace: 'hace 1 d', texto: 'Increíble nieve; acceso al volcán bien señalizado.' },
+      ],
+      totalReportes48h: 8,
+    },
+  },
+
+  'las-araucarias': {
+    id: 'las-araucarias',
+    nombre: 'Las Araucarias',
+    zona: 'Andes de La Araucanía',
+    elevacion: '1.550 – 1.942 m',
+    exposicion: 'O',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Centro familiar al pie del Volcán Llaima con buena cobertura nival. Alta precipitación acumulada; nieve húmeda activa en las últimas horas. Precaución en pendientes orientadas al oeste durante la tarde.',
+      vientoKmh: 32,
+      temperatura: 0,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Todas las cotas',
+        orientaciones: 'O – SO (exposición dominante)',
+        detalle: 'Influencia oceánica genera humedecimiento desde mediodía; aludes de nieve mojada posibles.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.700 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas frecuentes; pendientes abruptas bajo cornisas merecen atención.',
+      },
+    ],
+    timeline: ajustarTimeline(5, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(5, 1.8),
+    satelital: {
+      ndsi: 0.61,
+      coberturaPct: 69,
+      fechaPasada: '09 jun 2026 · 14:05 UTC',
+      tile: 'T19GVU',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 72,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.86,
+    },
+    comunidad: {
+      resumenNLP:
+        'Reportes familiares describen pistas bien preparadas. Nieve pesada en la tarde como característica habitual del centro.',
+      reportes: [
+        { autor: 'Instructor Araucarias', hace: 'hace 6 h', texto: 'Clases de esquí con buena nieve en pistas bajas. Pesada desde las 14:00.' },
+        { autor: 'Familia Torres', hace: 'hace 1 d', texto: 'Muy buen día, nieve perfecta en la mañana.' },
+      ],
+      totalReportes48h: 5,
+    },
+  },
+
+  'ski-pucon': {
+    id: 'ski-pucon',
+    nombre: 'Ski Pucón',
+    zona: 'Andes de La Araucanía',
+    elevacion: '1.380 – 2.100 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Condiciones variables en el Volcán Villarrica por influencia marítima intensa. Lluvia sobre nieve en sectores bajos; nieve de calidad sobre los 1.700 m. Supervisar alertas volcánicas de SERNAGEOMIN.',
+      vientoKmh: 40,
+      temperatura: 0,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 1.700 m',
+        orientaciones: 'SO – O (orientación dominante)',
+        detalle: 'Lluvia sobre nieve frecuente en base del volcán; aludes espontáneos en pendientes abruptas.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.700 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas copiosas esperadas; acumulaciones rápidas en laderas del cono volcánico.',
+      },
+    ],
+    timeline: ajustarTimeline(5, [2, 2, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(5, 1.8),
+    satelital: {
+      ndsi: 0.63,
+      coberturaPct: 71,
+      fechaPasada: '09 jun 2026 · 13:58 UTC',
+      tile: 'T19GVT',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 78,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.87,
+    },
+    comunidad: {
+      resumenNLP:
+        'Alta actividad de reportes en Pucón. Esquiadores destacan la cobertura desde la mitad del volcán hacia arriba; lluvia en la mañana en el sector bajo.',
+      reportes: [
+        { autor: 'MCP Mountain Pucón', hace: 'hace 3 h', texto: 'Apertura completa desde los 1.700 m. Lluvia abajo, nieve arriba.' },
+        { autor: 'P. Alvarado', hace: 'hace 18 h', texto: 'Cumbre espectacular con vista al lago Villarrica. Nieve polvo sobre los 1.900 m.' },
+      ],
+      totalReportes48h: 11,
+    },
+  },
+
+  antillanca: {
+    id: 'antillanca',
+    nombre: 'Antillanca',
+    zona: 'Andes de Los Lagos',
+    elevacion: '1.040 – 1.540 m',
+    exposicion: 'SE',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Centro con mayor precipitación nival de Chile, influencia marítima extrema. Nevadas frecuentes y abundantes; manto saturado en cotas bajas. Precaución en las pendientes del Volcán Casablanca tras cada evento de precipitación.',
+      vientoKmh: 45,
+      temperatura: 2,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Todas las cotas',
+        orientaciones: 'SE – E (orientación del centro)',
+        detalle: 'Influencia oceánica permanente; humedecimiento del manto incluso en cotas altas.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.200 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas intensas y frecuentes propias del Parque Nacional Puyehue; acumulaciones rápidas.',
+      },
+    ],
+    timeline: ajustarTimeline(7, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(7, 2.2),
+    satelital: {
+      ndsi: 0.52,
+      coberturaPct: 61,
+      fechaPasada: '09 jun 2026 · 13:50 UTC',
+      tile: 'T19GUS',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 56,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.84,
+    },
+    comunidad: {
+      resumenNLP:
+        'Antillanca con temporada activa. Reportes destacan la abundante precipitación nival, aunque la nieve es pesada y húmeda por el clima oceánico del Parque Puyehue.',
+      reportes: [
+        { autor: 'Ski Patrol Antillanca', hace: 'hace 4 h', texto: 'Mucha nieve pero muy pesada. Pistas bien marcadas para seguridad.' },
+        { autor: 'CONAF Puyehue', hace: 'hace 1 d', texto: 'Acceso expedito hasta la base. Condiciones volcánicas normales.' },
+      ],
+      totalReportes48h: 7,
+    },
+  },
+
+  'volcan-osorno': {
+    id: 'volcan-osorno',
+    nombre: 'Volcán Osorno',
+    zona: 'Andes de Los Lagos',
+    elevacion: '1.230 – 1.760 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Icónico volcán patagónico con precipitación muy alta. Manto húmedo en toda la extensión del centro. Las acumulaciones recientes requieren precaución en pendientes del cono volcánico sobre los 1.500 m.',
+      vientoKmh: 50,
+      temperatura: 1,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Todas las cotas',
+        orientaciones: 'SO – O – NO',
+        detalle: 'Clima oceánico con alta humedad; nieve húmeda activa en amplias franjas horarias.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.400 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas abundantes en el sector del Lago Llanquihue; evaluar pendientes abruptas del cono.',
+      },
+    ],
+    timeline: ajustarTimeline(6, [2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(6, 2.0),
+    satelital: {
+      ndsi: 0.55,
+      coberturaPct: 63,
+      fechaPasada: '09 jun 2026 · 13:44 UTC',
+      tile: 'T19GUR',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 60,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.85,
+    },
+    comunidad: {
+      resumenNLP:
+        'Reportes de escaladores y esquiadores describen nieve pesada y vientos fuertes del Pacífico. Vistas al Lago Llanquihue cuando despeja.',
+      reportes: [
+        { autor: 'MCP Mountain Osorno', hace: 'hace 5 h', texto: 'Centro operativo con buena nieve. Viento fuerte en la tarde.' },
+        { autor: 'R. Espinoza', hace: 'hace 2 d', texto: 'Subida al volcán con crampones; nieve dura y compacta sobre los 1.600 m.' },
+      ],
+      totalReportes48h: 5,
+    },
+  },
+
+  'el-fraile': {
+    id: 'el-fraile',
+    nombre: 'El Fraile',
+    zona: 'Andes de Aysén',
+    elevacion: '980 – 1.280 m',
+    exposicion: 'N',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 1,
+      descripcionIA:
+        'Condiciones favorables en El Fraile, único centro de esquí de Coyhaique. Elevaciones bajas con manto nival moderado. Vientos patagónicos fuertes del oeste pueden generar placas en los hombros del cerro.',
+      vientoKmh: 55,
+      temperatura: 3,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 1.100 m',
+        orientaciones: 'N – NE (exposición del centro)',
+        detalle: 'Cotas muy bajas propensas a lluvia-sobre-nieve; verificar temperatura en acceso.',
+      },
+    ],
+    timeline: ajustarTimeline(8, [1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1]),
+    pronostico15: ajustarPronostico(8, 1.2),
+    satelital: {
+      ndsi: 0.48,
+      coberturaPct: 56,
+      fechaPasada: '09 jun 2026 · 13:35 UTC',
+      tile: 'T18GWJ',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 45,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.82,
+    },
+    comunidad: {
+      resumenNLP:
+        'Centro patagónico con ambiente familiar. Pocos reportes pero positivos; la temporada corta concentra esquiadores locales de Coyhaique.',
+      reportes: [
+        { autor: 'Club Andino Coyhaique', hace: 'hace 6 h', texto: 'Centro abierto con buenas condiciones. Viento fuerte en la cresta.' },
+        { autor: 'M. Bahamondes', hace: 'hace 3 d', texto: 'Paisaje patagónico increíble con los lenga nevados.' },
+      ],
+      totalReportes48h: 3,
+    },
+  },
+
+  'cerro-mirador': {
+    id: 'cerro-mirador',
+    nombre: 'Cerro Mirador',
+    zona: 'Andes de Magallanes',
+    elevacion: '380 – 570 m',
+    exposicion: 'SE',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 1,
+      descripcionIA:
+        'El centro de esquí más austral del mundo opera con condiciones subantárticas. Elevaciones muy bajas; la nieve es frecuente pero la cobertura es variable. Vientos intensos del estrecho son la principal condición a monitorear.',
+      vientoKmh: 60,
+      temperatura: 5,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Todas las cotas',
+        orientaciones: 'SE – E',
+        detalle: 'Elevación muy baja con transiciones frecuentes nieve–lluvia; superficie variable según temperatura.',
+      },
+    ],
+    timeline: ajustarTimeline(11, [1, 1, 1, 1, 2, 2, 1, 1, 1, 1, 1, 1]),
+    pronostico15: ajustarPronostico(11, 0.7),
+    satelital: {
+      ndsi: 0.42,
+      coberturaPct: 50,
+      fechaPasada: '09 jun 2026 · 13:20 UTC',
+      tile: 'T18CWH',
+      tendencia: 'Variable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 32,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.78,
+    },
+    comunidad: {
+      resumenNLP:
+        'Cerro Mirador, el centro más austral del mundo, opera con condiciones subantárticas únicas. Reportes de esquiadores locales de Punta Arenas y turistas que visitan el estrecho.',
+      reportes: [
+        { autor: 'Ski Club Punta Arenas', hace: 'hace 7 h', texto: 'Centro abierto; nieve compacta pero viento muy fuerte al mediodía.' },
+        { autor: 'T. Mansilla', hace: 'hace 2 d', texto: 'Experiencia única esquiando con vista al Estrecho de Magallanes.' },
+      ],
+      totalReportes48h: 4,
+    },
+  },
 }
 
-// Orden geográfico norte → sur: Aconcagua, Farellones, Cajón del Maipo, O'Higgins
+// Orden geográfico norte → sur: desde Aconcagua hasta Magallanes
 const ORDEN_GEOGRAFICO = [
   'ski-arpa',
   'portillo',
@@ -420,6 +996,16 @@ const ORDEN_GEOGRAFICO = [
   'valle-nevado',
   'lagunillas',
   'chapa-verde',
+  'laguna-del-maule',
+  'nevados-de-chillan',
+  'antuco',
+  'corralco',
+  'las-araucarias',
+  'ski-pucon',
+  'antillanca',
+  'volcan-osorno',
+  'el-fraile',
+  'cerro-mirador',
 ]
 
 export const CENTROS_LISTA = ORDEN_GEOGRAFICO.map((id) => CENTROS[id])

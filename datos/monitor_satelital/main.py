@@ -106,6 +106,7 @@ UBICACIONES_MONITOREO = [
         {'nombre': 'Valle Nevado', 'latitud': -33.3547, 'longitud': -70.2498, 'descripcion': 'Valle Nevado, Chile'},
         {'nombre': 'Lagunillas', 'latitud': -33.6100, 'longitud': -70.2900, 'descripcion': 'Lagunillas, San José de Maipo, Chile'},
         {'nombre': 'Chapa Verde', 'latitud': -34.1700, 'longitud': -70.3700, 'descripcion': 'Chapa Verde, Rancagua, Chile'},
+        {'nombre': 'Laguna del Maule', 'latitud': -36.0580, 'longitud': -70.5600, 'descripcion': 'Laguna del Maule, Región del Maule, Chile'},
         {'nombre': 'Nevados de Chillán', 'latitud': -36.8580, 'longitud': -71.3727, 'descripcion': 'Nevados de Chillán, Chile'},
         {'nombre': 'Antuco', 'latitud': -37.4100, 'longitud': -71.4200, 'descripcion': 'Ski Antuco, Los Ángeles, Chile'},
         {'nombre': 'Corralco', 'latitud': -38.3700, 'longitud': -71.5700, 'descripcion': 'Corralco, Volcán Lonquimay, Chile'},

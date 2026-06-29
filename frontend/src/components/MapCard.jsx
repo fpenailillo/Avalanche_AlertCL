@@ -14,10 +14,20 @@ const COORDS = {
   'valle-nevado': [-33.35, -70.25],
   lagunillas: [-33.68, -70.25],
   'chapa-verde': [-34.17, -70.37],
+  'laguna-del-maule': [-36.058, -70.56],
+  'nevados-de-chillan': [-36.858, -71.3727],
+  antuco: [-37.41, -71.42],
+  corralco: [-38.37, -71.57],
+  'las-araucarias': [-38.73, -71.74],
+  'ski-pucon': [-39.50, -71.96],
+  antillanca: [-40.7756, -72.2046],
+  'volcan-osorno': [-41.10, -72.50],
+  'el-fraile': [-45.68, -71.94],
+  'cerro-mirador': [-53.13, -70.98],
 }
 
-const CENTRO_DEFECTO = [-33.4, -70.25]
-const ZOOM_DEFECTO = 9
+const CENTRO_DEFECTO = [-39.0, -71.2]
+const ZOOM_DEFECTO = 5
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 

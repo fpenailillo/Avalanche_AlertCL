@@ -20,6 +20,17 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "Ski Arpa":             (-32.600, -70.390),
     "Lagunillas":           (-33.610, -70.290),
     "Chapa Verde":          (-34.170, -70.370),
+    "Laguna del Maule":     (-36.058, -70.560),
+    # Sur de Chile (Biobío → Magallanes)
+    "Nevados de Chillán":   (-36.858, -71.373),
+    "Antuco":               (-37.410, -71.420),
+    "Corralco":             (-38.370, -71.570),
+    "Las Araucarias":       (-38.730, -71.740),
+    "Ski Pucón":            (-39.500, -71.960),
+    "Antillanca":           (-40.776, -72.205),
+    "Volcán Osorno":        (-41.100, -72.500),
+    "El Fraile":            (-45.680, -71.940),
+    "Cerro Mirador":        (-53.130, -70.980),
     # Alpes suizos (validación H1/H3 SLF)
     "Interlaken":           (46.686,   7.863),
     "Matterhorn Zermatt":   (45.977,   7.659),
@@ -38,6 +49,17 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "Ski Arpa":             [-70.49, -32.70, -70.29, -32.50],
     "Lagunillas":           [-70.39, -33.71, -70.19, -33.51],
     "Chapa Verde":          [-70.47, -34.27, -70.27, -34.07],
+    "Laguna del Maule":     [-70.76, -36.26, -70.36, -35.86],
+    # Sur de Chile (Biobío → Magallanes)
+    "Nevados de Chillán":   [-71.57, -37.06, -71.17, -36.66],
+    "Antuco":               [-71.62, -37.61, -71.22, -37.21],
+    "Corralco":             [-71.77, -38.57, -71.37, -38.17],
+    "Las Araucarias":       [-71.94, -38.93, -71.54, -38.53],
+    "Ski Pucón":            [-72.16, -39.70, -71.76, -39.30],
+    "Antillanca":           [-72.41, -40.98, -72.01, -40.58],
+    "Volcán Osorno":        [-72.70, -41.30, -72.30, -40.90],
+    "El Fraile":            [-72.14, -45.88, -71.74, -45.48],
+    "Cerro Mirador":        [-71.18, -53.33, -70.78, -52.93],
 }
 
 # ─── Polígonos GeoJSON (para BigQuery GEOGRAPHY y ST_REGIONSTATS) ─────────────
@@ -106,6 +128,86 @@ POLIGONOS_ZONAS: dict[str, dict] = {
             [-70.47, -34.27], [-70.27, -34.27],
             [-70.27, -34.07], [-70.47, -34.07],
             [-70.47, -34.27],
+        ]],
+    },
+    "Laguna del Maule": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.76, -36.26], [-70.36, -36.26],
+            [-70.36, -35.86], [-70.76, -35.86],
+            [-70.76, -36.26],
+        ]],
+    },
+    "Nevados de Chillán": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-71.57, -37.06], [-71.17, -37.06],
+            [-71.17, -36.66], [-71.57, -36.66],
+            [-71.57, -37.06],
+        ]],
+    },
+    "Antuco": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-71.62, -37.61], [-71.22, -37.61],
+            [-71.22, -37.21], [-71.62, -37.21],
+            [-71.62, -37.61],
+        ]],
+    },
+    "Corralco": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-71.77, -38.57], [-71.37, -38.57],
+            [-71.37, -38.17], [-71.77, -38.17],
+            [-71.77, -38.57],
+        ]],
+    },
+    "Las Araucarias": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-71.94, -38.93], [-71.54, -38.93],
+            [-71.54, -38.53], [-71.94, -38.53],
+            [-71.94, -38.93],
+        ]],
+    },
+    "Ski Pucón": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.16, -39.70], [-71.76, -39.70],
+            [-71.76, -39.30], [-72.16, -39.30],
+            [-72.16, -39.70],
+        ]],
+    },
+    "Antillanca": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.41, -40.98], [-72.01, -40.98],
+            [-72.01, -40.58], [-72.41, -40.58],
+            [-72.41, -40.98],
+        ]],
+    },
+    "Volcán Osorno": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.70, -41.30], [-72.30, -41.30],
+            [-72.30, -40.90], [-72.70, -40.90],
+            [-72.70, -41.30],
+        ]],
+    },
+    "El Fraile": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.14, -45.88], [-71.74, -45.88],
+            [-71.74, -45.48], [-72.14, -45.48],
+            [-72.14, -45.88],
+        ]],
+    },
+    "Cerro Mirador": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-71.18, -53.33], [-70.78, -53.33],
+            [-70.78, -52.93], [-71.18, -52.93],
+            [-71.18, -53.33],
         ]],
     },
 }
@@ -181,6 +283,77 @@ METADATA_ZONAS: dict[str, dict] = {
         "elevacion_max_m": 3100,
         "exposicion_predominante": "SO",
         "region_eaws": "Andes de O'Higgins",
+        "region": "andes_chile",
+    },
+    "Laguna del Maule": {
+        "elevacion_min_m": 2100,
+        "elevacion_max_m": 3200,
+        "exposicion_predominante": "E",
+        "region_eaws": "Andes del Maule",
+        "region": "andes_chile",
+    },
+    # Sur de Chile (Biobío → Magallanes)
+    "Nevados de Chillán": {
+        "elevacion_min_m": 1530,
+        "elevacion_max_m": 2400,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes de Biobío",
+        "region": "andes_chile",
+    },
+    "Antuco": {
+        "elevacion_min_m": 1400,
+        "elevacion_max_m": 1850,
+        "exposicion_predominante": "NO",
+        "region_eaws": "Andes de Biobío",
+        "region": "andes_chile",
+    },
+    "Corralco": {
+        "elevacion_min_m": 1550,
+        "elevacion_max_m": 2400,
+        "exposicion_predominante": "NE",
+        "region_eaws": "Andes de La Araucanía",
+        "region": "andes_chile",
+    },
+    "Las Araucarias": {
+        "elevacion_min_m": 1550,
+        "elevacion_max_m": 1942,
+        "exposicion_predominante": "O",
+        "region_eaws": "Andes de La Araucanía",
+        "region": "andes_chile",
+    },
+    "Ski Pucón": {
+        "elevacion_min_m": 1380,
+        "elevacion_max_m": 2100,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes de La Araucanía",
+        "region": "andes_chile",
+    },
+    "Antillanca": {
+        "elevacion_min_m": 1040,
+        "elevacion_max_m": 1540,
+        "exposicion_predominante": "SE",
+        "region_eaws": "Andes de Los Lagos",
+        "region": "andes_chile",
+    },
+    "Volcán Osorno": {
+        "elevacion_min_m": 1230,
+        "elevacion_max_m": 1760,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes de Los Lagos",
+        "region": "andes_chile",
+    },
+    "El Fraile": {
+        "elevacion_min_m": 980,
+        "elevacion_max_m": 1280,
+        "exposicion_predominante": "N",
+        "region_eaws": "Andes de Aysén",
+        "region": "andes_chile",
+    },
+    "Cerro Mirador": {
+        "elevacion_min_m": 380,
+        "elevacion_max_m": 570,
+        "exposicion_predominante": "SE",
+        "region_eaws": "Andes de Magallanes",
         "region": "andes_chile",
     },
     # Alpes suizos (validación H1/H3 SLF)

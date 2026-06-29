@@ -123,6 +123,14 @@ UBICACIONES_MONITOREO = [
         'descripcion': 'Chapa Verde, Rancagua, Chile - Centro de Esquí CODELCO, acceso restringido (base 2260m / cima 3050m)'
     },
 
+    # --- Región del Maule ---
+    {
+        'nombre': 'Laguna del Maule',
+        'latitud': -36.0580,
+        'longitud': -70.5600,
+        'descripcion': 'Laguna del Maule, Región del Maule, Chile - Complejo volcánico y zona de esquí de travesía (base 2100m / cima 3200m)'
+    },
+
     # --- Región de Ñuble / Biobío ---
     {
         'nombre': 'Nevados de Chillán',
