@@ -94,7 +94,7 @@ function fusionarEstadoActual(estadoMock, detalle, dias) {
 
   return {
     ...estadoMock,
-    nivelEAWS: detalle.nivel,
+    nivelEAWS: detalle.nivel ?? estadoMock.nivelEAWS ?? 1,
     // Mensaje principal claro (sin jerga); el análisis técnico de la IA
     // queda disponible aparte como descripcionTecnica.
     descripcionIA: descripcionClara(detalle, dias),
@@ -136,10 +136,11 @@ function anclaTimeline(fechaBase) {
 
 function fusionarTimeline(timelineMock, detalle, horas, fechaBase) {
   // La timeline mock tiene 12 tramos de 6 h: 0-3 → 24 h, 4-7 → 48 h, 8-11 → 72 h
+  const nivel0 = detalle.nivel ?? 1
   const porTramo = [
-    detalle.nivel,
-    detalle.nivel48h ?? detalle.nivel,
-    detalle.nivel72h ?? detalle.nivel48h ?? detalle.nivel,
+    nivel0,
+    detalle.nivel48h ?? nivel0,
+    detalle.nivel72h ?? detalle.nivel48h ?? nivel0,
   ]
   const conNivel = timelineMock.map((punto, i) => ({
     ...punto,
