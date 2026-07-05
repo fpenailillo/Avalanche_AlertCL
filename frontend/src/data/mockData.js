@@ -83,7 +83,8 @@ export const CENTROS = {
   lagunillas:            mkCentro('lagunillas',           'Lagunillas',                  'Cajón del Maipo',        '2.250 – 2.700 m', 'SO'),
   'valle-de-las-arenas': mkCentro('valle-de-las-arenas', 'Valle de las Arenas',          'Cajón del Maipo',        '2.200 – 3.200 m', 'SO'),
   'chapa-verde':         mkCentro('chapa-verde',          'Chapa Verde',                 "Andes de O'Higgins",     '2.700 – 3.100 m', 'SO'),
-  'planchon-peteroa':    mkCentro('planchon-peteroa',    'Planchón-Peteroa / Termas Flaco', "Andes de O'Higgins", '1.600 – 3.000 m', 'N'),
+  'termas-del-flaco':    mkCentro('termas-del-flaco',    'Termas del Flaco',             "Andes de O'Higgins",     '1.700 – 2.800 m', 'SO'),
+  'planchon-peteroa':    mkCentro('planchon-peteroa',    'Planchón-Peteroa',             'Andes del Maule',        '1.720 – 3.000 m', 'N'),
   'laguna-del-maule':    mkCentro('laguna-del-maule',    'Laguna del Maule',             'Andes del Maule',        '2.100 – 3.200 m', 'E'),
   'nevados-de-chillan':  mkCentro('nevados-de-chillan',  'Nevados de Chillán',           'Andes de Biobío',        '1.530 – 2.400 m', 'SO'),
   antuco:                mkCentro('antuco',               'Antuco',                      'Andes de Biobío',        '1.400 – 1.850 m', 'NO'),
@@ -102,7 +103,7 @@ export const CENTROS = {
 // Orden geográfico norte → sur: desde Aconcagua hasta Magallanes
 const ORDEN_GEOGRAFICO = [
   'ski-arpa', 'portillo', 'la-parva', 'valle-nevado', 'el-colorado', 'lagunillas',
-  'valle-de-las-arenas', 'chapa-verde', 'planchon-peteroa', 'laguna-del-maule',
+  'valle-de-las-arenas', 'chapa-verde', 'termas-del-flaco', 'planchon-peteroa', 'laguna-del-maule',
   'nevados-de-chillan', 'antuco', 'corralco', 'los-arenales', 'las-araucarias',
   'ski-pucon', 'mocho-choshuenco', 'antillanca', 'volcan-osorno', 'ski-chaiten',
   'el-fraile', 'cerro-mirador',

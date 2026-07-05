@@ -25,6 +25,7 @@ const COORDS = {
   'el-fraile': [-45.68, -71.94],
   'cerro-mirador': [-53.13, -70.98],
   'valle-de-las-arenas': [-33.90, -70.05],
+  'termas-del-flaco': [-34.953, -70.437],
   'planchon-peteroa': [-35.24, -70.57],
   'los-arenales': [-38.85, -72.00],
   'mocho-choshuenco': [-39.93, -72.03],
