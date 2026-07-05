@@ -149,11 +149,14 @@ function MapaAmpliado({ gee, centros, seleccionadoId, onSelect, onCerrar }) {
   )
 }
 
+const ZOOM_CENTRO = 12  // zoom al que el mapa encuadra un centro seleccionado
+
 export default function MapCard({ centros, seleccionadoId, onSelect, className = '' }) {
   const { datos: gee, estado } = useMapaGEE()
   const refContenedor = useRef(null)
   const refMapa = useRef(null)
   const refMarcadores = useRef({})
+  const refSeleccionPrevia = useRef(null)   // null = carga inicial, no volar
   const [ampliado, setAmpliado] = useState(false)
 
   // 1. Inicializa el mapa base una sola vez.
@@ -231,6 +234,22 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
     })
   }, [centros, seleccionadoId, onSelect])
 
+  // 4. Volar al centro seleccionado (omite la carga inicial).
+  useEffect(() => {
+    const mapa = refMapa.current
+    if (!mapa) return
+    const coord = COORDS[seleccionadoId]
+    if (!coord) return
+    if (refSeleccionPrevia.current === null) {
+      // Primera vez: solo registra la selección inicial sin mover el mapa.
+      refSeleccionPrevia.current = seleccionadoId
+      return
+    }
+    if (refSeleccionPrevia.current === seleccionadoId) return
+    refSeleccionPrevia.current = seleccionadoId
+    mapa.flyTo(coord, ZOOM_CENTRO, { animate: true, duration: 0.8 })
+  }, [seleccionadoId])
+
   return (
     <GlassCard icon={Map} title="Mapa de zonas EAWS · Earth Engine" className={className}>
       <div className="relative min-h-72 flex-1 overflow-hidden rounded-2xl">
@@ -245,14 +264,29 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
           </div>
         )}
 
-        {/* Botón ampliar */}
-        <button
-          onClick={() => setAmpliado(true)}
-          className="absolute top-2 right-2 z-[400] flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-          Ampliar
-        </button>
+        {/* Botones superiores */}
+        <div className="absolute top-2 right-2 z-[400] flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              const mapa = refMapa.current
+              if (!mapa) return
+              const coords = Object.values(COORDS)
+              mapa.flyToBounds(L.latLngBounds(coords), { padding: [30, 30], animate: true, duration: 0.8 })
+            }}
+            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+            title="Ver todos los centros"
+          >
+            <Map className="h-3.5 w-3.5" />
+            Ver todos
+          </button>
+          <button
+            onClick={() => setAmpliado(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+            Ampliar
+          </button>
+        </div>
 
         {estado === 'ok' && gee && (
           <div className="pointer-events-none absolute bottom-2 left-2 z-[400] flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-[9px] text-white/85 backdrop-blur-sm">
