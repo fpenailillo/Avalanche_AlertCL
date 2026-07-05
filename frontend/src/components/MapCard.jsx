@@ -197,7 +197,7 @@ export default function MapCard({ centros, seleccionadoId, onSelect, className =
         { collapsed: true, position: 'topright' }
       )
       .addTo(mapa)
-    if (gee.bounds) mapa.fitBounds(gee.bounds)
+    // No re-encuadra al bounds del ROI GEE: el mapa ya muestra Chile completo.
     return () => {
       mapa.removeControl(control)
       mapa.removeLayer(color)
