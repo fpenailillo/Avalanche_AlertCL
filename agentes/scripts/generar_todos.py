@@ -76,6 +76,7 @@ UBICACIONES_PRODUCCION = [
     "Valle de las Arenas",
     # Región de O'Higgins
     "Chapa Verde",
+    "Termas del Flaco",
     "Planchón-Peteroa",
     # Región del Maule
     "Laguna del Maule",

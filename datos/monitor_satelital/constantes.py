@@ -221,7 +221,7 @@ FUENTES_POR_REGION: Dict[str, Dict[str, Any]] = {
         'ubicaciones': [
             'Portillo', 'Ski Arpa', 'La Parva Sector Bajo', 'La Parva Sector Medio',
             'La Parva Sector Alto', 'El Colorado', 'Valle Nevado', 'Lagunillas',
-            'Valle de las Arenas', 'Chapa Verde', 'Planchón-Peteroa',
+            'Valle de las Arenas', 'Chapa Verde', 'Termas del Flaco', 'Planchón-Peteroa',
             'Laguna del Maule', 'Nevados de Chillán', 'Antuco', 'Corralco',
             'Los Arenales', 'Las Araucarias', 'Ski Pucón', 'Mocho-Choshuenco',
             'Antillanca', 'Volcán Osorno', 'Ski Chaitén', 'El Fraile', 'Cerro Mirador'

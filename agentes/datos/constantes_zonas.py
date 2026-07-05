@@ -33,6 +33,7 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "Cerro Mirador":        (-53.130, -70.980),
     # Centros nuevos (expansión lista canónica)
     "Valle de las Arenas":  (-33.900, -70.050),
+    "Termas del Flaco":     (-34.953, -70.437),
     "Planchón-Peteroa":     (-35.240, -70.570),
     "Los Arenales":         (-38.850, -72.000),
     "Mocho-Choshuenco":     (-39.930, -72.030),
@@ -68,6 +69,7 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "Cerro Mirador":        [-71.18, -53.33, -70.78, -52.93],
     # Centros nuevos (expansión lista canónica)
     "Valle de las Arenas":  [-70.25, -34.10, -69.85, -33.70],
+    "Termas del Flaco":     [-70.64, -35.15, -70.24, -34.75],
     "Planchón-Peteroa":     [-70.77, -35.44, -70.37, -35.04],
     "Los Arenales":         [-72.20, -39.05, -71.80, -38.65],
     "Mocho-Choshuenco":     [-72.23, -40.13, -71.83, -39.73],
@@ -231,6 +233,14 @@ POLIGONOS_ZONAS: dict[str, dict] = {
             [-70.25, -34.10],
         ]],
     },
+    "Termas del Flaco": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.64, -35.15], [-70.24, -35.15],
+            [-70.24, -34.75], [-70.64, -34.75],
+            [-70.64, -35.15],
+        ]],
+    },
     "Planchón-Peteroa": {
         "type": "Polygon",
         "coordinates": [[
@@ -378,13 +388,23 @@ METADATA_ZONAS: dict[str, dict] = {
         "macizo_volcan": "Cordillera de Rancagua",
         "tipo_operacion": "Club de Ski",
     },
-    "Planchón-Peteroa": {
-        "elevacion_min_m": 1600,
-        "elevacion_max_m": 3000,
-        "exposicion_predominante": "N",
+    "Termas del Flaco": {
+        "elevacion_min_m": 1700,
+        "elevacion_max_m": 2800,
+        "exposicion_predominante": "SO",
         "region_eaws": "Andes de O'Higgins",
         "region": "andes_chile",
         "region_admin": "O'Higgins",
+        "macizo_volcan": "Cordillera del Tinguiririca",
+        "tipo_operacion": "Randonnée / Termas",
+    },
+    "Planchón-Peteroa": {
+        "elevacion_min_m": 1720,
+        "elevacion_max_m": 3000,
+        "exposicion_predominante": "N",
+        "region_eaws": "Andes del Maule",
+        "region": "andes_chile",
+        "region_admin": "Maule",
         "macizo_volcan": "Volcán Planchón-Peteroa",
         "tipo_operacion": "Randonnée / Expedición",
     },

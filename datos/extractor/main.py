@@ -130,13 +130,19 @@ UBICACIONES_MONITOREO = [
         'descripcion': 'Chapa Verde, Rancagua, Chile - Centro de Esquí CODELCO, acceso restringido (base 2260m / cima 3050m)'
     },
     {
-        'nombre': 'Planchón-Peteroa',
-        'latitud': -35.2400,
-        'longitud': -70.5700,
-        'descripcion': 'Planchón-Peteroa / Termas Flaco, O\'Higgins, Chile - Volcán activo, Randonnée (base 1720m / cima 3000m)'
+        'nombre': 'Termas del Flaco',
+        'latitud': -34.9530,
+        'longitud': -70.4370,
+        'descripcion': 'Termas del Flaco, San Fernando, Chile - Valle del Tinguiririca, Randonnée (base 1700m / cima 2800m)'
     },
 
     # --- Región del Maule ---
+    {
+        'nombre': 'Planchón-Peteroa',
+        'latitud': -35.2400,
+        'longitud': -70.5700,
+        'descripcion': 'Planchón-Peteroa, Curicó, Chile - Volcán activo en frontera, Randonnée (base 1720m / cima 3000m)'
+    },
     {
         'nombre': 'Laguna del Maule',
         'latitud': -36.0580,
