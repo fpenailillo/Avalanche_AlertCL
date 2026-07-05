@@ -43,7 +43,7 @@ export default function TimelineCarousel({ timeline, esHistorico = false, fechaB
     >
       <div className="scroll-slim -mx-1 flex snap-x snap-mandatory gap-1 overflow-x-auto pb-1">
         {puntos.map((punto, i) => {
-          const nivel = ESCALA_EAWS[punto.nivel]
+          const nivel = ESCALA_EAWS[punto.nivel] ?? ESCALA_EAWS[1]
           return (
             <div
               key={i}

@@ -17,6 +17,7 @@ const TIMELINE_NEUTRO = Array.from({ length: 12 }, () => ({
   hora: '',
   icono: 'cloud',
   temp: null,
+  nivel: 1,
 }))
 
 // Estado neutro: fusionarEstadoActual() lo sobreescribe desde boletin_activo.json.
