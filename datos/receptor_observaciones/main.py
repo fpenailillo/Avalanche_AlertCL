@@ -89,6 +89,23 @@ def _subir_fotos(fotos, id_obs):
     return rutas
 
 
+def _guardar_json_gcs(fila, id_obs):
+    """Guarda un JSON completo de la observación en GCS para análisis posterior.
+
+    Ruta: gs://avalanche-alertcl-observaciones/observaciones/{id_obs}/data.json
+    Incluye todos los campos (sin binarios de imagen, solo rutas GCS de fotos).
+    No bloquea la respuesta si falla.
+    """
+    try:
+        contenido = json.dumps(fila, ensure_ascii=False, default=str, indent=2)
+        bucket = storage.Client(project=PROYECTO).bucket(BUCKET_FOTOS)
+        blob = bucket.blob(f"observaciones/{id_obs}/data.json")
+        blob.upload_from_string(contenido, content_type="application/json", timeout=30)
+        logger.info("Backup JSON guardado: observaciones/%s/data.json", id_obs)
+    except Exception:  # noqa: BLE001
+        logger.exception("No se pudo guardar backup JSON en GCS (no bloquea)")
+
+
 def _regenerar_feed():
     """Reconstruye observaciones.json (público) con los reportes recientes.
 
@@ -160,6 +177,18 @@ def recibir_observacion(solicitud):
     centro = _limpiar(cuerpo.get("centro"), 120)
     fecha_obs = _limpiar(cuerpo.get("fecha_observacion"), 10)
 
+    def _float_opt(val, lo, hi):
+        """Parsea float dentro de rango [lo, hi]; devuelve None si inválido."""
+        try:
+            v = float(val)
+            return v if lo <= v <= hi else None
+        except (TypeError, ValueError):
+            return None
+
+    latitud = _float_opt(cuerpo.get("latitud"), -90, 90)
+    longitud = _float_opt(cuerpo.get("longitud"), -180, 180)
+    precision_gps_m = _float_opt(cuerpo.get("precision_gps_m"), 0, 50000)
+
     # Validación mínima: comentarios obligatorios y algún dato de contacto.
     if not comentarios:
         return _cors(json.dumps({"error": "Los comentarios son obligatorios"}), 400)
@@ -186,6 +215,9 @@ def recibir_observacion(solicitud):
         "fotos": json.dumps(rutas_fotos, ensure_ascii=False),
         "origen": "frontend-poc",
         "user_agent": _limpiar(solicitud.headers.get("User-Agent"), 300),
+        "latitud": latitud,
+        "longitud": longitud,
+        "precision_gps_m": precision_gps_m,
     }
 
     try:
@@ -199,5 +231,6 @@ def recibir_observacion(solicitud):
         return _cors(json.dumps({"error": "No se pudo registrar"}), 500)
 
     logger.info("Observación registrada: %s (%s fotos)", id_obs, len(rutas_fotos))
+    _guardar_json_gcs(fila, id_obs)  # backup completo en GCS para análisis
     _regenerar_feed()  # actualiza el feed público para la tarjeta Comunidad
     return _cors(json.dumps({"ok": True, "id": id_obs, "fotos": len(rutas_fotos)}), 200)

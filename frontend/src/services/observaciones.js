@@ -19,7 +19,7 @@ export function leerArchivoBase64(file) {
   })
 }
 
-export async function enviarObservacion({ nombre, contacto, comentarios, centro, fechaObservacion, fotos = [] }) {
+export async function enviarObservacion({ nombre, contacto, comentarios, centro, fechaObservacion, fotos = [], latitud = null, longitud = null, precisionGps = null }) {
   const fotosBase64 = await Promise.all(fotos.map(leerArchivoBase64))
 
   const respuesta = await fetch(URL_RECEPTOR, {
@@ -32,6 +32,9 @@ export async function enviarObservacion({ nombre, contacto, comentarios, centro,
       centro,
       fecha_observacion: fechaObservacion,
       fotos: fotosBase64,
+      latitud,
+      longitud,
+      precision_gps_m: precisionGps,
     }),
   })
 
