@@ -70,7 +70,7 @@ function VistaDemo({ datos }) {
   return (
     <div className="flex flex-1 flex-col justify-between gap-4 text-white">
       <div>
-        <div className="text-4xl font-bold tracking-tight">{datos.ndsi.toFixed(2)}</div>
+        <div className="text-4xl font-bold tracking-tight">{datos.ndsi != null ? datos.ndsi.toFixed(2) : '—'}</div>
         <div className="text-xs text-white/60">Índice NDSI</div>
       </div>
 
@@ -106,10 +106,20 @@ function VistaDemo({ datos }) {
   )
 }
 
+function VistaSinDatos() {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-2 py-4 text-white/40">
+      <Satellite className="h-8 w-8" />
+      <p className="text-sm">Sin datos satelitales disponibles</p>
+    </div>
+  )
+}
+
 export default function SatelliteCard({ datos, className = '' }) {
+  const tieneDemo = datos.ndsi != null || datos.coberturaPct != null
   return (
     <GlassCard icon={Satellite} title="Satelital · S2" className={className}>
-      {datos.real ? <VistaReal datos={datos} /> : <VistaDemo datos={datos} />}
+      {datos.real ? <VistaReal datos={datos} /> : tieneDemo ? <VistaDemo datos={datos} /> : <VistaSinDatos />}
     </GlassCard>
   )
 }
