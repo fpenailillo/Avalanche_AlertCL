@@ -721,8 +721,10 @@ class ConsultorBigQuery:
                         fecha_captura
                     FROM `{proyecto}.{dataset}.imagenes_satelitales`
                     WHERE nombre_ubicacion = @ubicacion
-                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL 2 DAY)
-                    ORDER BY fecha_captura DESC
+                      AND fecha_captura >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+                    ORDER BY
+                        (ndsi_medio IS NOT NULL) DESC,
+                        fecha_captura DESC
                     LIMIT 1
                 """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
 
@@ -749,9 +751,11 @@ class ConsultorBigQuery:
                         fecha_captura
                     FROM `{proyecto}.{dataset}.imagenes_satelitales`
                     WHERE nombre_ubicacion = @ubicacion
-                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL 2 DAY)
+                      AND fecha_captura >= DATE_SUB(DATE(@fecha_ref), INTERVAL 7 DAY)
                       AND fecha_captura <= DATE(@fecha_ref)
-                    ORDER BY fecha_captura DESC
+                    ORDER BY
+                        (ndsi_medio IS NOT NULL) DESC,
+                        fecha_captura DESC
                     LIMIT 1
                 """.format(proyecto=self.GCP_PROJECT, dataset=self.DATASET)
 

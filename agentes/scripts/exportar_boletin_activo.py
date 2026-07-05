@@ -50,9 +50,11 @@ SELECT nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_48h,
 SQL_ULTIMOS_BOLETINES = f"""
 {CAMPOS_BOLETIN}
 FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
-WHERE DATE(fecha_emision) >= DATE_SUB(CURRENT_DATE(), INTERVAL 3 DAY)
+WHERE DATE(fecha_emision) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
 QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
+    PARTITION BY nombre_ubicacion ORDER BY
+        (estado_vit IS NOT NULL AND estado_vit NOT IN ('sin_datos')) DESC,
+        fecha_emision DESC
 ) = 1
 """
 

@@ -183,7 +183,7 @@ function fusionarTopografico(topoMock, manto, detalle) {
 }
 
 function fusionarSatelital(satMock, satelital, detalle) {
-  if (!satelital?.estado) return satMock
+  if (!satelital?.estado || satelital.estado === 'sin_datos') return satMock
   return {
     estadoVit: capitalizar(satelital.estado),
     scoreAnomalia: satelital.score_anomalia ?? null,
