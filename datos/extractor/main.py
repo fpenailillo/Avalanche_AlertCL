@@ -115,12 +115,25 @@ UBICACIONES_MONITOREO = [
         'descripcion': 'Lagunillas, San José de Maipo, Chile - Centro familiar, 3 remontes (base 2200m / cima 2550m)'
     },
 
+    {
+        'nombre': 'Valle de las Arenas',
+        'latitud': -33.9000,
+        'longitud': -70.0500,
+        'descripcion': 'Valle de las Arenas, Cajón del Maipo, Chile - Randonnée Volcán Morado / San José (base 2200m / cima 3200m)'
+    },
+
     # --- Región de O'Higgins ---
     {
         'nombre': 'Chapa Verde',
         'latitud': -34.1700,
         'longitud': -70.3700,
         'descripcion': 'Chapa Verde, Rancagua, Chile - Centro de Esquí CODELCO, acceso restringido (base 2260m / cima 3050m)'
+    },
+    {
+        'nombre': 'Planchón-Peteroa',
+        'latitud': -35.2400,
+        'longitud': -70.5700,
+        'descripcion': 'Planchón-Peteroa / Termas Flaco, O\'Higgins, Chile - Volcán activo, Randonnée (base 1720m / cima 3000m)'
     },
 
     # --- Región del Maule ---
@@ -171,6 +184,14 @@ UBICACIONES_MONITOREO = [
         'descripcion': 'Los Arenales, Temuco, Chile - Centro de Entrenamiento y Esquí Familiar (base 1600m / cima 1845m)'
     },
 
+    # --- Región de Los Ríos ---
+    {
+        'nombre': 'Mocho-Choshuenco',
+        'latitud': -39.9300,
+        'longitud': -72.0300,
+        'descripcion': 'Mocho-Choshuenco, Los Ríos, Chile - Volcán glaciar, Randonnée (base 1700m / cima 2422m)'
+    },
+
     # --- Región de Los Lagos ---
     {
         'nombre': 'Antillanca',
@@ -183,6 +204,12 @@ UBICACIONES_MONITOREO = [
         'latitud': -41.1000,
         'longitud': -72.5000,
         'descripcion': 'Volcán Osorno, Puerto Varas, Chile - MCP Mountain, Volcán icónico patagónico (base 1230m / cima 1760m)'
+    },
+    {
+        'nombre': 'Ski Chaitén',
+        'latitud': -42.8300,
+        'longitud': -72.6800,
+        'descripcion': 'Ski Chaitén, Volcán Michinmahuida, Los Lagos, Chile - Club de Ski (base 600m / cima 1500m)'
     },
 
     # --- Región de Aysén ---

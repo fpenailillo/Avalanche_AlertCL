@@ -31,6 +31,12 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "Volcán Osorno":        (-41.100, -72.500),
     "El Fraile":            (-45.680, -71.940),
     "Cerro Mirador":        (-53.130, -70.980),
+    # Centros nuevos (expansión lista canónica)
+    "Valle de las Arenas":  (-33.900, -70.050),
+    "Planchón-Peteroa":     (-35.240, -70.570),
+    "Los Arenales":         (-38.850, -72.000),
+    "Mocho-Choshuenco":     (-39.930, -72.030),
+    "Ski Chaitén":          (-42.830, -72.680),
     # Alpes suizos (validación H1/H3 SLF)
     "Interlaken":           (46.686,   7.863),
     "Matterhorn Zermatt":   (45.977,   7.659),
@@ -60,6 +66,12 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "Volcán Osorno":        [-72.70, -41.30, -72.30, -40.90],
     "El Fraile":            [-72.14, -45.88, -71.74, -45.48],
     "Cerro Mirador":        [-71.18, -53.33, -70.78, -52.93],
+    # Centros nuevos (expansión lista canónica)
+    "Valle de las Arenas":  [-70.25, -34.10, -69.85, -33.70],
+    "Planchón-Peteroa":     [-70.77, -35.44, -70.37, -35.04],
+    "Los Arenales":         [-72.20, -39.05, -71.80, -38.65],
+    "Mocho-Choshuenco":     [-72.23, -40.13, -71.83, -39.73],
+    "Ski Chaitén":          [-72.88, -43.03, -72.48, -42.63],
 }
 
 # ─── Polígonos GeoJSON (para BigQuery GEOGRAPHY y ST_REGIONSTATS) ─────────────
@@ -210,6 +222,47 @@ POLIGONOS_ZONAS: dict[str, dict] = {
             [-71.18, -53.33],
         ]],
     },
+    # Centros nuevos (expansión lista canónica)
+    "Valle de las Arenas": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.25, -34.10], [-69.85, -34.10],
+            [-69.85, -33.70], [-70.25, -33.70],
+            [-70.25, -34.10],
+        ]],
+    },
+    "Planchón-Peteroa": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-70.77, -35.44], [-70.37, -35.44],
+            [-70.37, -35.04], [-70.77, -35.04],
+            [-70.77, -35.44],
+        ]],
+    },
+    "Los Arenales": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.20, -39.05], [-71.80, -39.05],
+            [-71.80, -38.65], [-72.20, -38.65],
+            [-72.20, -39.05],
+        ]],
+    },
+    "Mocho-Choshuenco": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.23, -40.13], [-71.83, -40.13],
+            [-71.83, -39.73], [-72.23, -39.73],
+            [-72.23, -40.13],
+        ]],
+    },
+    "Ski Chaitén": {
+        "type": "Polygon",
+        "coordinates": [[
+            [-72.88, -43.03], [-72.48, -43.03],
+            [-72.48, -42.63], [-72.88, -42.63],
+            [-72.88, -43.03],
+        ]],
+    },
 }
 
 # ─── Metadata de zonas ─────────────────────────────────────────────────────────
@@ -221,6 +274,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro Falsa Parva",
+        "tipo_operacion": "Centro Comercial",
     },
     "La Parva Sector Bajo": {
         "elevacion_min_m": 2200,
@@ -228,6 +284,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro Falsa Parva",
+        "tipo_operacion": "Centro Comercial",
     },
     "La Parva Sector Medio": {
         "elevacion_min_m": 2500,
@@ -235,6 +294,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro Falsa Parva",
+        "tipo_operacion": "Centro Comercial",
     },
     "La Parva Sector Alto": {
         "elevacion_min_m": 3000,
@@ -242,6 +304,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro Falsa Parva",
+        "tipo_operacion": "Centro Comercial",
     },
     "Valle Nevado": {
         "elevacion_min_m": 2800,
@@ -249,6 +314,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "NO",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro El Plomo",
+        "tipo_operacion": "Centro Comercial",
     },
     "El Colorado": {
         "elevacion_min_m": 2400,
@@ -256,6 +324,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "O",
         "region_eaws": "Andes Central Norte",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Cerro Colorado",
+        "tipo_operacion": "Centro Comercial",
     },
     "Portillo": {
         "elevacion_min_m": 2580,
@@ -263,6 +334,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "NE",
         "region_eaws": "Andes del Aconcagua",
         "region": "andes_chile",
+        "region_admin": "Valparaíso",
+        "macizo_volcan": "Alta Montaña (Laguna del Inca)",
+        "tipo_operacion": "Centro Comercial",
     },
     "Ski Arpa": {
         "elevacion_min_m": 2600,
@@ -270,6 +344,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "S",
         "region_eaws": "Andes del Aconcagua",
         "region": "andes_chile",
+        "region_admin": "Valparaíso",
+        "macizo_volcan": "Cerro Blanco / Aconcagua",
+        "tipo_operacion": "Cat-Ski / Freeride",
     },
     "Lagunillas": {
         "elevacion_min_m": 2250,
@@ -277,6 +354,19 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SO",
         "region_eaws": "Andes Cajón del Maipo",
         "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Precordillera (Cajón del Maipo)",
+        "tipo_operacion": "Club Andino",
+    },
+    "Valle de las Arenas": {
+        "elevacion_min_m": 2200,
+        "elevacion_max_m": 3200,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes Cajón del Maipo",
+        "region": "andes_chile",
+        "region_admin": "Metropolitana",
+        "macizo_volcan": "Morado / San José",
+        "tipo_operacion": "Randonnée / Expedición",
     },
     "Chapa Verde": {
         "elevacion_min_m": 2700,
@@ -284,6 +374,19 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SO",
         "region_eaws": "Andes de O'Higgins",
         "region": "andes_chile",
+        "region_admin": "O'Higgins",
+        "macizo_volcan": "Cordillera de Rancagua",
+        "tipo_operacion": "Club de Ski",
+    },
+    "Planchón-Peteroa": {
+        "elevacion_min_m": 1600,
+        "elevacion_max_m": 3000,
+        "exposicion_predominante": "N",
+        "region_eaws": "Andes de O'Higgins",
+        "region": "andes_chile",
+        "region_admin": "O'Higgins",
+        "macizo_volcan": "Volcán Planchón-Peteroa",
+        "tipo_operacion": "Randonnée / Expedición",
     },
     "Laguna del Maule": {
         "elevacion_min_m": 2100,
@@ -291,6 +394,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "E",
         "region_eaws": "Andes del Maule",
         "region": "andes_chile",
+        "region_admin": "Maule",
+        "macizo_volcan": "Complejo Volcánico Laguna del Maule",
+        "tipo_operacion": "Randonnée / Nieve Salvaje",
     },
     # Sur de Chile (Biobío → Magallanes)
     "Nevados de Chillán": {
@@ -299,6 +405,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SO",
         "region_eaws": "Andes de Biobío",
         "region": "andes_chile",
+        "region_admin": "Ñuble",
+        "macizo_volcan": "Volcán Chillán",
+        "tipo_operacion": "Centro Comercial",
     },
     "Antuco": {
         "elevacion_min_m": 1400,
@@ -306,6 +415,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "NO",
         "region_eaws": "Andes de Biobío",
         "region": "andes_chile",
+        "region_admin": "Biobío",
+        "macizo_volcan": "Volcán Antuco",
+        "tipo_operacion": "Club de Ski",
     },
     "Corralco": {
         "elevacion_min_m": 1550,
@@ -313,6 +425,19 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "NE",
         "region_eaws": "Andes de La Araucanía",
         "region": "andes_chile",
+        "region_admin": "La Araucanía",
+        "macizo_volcan": "Volcán Lonquimay",
+        "tipo_operacion": "Centro Comercial",
+    },
+    "Los Arenales": {
+        "elevacion_min_m": 1500,
+        "elevacion_max_m": 1845,
+        "exposicion_predominante": "S",
+        "region_eaws": "Andes de La Araucanía",
+        "region": "andes_chile",
+        "region_admin": "La Araucanía",
+        "macizo_volcan": "Volcán Lonquimay (Ladera Sur)",
+        "tipo_operacion": "Randonnée / Recreativo",
     },
     "Las Araucarias": {
         "elevacion_min_m": 1550,
@@ -320,6 +445,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "O",
         "region_eaws": "Andes de La Araucanía",
         "region": "andes_chile",
+        "region_admin": "La Araucanía",
+        "macizo_volcan": "Volcán Llaima",
+        "tipo_operacion": "Centro Comercial",
     },
     "Ski Pucón": {
         "elevacion_min_m": 1380,
@@ -327,6 +455,19 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SO",
         "region_eaws": "Andes de La Araucanía",
         "region": "andes_chile",
+        "region_admin": "La Araucanía",
+        "macizo_volcan": "Volcán Villarrica",
+        "tipo_operacion": "Centro Comercial",
+    },
+    "Mocho-Choshuenco": {
+        "elevacion_min_m": 1700,
+        "elevacion_max_m": 2422,
+        "exposicion_predominante": "SO",
+        "region_eaws": "Andes de Los Ríos",
+        "region": "andes_chile",
+        "region_admin": "Los Ríos",
+        "macizo_volcan": "Volcán Mocho-Choshuenco",
+        "tipo_operacion": "Randonnée / Glaciar",
     },
     "Antillanca": {
         "elevacion_min_m": 1040,
@@ -334,6 +475,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes de Los Lagos",
         "region": "andes_chile",
+        "region_admin": "Los Lagos",
+        "macizo_volcan": "Volcán Casablanca",
+        "tipo_operacion": "Centro Comercial",
     },
     "Volcán Osorno": {
         "elevacion_min_m": 1230,
@@ -341,6 +485,19 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SO",
         "region_eaws": "Andes de Los Lagos",
         "region": "andes_chile",
+        "region_admin": "Los Lagos",
+        "macizo_volcan": "Volcán Osorno",
+        "tipo_operacion": "Centro Comercial",
+    },
+    "Ski Chaitén": {
+        "elevacion_min_m": 600,
+        "elevacion_max_m": 1500,
+        "exposicion_predominante": "N",
+        "region_eaws": "Andes de Los Lagos",
+        "region": "andes_chile",
+        "region_admin": "Los Lagos",
+        "macizo_volcan": "Volcán Michinmahuida",
+        "tipo_operacion": "Club de Ski",
     },
     "El Fraile": {
         "elevacion_min_m": 980,
@@ -348,6 +505,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "N",
         "region_eaws": "Andes de Aysén",
         "region": "andes_chile",
+        "region_admin": "Aysén",
+        "macizo_volcan": "Cerro El Fraile",
+        "tipo_operacion": "Centro Comercial",
     },
     "Cerro Mirador": {
         "elevacion_min_m": 380,
@@ -355,6 +515,9 @@ METADATA_ZONAS: dict[str, dict] = {
         "exposicion_predominante": "SE",
         "region_eaws": "Andes de Magallanes",
         "region": "andes_chile",
+        "region_admin": "Magallanes",
+        "macizo_volcan": "Monte Fenton",
+        "tipo_operacion": "Centro Comercial",
     },
     # Alpes suizos (validación H1/H3 SLF)
     "Interlaken": {

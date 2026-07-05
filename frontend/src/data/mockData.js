@@ -180,6 +180,59 @@ export const CENTROS = {
     },
   },
 
+  'el-colorado': {
+    id: 'el-colorado',
+    nombre: 'El Colorado / Farellones',
+    zona: 'Andes Centrales',
+    elevacion: '2.400 – 4.100 m',
+    exposicion: 'O',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Mayor red de pistas de los Tres Valles. Riesgo moderado con placas de viento en laderas oeste sobre los 3.000 m. Las condiciones mejoran hacia la tarde en las pistas bajas de Farellones.',
+      vientoKmh: 50,
+      temperatura: -5,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wind-slab',
+        nombre: 'Placas de viento',
+        cotas: 'Sobre 3.000 m',
+        orientaciones: 'O – SO (sotavento)',
+        detalle: 'Vientos del norte y noroeste cargan pendientes de orientación oeste; acumulaciones sobre los 3.000 m.',
+      },
+    ],
+    timeline: ajustarTimeline(-1, [2, 2, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(-1, 1.1),
+    satelital: {
+      ndsi: 0.81,
+      coberturaPct: 88,
+      fechaPasada: '09 jun 2026 · 14:32 UTC',
+      tile: 'T19HCC',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Moderado',
+      estable: true,
+      profundidadCm: 135,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.88,
+    },
+    comunidad: {
+      resumenNLP:
+        'El Colorado y Farellones reportan buen estado en pistas principales. Acceso asfaltado facilita el volumen de esquiadores. Cautela en sectores venteados en las cumbres.',
+      reportes: [
+        { autor: 'Ski Patrol Colorado', hace: 'hace 4 h', texto: 'Pistas superiores con sastrugi; las de baja cota en excelente estado.' },
+        { autor: 'P. Vargas', hace: 'hace 15 h', texto: 'Gran día en Farellones, nieve polvo en el sector Ángel.' },
+        { autor: 'M. Soto', hace: 'hace 1 d', texto: 'Cumbres cerradas por viento, resto del resort abierto.' },
+      ],
+      totalReportes48h: 18,
+    },
+  },
+
   'portillo': {
     id: 'portillo',
     nombre: 'Portillo',
@@ -352,6 +405,57 @@ export const CENTROS = {
     },
   },
 
+  'valle-de-las-arenas': {
+    id: 'valle-de-las-arenas',
+    nombre: 'Valle de las Arenas',
+    zona: 'Cajón del Maipo',
+    elevacion: '2.200 – 3.200 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Zona de travesía volcánica en las cercanías del Morado. Manto irregular con placas de viento en laderas altas. Acceso solo para grupos con equipo y experiencia en terreno glaciar.',
+      vientoKmh: 40,
+      temperatura: -5,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wind-slab',
+        nombre: 'Placas de viento',
+        cotas: 'Sobre 2.800 m',
+        orientaciones: 'SE – E',
+        detalle: 'Acumulaciones en laderas orientadas al sur y sureste por vientos del noroeste.',
+      },
+    ],
+    timeline: ajustarTimeline(-1, [2, 2, 2, 2, 2, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(-1, 1.1),
+    satelital: {
+      ndsi: 0.74,
+      coberturaPct: 71,
+      fechaPasada: '09 jun 2026 · 14:18 UTC',
+      tile: 'T19HBC',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Irregular',
+      estable: true,
+      profundidadCm: 85,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.82,
+    },
+    comunidad: {
+      resumenNLP:
+        'Zona frecuentada por esquiadores de travesía con experiencia. Acceso desde San José de Maipo requiere equipo glaciar sobre los 2.800 m.',
+      reportes: [
+        { autor: 'Grupo Travesía Maipo', hace: 'hace 8 h', texto: 'Neve dura y compacta en el glaciar Morado. Crampones obligatorios sobre los 2.900 m.' },
+      ],
+      totalReportes48h: 3,
+    },
+  },
+
   'chapa-verde': {
     id: 'chapa-verde',
     nombre: 'Chapa Verde',
@@ -408,6 +512,57 @@ export const CENTROS = {
         { autor: 'L. Moreno', hace: 'hace 1 d', texto: 'Buena nieve a primera hora, pesada en la tarde.' },
       ],
       totalReportes48h: 5,
+    },
+  },
+
+  'planchon-peteroa': {
+    id: 'planchon-peteroa',
+    nombre: 'Planchón-Peteroa / Termas Flaco',
+    zona: "Andes de O'Higgins",
+    elevacion: '1.600 – 3.000 m',
+    exposicion: 'N',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Complejo volcánico activo. Nieve primavera temprana en cotas bajas; buen manto sobre los 2.000 m. Las emisiones fumarólicas del Peteroa pueden generar lluvia ácida que altera la estabilidad superficial.',
+      vientoKmh: 35,
+      temperatura: -2,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 2.000 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas previstas que se suman a manto existente; avalanchas espontáneas posibles en pendientes empinadas.',
+      },
+    ],
+    timeline: ajustarTimeline(2, [1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]),
+    pronostico15: ajustarPronostico(2, 1.2),
+    satelital: {
+      ndsi: 0.65,
+      coberturaPct: 62,
+      fechaPasada: '09 jun 2026 · 14:05 UTC',
+      tile: 'T19HBB',
+      tendencia: 'En aumento',
+    },
+    topografico: {
+      estadoManto: 'Moderado',
+      estable: true,
+      profundidadCm: 68,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.80,
+    },
+    comunidad: {
+      resumenNLP:
+        'Volcán activo con acceso por Termas del Flaco. Esquiadores de travesía reportan buenas condiciones sobre los 2.200 m pese a actividad fumarólica menor.',
+      reportes: [
+        { autor: 'Expedicón Sur-Andina', hace: 'hace 1 d', texto: 'Cumbre Peteroa con nieve firme. Actividad fumarólica leve, sin riesgo para esquiadores.' },
+      ],
+      totalReportes48h: 2,
     },
   },
 
@@ -647,6 +802,58 @@ export const CENTROS = {
     },
   },
 
+  'los-arenales': {
+    id: 'los-arenales',
+    nombre: 'Los Arenales',
+    zona: 'Andes de La Araucanía',
+    elevacion: '1.500 – 1.845 m',
+    exposicion: 'S',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Centro recreativo en la ladera sur del Volcán Lonquimay. Buena cobertura nival para el acceso; riesgo moderado por nieve nueva prevista. Ideal para esquiadores familiares y grupos de travesía iniciados.',
+      vientoKmh: 20,
+      temperatura: 1,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.600 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Nevadas previstas para el jueves; evaluar estabilidad antes de iniciar travesías.',
+      },
+    ],
+    timeline: ajustarTimeline(3, [1, 1, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1]),
+    pronostico15: ajustarPronostico(3, 1.3),
+    satelital: {
+      ndsi: 0.60,
+      coberturaPct: 65,
+      fechaPasada: '09 jun 2026 · 14:12 UTC',
+      tile: 'T19HAC',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Moderado',
+      estable: true,
+      profundidadCm: 62,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.83,
+    },
+    comunidad: {
+      resumenNLP:
+        'Centro de entrenamiento y esquí familiar con acceso desde Temuco. Buena cobertura en las pistas principales; grupos de escuelas de ski activos esta semana.',
+      reportes: [
+        { autor: 'Club Ski Temuco', hace: 'hace 5 h', texto: 'Pistas limpias y seguras. Nieve polvo desde las 1.700 m.' },
+        { autor: 'Instructor A. Leiva', hace: 'hace 1 d', texto: 'Excelente para principiantes; base consolidada y sin desniveles peligrosos.' },
+      ],
+      totalReportes48h: 5,
+    },
+  },
+
   'las-araucarias': {
     id: 'las-araucarias',
     nombre: 'Las Araucarias',
@@ -708,7 +915,7 @@ export const CENTROS = {
 
   'ski-pucon': {
     id: 'ski-pucon',
-    nombre: 'Ski Pucón',
+    nombre: 'Pillán (ex Ski Pucón)',
     zona: 'Andes de La Araucanía',
     elevacion: '1.380 – 2.100 m',
     exposicion: 'SO',
@@ -762,6 +969,65 @@ export const CENTROS = {
         { autor: 'P. Alvarado', hace: 'hace 18 h', texto: 'Cumbre espectacular con vista al lago Villarrica. Nieve polvo sobre los 1.900 m.' },
       ],
       totalReportes48h: 11,
+    },
+  },
+
+  'mocho-choshuenco': {
+    id: 'mocho-choshuenco',
+    nombre: 'Mocho-Choshuenco',
+    zona: 'Andes de Los Ríos',
+    elevacion: '1.700 – 2.422 m',
+    exposicion: 'SO',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'Volcán de glaciares en la Región de Los Ríos. Manto profundo en cotas altas gracias a las abundantes precipitaciones del sur. Travesías en glaciar requieren equipo técnico; avalanchas de placa posibles sobre los 2.000 m.',
+      vientoKmh: 45,
+      temperatura: -3,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wind-slab',
+        nombre: 'Placas de viento',
+        cotas: 'Sobre 2.000 m',
+        orientaciones: 'S – SE',
+        detalle: 'Vientos del noroeste acumulan nieve en laderas suroeste del glaciar.',
+      },
+      {
+        id: 'new-snow',
+        nombre: 'Nieve nueva',
+        cotas: 'Sobre 1.700 m',
+        orientaciones: 'Todas las orientaciones',
+        detalle: 'Precipitaciones frecuentes en la región; carga alta de nieve nueva entre eventos.',
+      },
+    ],
+    timeline: ajustarTimeline(1, [2, 2, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2]),
+    pronostico15: ajustarPronostico(1, 1.6),
+    satelital: {
+      ndsi: 0.75,
+      coberturaPct: 73,
+      fechaPasada: '09 jun 2026 · 14:08 UTC',
+      tile: 'T19HUB',
+      tendencia: 'En aumento',
+    },
+    topografico: {
+      estadoManto: 'Profundo',
+      estable: false,
+      profundidadCm: 130,
+      capaDebil: 'Posible en interfaz nieve nueva/vieja',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.84,
+    },
+    comunidad: {
+      resumenNLP:
+        'Volcán glaciar frecuentado por montañistas y guías de alta montaña. Alta precipitación hace que el manto sea profundo pero inestable tras eventos.',
+      reportes: [
+        { autor: 'Guía Carlos Fuentes', hace: 'hace 10 h', texto: 'Subida al Mocho con esquíes; glaciar en muy buen estado. Cuidado con seracs en la ruta norte.' },
+        { autor: 'Club Andinismo Valdivia', hace: 'hace 2 d', texto: 'Condiciones técnicas exigentes. Nieve polvo excelente sobre los 2.100 m.' },
+      ],
+      totalReportes48h: 6,
     },
   },
 
@@ -883,6 +1149,57 @@ export const CENTROS = {
     },
   },
 
+  'ski-chaiten': {
+    id: 'ski-chaiten',
+    nombre: 'Ski Chaitén',
+    zona: 'Andes de Los Lagos',
+    elevacion: '600 – 1.500 m',
+    exposicion: 'N',
+    estadoActual: {
+      fechaBoletin: 'Miércoles 10 de junio de 2026 · 08:00',
+      nivelEAWS: 2,
+      descripcionIA:
+        'El centro más remoto de la Patagonia norte, a los pies del Volcán Michinmahuida. Nieve abundante por las precipitaciones patagónicas; acceso por vía marítima desde Puerto Montt. Terreno apropiado para usuarios con experiencia en nieve húmeda.',
+      vientoKmh: 50,
+      temperatura: 2,
+      validoHasta: 'Válido hasta el 11-06-2026 · 08:00',
+    },
+    problemas: [
+      {
+        id: 'wet-snow',
+        nombre: 'Nieve húmeda',
+        cotas: 'Bajo 1.000 m',
+        orientaciones: 'N – NE',
+        detalle: 'Altas temperaturas relativas generan nieve densa y húmeda en base; mayor estabilidad en altura.',
+      },
+    ],
+    timeline: ajustarTimeline(6, [1, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 2]),
+    pronostico15: ajustarPronostico(6, 1.4),
+    satelital: {
+      ndsi: 0.52,
+      coberturaPct: 58,
+      fechaPasada: '09 jun 2026 · 13:55 UTC',
+      tile: 'T18GYP',
+      tendencia: 'Estable',
+    },
+    topografico: {
+      estadoManto: 'Húmedo',
+      estable: true,
+      profundidadCm: 95,
+      capaDebil: 'No detectada',
+      ultimaCorrida: '10 jun 2026 · 06:00',
+      confianza: 0.79,
+    },
+    comunidad: {
+      resumenNLP:
+        'Club de Ski Chaitén, el más austral del continente en volcán activo. Alta precipitación garantiza nieve, pero las condiciones son cambiantes y el acceso remoto.',
+      reportes: [
+        { autor: 'Club Ski Chaitén', hace: 'hace 9 h', texto: 'Centro abierto con buena nieve desde los 800 m. Acceso por chalupa desde el muelle principal.' },
+      ],
+      totalReportes48h: 2,
+    },
+  },
+
   'el-fraile': {
     id: 'el-fraile',
     nombre: 'El Fraile',
@@ -994,16 +1311,22 @@ const ORDEN_GEOGRAFICO = [
   'portillo',
   'la-parva',
   'valle-nevado',
+  'el-colorado',
   'lagunillas',
+  'valle-de-las-arenas',
   'chapa-verde',
+  'planchon-peteroa',
   'laguna-del-maule',
   'nevados-de-chillan',
   'antuco',
   'corralco',
+  'los-arenales',
   'las-araucarias',
   'ski-pucon',
+  'mocho-choshuenco',
   'antillanca',
   'volcan-osorno',
+  'ski-chaiten',
   'el-fraile',
   'cerro-mirador',
 ]

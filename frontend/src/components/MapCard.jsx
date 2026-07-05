@@ -24,6 +24,12 @@ const COORDS = {
   'volcan-osorno': [-41.10, -72.50],
   'el-fraile': [-45.68, -71.94],
   'cerro-mirador': [-53.13, -70.98],
+  'valle-de-las-arenas': [-33.90, -70.05],
+  'planchon-peteroa': [-35.24, -70.57],
+  'los-arenales': [-38.85, -72.00],
+  'mocho-choshuenco': [-39.93, -72.03],
+  'ski-chaiten': [-42.83, -72.68],
+  'el-colorado': [-33.36, -70.29],
 }
 
 const CENTRO_DEFECTO = [-39.0, -71.2]

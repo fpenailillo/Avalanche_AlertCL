@@ -62,14 +62,36 @@ UBICACIONES_LAPARVA = [
 # Preset producción: todos los centros chilenos operacionales que alimentan
 # el frontend (boletin_activo.json). Usado por el job diario.
 UBICACIONES_PRODUCCION = [
+    # Región Metropolitana — Tres Valles
     "La Parva Sector Alto",
     "La Parva Sector Bajo",
     "La Parva Sector Medio",
     "Valle Nevado",
+    "El Colorado",
+    # Región de Valparaíso
     "Portillo",
     "Ski Arpa",
+    # Región Metropolitana — otros
     "Lagunillas",
+    "Valle de las Arenas",
+    # Región de O'Higgins
     "Chapa Verde",
+    "Planchón-Peteroa",
+    # Región del Maule
+    "Laguna del Maule",
+    # Sur de Chile (Biobío → Magallanes)
+    "Nevados de Chillán",
+    "Antuco",
+    "Corralco",
+    "Los Arenales",
+    "Las Araucarias",
+    "Ski Pucón",
+    "Mocho-Choshuenco",
+    "Antillanca",
+    "Volcán Osorno",
+    "Ski Chaitén",
+    "El Fraile",
+    "Cerro Mirador",
 ]
 
 
