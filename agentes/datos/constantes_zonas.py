@@ -14,7 +14,6 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "La Parva Sector Medio":(-33.352, -70.290),
     "La Parva Sector Alto": (-33.344, -70.280),
     "Valle Nevado":         (-33.357, -70.270),
-    "El Colorado":          (-33.360, -70.289),
     # Centros adicionales (coordenadas alineadas con datos/extractor)
     "Portillo":             (-32.837, -70.129),
     "Ski Arpa":             (-32.600, -70.390),
@@ -51,7 +50,6 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "La Parva":             [-70.45, -33.45, -70.15, -33.25],
     "La Parva Sector Bajo": [-70.40, -33.43, -70.25, -33.32],
     "Valle Nevado":         [-70.38, -33.40, -70.18, -33.25],
-    "El Colorado":          [-70.35, -33.43, -70.22, -33.30],
     "Portillo":             [-70.23, -32.94, -70.03, -32.74],
     "Ski Arpa":             [-70.49, -32.70, -70.29, -32.50],
     "Lagunillas":           [-70.39, -33.71, -70.19, -33.51],
@@ -102,14 +100,6 @@ POLIGONOS_ZONAS: dict[str, dict] = {
             [-70.38, -33.40], [-70.18, -33.40],
             [-70.18, -33.25], [-70.38, -33.25],
             [-70.38, -33.40],
-        ]],
-    },
-    "El Colorado": {
-        "type": "Polygon",
-        "coordinates": [[
-            [-70.35, -33.43], [-70.22, -33.43],
-            [-70.22, -33.30], [-70.35, -33.30],
-            [-70.35, -33.43],
         ]],
     },
     "Portillo": {
@@ -326,16 +316,6 @@ METADATA_ZONAS: dict[str, dict] = {
         "region": "andes_chile",
         "region_admin": "Metropolitana",
         "macizo_volcan": "Cerro El Plomo",
-        "tipo_operacion": "Centro Comercial",
-    },
-    "El Colorado": {
-        "elevacion_min_m": 2400,
-        "elevacion_max_m": 4100,
-        "exposicion_predominante": "O",
-        "region_eaws": "Andes Central Norte",
-        "region": "andes_chile",
-        "region_admin": "Metropolitana",
-        "macizo_volcan": "Cerro Colorado",
         "tipo_operacion": "Centro Comercial",
     },
     "Portillo": {

@@ -67,7 +67,6 @@ UBICACIONES_PRODUCCION = [
     "La Parva Sector Bajo",
     "La Parva Sector Medio",
     "Valle Nevado",
-    "El Colorado",
     # Región de Valparaíso
     "Portillo",
     "Ski Arpa",

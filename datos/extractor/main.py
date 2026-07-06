@@ -97,12 +97,6 @@ UBICACIONES_MONITOREO = [
         'descripcion': 'La Parva - Sector Alto / Cima, Chile - MCP Mountain, Zona cumbre experto (3574m)'
     },
     {
-        'nombre': 'El Colorado',
-        'latitud': -33.3600,
-        'longitud': -70.3000,
-        'descripcion': 'El Colorado / Farellones, Chile - MCP Mountain, Mayor pistas Tres Valles (base 2350m / cima 3460m)'
-    },
-    {
         'nombre': 'Valle Nevado',
         'latitud': -33.3547,
         'longitud': -70.2498,

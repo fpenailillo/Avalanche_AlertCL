@@ -79,7 +79,6 @@ export const CENTROS = {
   portillo:              mkCentro('portillo',             'Portillo',                    'Valle del Aconcagua',    '2.580 – 3.310 m', 'NE'),
   'la-parva':            mkCentro('la-parva',             'La Parva',                    'Andes Centrales',        '2.200 – 4.500 m', 'SE'),
   'valle-nevado':        mkCentro('valle-nevado',         'Valle Nevado',                'Andes Centrales',        '2.800 – 4.500 m', 'NO'),
-  'el-colorado':         mkCentro('el-colorado',          'El Colorado / Farellones',    'Andes Centrales',        '2.400 – 4.100 m', 'O'),
   lagunillas:            mkCentro('lagunillas',           'Lagunillas',                  'Cajón del Maipo',        '2.250 – 2.700 m', 'SO'),
   'valle-de-las-arenas': mkCentro('valle-de-las-arenas', 'Valle de las Arenas',          'Cajón del Maipo',        '2.200 – 3.200 m', 'SO'),
   'chapa-verde':         mkCentro('chapa-verde',          'Chapa Verde',                 "Andes de O'Higgins",     '2.700 – 3.100 m', 'SO'),
@@ -102,7 +101,7 @@ export const CENTROS = {
 
 // Orden geográfico norte → sur: desde Aconcagua hasta Magallanes
 const ORDEN_GEOGRAFICO = [
-  'ski-arpa', 'portillo', 'la-parva', 'valle-nevado', 'el-colorado', 'lagunillas',
+  'ski-arpa', 'portillo', 'la-parva', 'valle-nevado', 'lagunillas',
   'valle-de-las-arenas', 'chapa-verde', 'termas-del-flaco', 'planchon-peteroa', 'laguna-del-maule',
   'nevados-de-chillan', 'antuco', 'corralco', 'los-arenales', 'las-araucarias',
   'ski-pucon', 'mocho-choshuenco', 'antillanca', 'volcan-osorno', 'ski-chaiten',

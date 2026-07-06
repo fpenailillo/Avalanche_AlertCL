@@ -30,7 +30,6 @@ const COORDS = {
   'los-arenales': [-38.85, -72.00],
   'mocho-choshuenco': [-39.93, -72.03],
   'ski-chaiten': [-42.83, -72.68],
-  'el-colorado': [-33.36, -70.29],
 }
 
 const CENTRO_DEFECTO = [-39.0, -71.2]
