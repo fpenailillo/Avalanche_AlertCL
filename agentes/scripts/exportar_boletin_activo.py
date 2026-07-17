@@ -28,6 +28,7 @@ from agentes.salidas.almacenador import (
     DATASET,
     TABLA_BOLETINES,
     _consolidar_registros,
+    _derivar_tendencia,
     _nivel_valido,
     _parsear_boletin_texto,
     subir_boletin_activo,
@@ -75,10 +76,12 @@ def _registro_desde_fila_bq(fila) -> dict | None:
         return None
 
     parseado = _parsear_boletin_texto(fila.boletin_texto or "")
+    nivel_48h = _nivel_valido(fila.nivel_eaws_48h)
+    parseado["tendencia"] = _derivar_tendencia(nivel, nivel_48h, parseado.get("tendencia"))
     return {
         "ubicacion": fila.nombre_ubicacion,
         "nivel_eaws": nivel,
-        "nivel_eaws_48h": _nivel_valido(fila.nivel_eaws_48h),
+        "nivel_eaws_48h": nivel_48h,
         "nivel_eaws_72h": _nivel_valido(fila.nivel_eaws_72h),
         "confianza": fila.confianza,
         "viento_kmh": fila.viento_kmh,

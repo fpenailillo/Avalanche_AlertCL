@@ -581,9 +581,9 @@ def _parsear_boletin_texto(texto: str) -> dict:
                 campos["descripcion"] = _primeras_frases(linea, 2)
                 break
 
-    m = re.search(r"Tendencia de riesgo:\s*(\S+)", texto)
+    m = re.search(r"Tendencia de riesgo:\s*([^\n.]+)", texto)
     if m:
-        campos["tendencia"] = m.group(1).strip().rstrip(".")
+        campos["tendencia"] = m.group(1).strip()
 
     m = re.search(r"Temperatura:\s*(-?[\d.]+)°C", texto)
     if m:
@@ -623,6 +623,24 @@ def _parsear_boletin_texto(texto: str) -> dict:
     return campos
 
 
+def _derivar_tendencia(
+    nivel_24h: Optional[int],
+    nivel_48h: Optional[int],
+    fallback: Optional[str] = None,
+) -> Optional[str]:
+    """
+    Deriva la tendencia comparando niveles EAWS 48h vs 24h. Solo usa el texto
+    parseado como fallback cuando falta alguno de los niveles.
+    """
+    if nivel_24h and nivel_48h:
+        if nivel_48h > nivel_24h:
+            return "en aumento"
+        if nivel_48h < nivel_24h:
+            return "en descenso"
+        return "estable"
+    return fallback
+
+
 def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
     """Convierte un resultado del orquestador en el registro del boletín activo."""
     if resultado.get("error"):
@@ -638,13 +656,18 @@ def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
     res_boletin_tool = _extraer_resultado_tool(tools_llamadas, "redactar_boletin_eaws")
     parseado = _parsear_boletin_texto(boletin_texto)
 
+    nivel_48h = _nivel_valido(
+        res_boletin_tool.get("nivel_eaws_48h")
+        or _extraer_nivel(boletin_texto, r'48h\s*[→\-]\s*(\d)')
+    )
+    parseado["tendencia"] = _derivar_tendencia(
+        nivel_24h, nivel_48h, parseado.get("tendencia")
+    )
+
     return {
         "ubicacion": resultado.get("ubicacion", ""),
         "nivel_eaws": nivel_24h,
-        "nivel_eaws_48h": _nivel_valido(
-            res_boletin_tool.get("nivel_eaws_48h")
-            or _extraer_nivel(boletin_texto, r'48h\s*[→\-]\s*(\d)')
-        ),
+        "nivel_eaws_48h": nivel_48h,
         "nivel_eaws_72h": _nivel_valido(
             res_boletin_tool.get("nivel_eaws_72h")
             or _extraer_nivel(boletin_texto, r'72h\s*[→\-]\s*(\d)')
@@ -673,9 +696,14 @@ def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
 
 def _consolidar_registros(registros: list) -> list:
     """
-    Consolida sectores por zona base quedándose con el registro del PEOR
-    sector (máximo nivel — criterio conservador) y elevando también los
-    niveles 48/72h al máximo entre sectores. Solo zonas chilenas.
+    Consolida sectores por zona base quedándose con el registro ÍNTEGRO del
+    PEOR sector (máximo nivel 24h — criterio conservador). Solo zonas chilenas.
+
+    El trío 24/48/72h viene completo del sector dominante: mezclar el 48/72h
+    máximo de otro sector con el 24h del dominante producía tendencias
+    imposibles ("en aumento" con el sector dominante estable) y rompía la
+    garantía de deltas ±1/día de la proyección. Trade-off aceptado: un sector
+    no dominante con 48h alto ya no eleva el 48h publicado.
     """
     from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 
@@ -685,20 +713,13 @@ def _consolidar_registros(registros: list) -> list:
             continue
         zona = _zona_base(registro["ubicacion"])
         if zona not in ZONAS_ANDES_CHILE:
+            logger.info(f"Consolidación: '{registro['ubicacion']}' descartada "
+                        f"(zona '{zona}' fuera de ZONAS_ANDES_CHILE)")
             continue
 
         previo = por_zona.get(zona)
         if previo is None or registro["nivel_eaws"] > previo["nivel_eaws"]:
-            dominante = dict(registro)
-            if previo:
-                for clave in ("nivel_eaws_48h", "nivel_eaws_72h"):
-                    valores = [v for v in (dominante.get(clave), previo.get(clave)) if v]
-                    dominante[clave] = max(valores) if valores else None
-            por_zona[zona] = dominante
-        else:
-            for clave in ("nivel_eaws_48h", "nivel_eaws_72h"):
-                valores = [v for v in (previo.get(clave), registro.get(clave)) if v]
-                previo[clave] = max(valores) if valores else None
+            por_zona[zona] = dict(registro)
 
     boletines = []
     for zona, registro in sorted(por_zona.items()):
