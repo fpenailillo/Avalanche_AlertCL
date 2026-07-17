@@ -298,7 +298,8 @@ def _seccion_factores_riesgo(
     # Datos cuantitativos de precipitación/nieve
     datos_clima = []
     if precipitacion_reciente_mm is not None:
-        datos_clima.append(f"Precipitación últimas 24h: {precipitacion_reciente_mm:.1f} mm")
+        # "reciente" sin ventana explícita: el LLM a veces pasa el acumulado 72h
+        datos_clima.append(f"Precipitación reciente: {precipitacion_reciente_mm:.1f} mm")
     if nieve_reciente_cm is not None and nieve_reciente_cm > 0:
         datos_clima.append(f"Nieve nueva estimada últimas 24h: {nieve_reciente_cm:.0f} cm")
     if datos_clima:
@@ -335,7 +336,7 @@ def _seccion_datos_meteorologicos(
     if viento_actual_kmh is not None:
         actuales.append(f"Viento: {viento_actual_kmh:.0f} km/h")
     if precipitacion_reciente_mm is not None:
-        actuales.append(f"Precipitación 24h: {precipitacion_reciente_mm:.1f} mm")
+        actuales.append(f"Precipitación reciente: {precipitacion_reciente_mm:.1f} mm")
 
     if actuales:
         partes.append("Condiciones actuales:\n  " + " | ".join(actuales))

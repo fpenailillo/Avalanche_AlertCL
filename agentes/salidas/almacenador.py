@@ -589,12 +589,14 @@ def _parsear_boletin_texto(texto: str) -> dict:
     if m:
         campos["temperatura_c"] = float(m.group(1))
 
-    m = re.search(r"Precipitación 24h:\s*([\d.]+)\s*mm", texto)
+    m = re.search(r"Precipitación (?:24h|reciente):\s*([\d.]+)\s*mm", texto)
     if m:
         campos["precip_24h_mm"] = float(m.group(1))
 
-    for fecha, tmax, tmin, precip, viento, cielo in re.findall(
+    # El campo "Nieve ~X cm" es opcional: aparece cuando WN2 aporta nieve nueva
+    for fecha, tmax, tmin, precip, nieve, viento, cielo in re.findall(
         r"(\d{4}-\d{2}-\d{2})\s*\|\s*T\s*(-?\d+)°C/(-?\d+)°C\s*\|\s*Precip\s*([\d.]+)\s*mm"
+        r"(?:\s*\|\s*Nieve\s*~?([\d.]+)\s*cm)?"
         r"\s*\|\s*Viento\s*([\d.]+)\s*km/h\s*\|\s*(.+)",
         texto,
     ):
@@ -603,6 +605,7 @@ def _parsear_boletin_texto(texto: str) -> dict:
             "tmax": int(tmax),
             "tmin": int(tmin),
             "precip_mm": float(precip),
+            "nieve_cm": float(nieve) if nieve else None,
             "viento_kmh": float(viento),
             "cielo": cielo.strip(),
         })

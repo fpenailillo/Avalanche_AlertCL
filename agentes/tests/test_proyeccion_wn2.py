@@ -16,7 +16,11 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
     _delta_dia_wn2,
     _proyectar_niveles_wn2,
 )
-from agentes.salidas.almacenador import _consolidar_registros, _derivar_tendencia
+from agentes.salidas.almacenador import (
+    _consolidar_registros,
+    _derivar_tendencia,
+    _parsear_boletin_texto,
+)
 
 
 def _features(**kwargs) -> dict:
@@ -182,3 +186,30 @@ class TestConsolidarRegistros:
     def test_registros_none_ignorados(self):
         boletines = _consolidar_registros([None, _registro("Portillo", 2, 2, 1)])
         assert len(boletines) == 1
+
+
+# ── _parsear_boletin_texto (pronóstico 3d + precipitación) ────────────────────
+
+_TEXTO_PRONOSTICO = """DATOS METEOROLÓGICOS
+------------------------------
+Condiciones actuales:
+  Temperatura: -2.3°C | Viento: 5 km/h | Precipitación reciente: 109.6 mm
+Pronóstico 3 días:
+  2026-07-17 | T -1°C/-4°C | Precip 83 mm | Nieve ~131 cm | Viento 6 km/h | HEAVY_SNOW_STORM
+  2026-07-18 | T -2°C/-5°C | Precip 60 mm | Viento 8 km/h | HEAVY_SNOW_STORM
+"""
+
+
+class TestParsearBoletinTexto:
+    def test_pronostico_3d_con_campo_nieve_opcional(self):
+        campos = _parsear_boletin_texto(_TEXTO_PRONOSTICO)
+        assert len(campos["pronostico_3d"]) == 2
+        d1, d2 = campos["pronostico_3d"]
+        assert d1["precip_mm"] == 83.0 and d1["nieve_cm"] == 131.0
+        assert d1["cielo"] == "HEAVY_SNOW_STORM"
+        assert d2["nieve_cm"] is None and d2["viento_kmh"] == 8.0
+
+    def test_precipitacion_acepta_ambas_etiquetas(self):
+        assert _parsear_boletin_texto(_TEXTO_PRONOSTICO)["precip_24h_mm"] == 109.6
+        viejo = _TEXTO_PRONOSTICO.replace("Precipitación reciente:", "Precipitación 24h:")
+        assert _parsear_boletin_texto(viejo)["precip_24h_mm"] == 109.6
