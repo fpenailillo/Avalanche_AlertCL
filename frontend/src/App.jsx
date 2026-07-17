@@ -47,7 +47,7 @@ function BrandHeader() {
         Riesgos de Avalanchas - Chile
       </h1>
       <p className="max-w-xl text-balance text-xs text-white/60 sm:text-sm">
-        Boletines basados en la metodología de EAWS por zonas, generados por
+        Boletines zonales basados en la metodología de EAWS, generados por
         agentes de IA especializados en datos satelitales, topográficos,
         climatológicos y conocimiento humano.
       </p>
