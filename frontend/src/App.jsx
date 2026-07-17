@@ -44,7 +44,7 @@ function BrandHeader() {
         </span>
       </div>
       <h1 className="text-balance text-2xl font-bold uppercase leading-snug tracking-tight sm:text-3xl">
-        Boletín Riesgos de Avalanchas - Chile
+        Riesgos de Avalanchas - Chile
       </h1>
       <p className="max-w-xl text-balance text-xs text-white/60 sm:text-sm">
         Boletines basados en la metodología de EAWS por zonas, generados por

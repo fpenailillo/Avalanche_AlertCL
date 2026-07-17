@@ -456,8 +456,7 @@ def _seccion_recomendaciones(nivel: int) -> str:
         partes.extend([
             "🔴 PELIGRO MUY ALTO — Abstenerse de actividades en montaña",
             "• No salir a zonas de avalancha bajo ninguna circunstancia",
-            "• Las avalanchas se producen de forma espontánea y masiva",
-            "• Solo personal de rescate autorizado puede operar en el terreno"
+            "• Las avalanchas se producen de forma espontánea y masiva"
         ])
     elif nivel == 4:
         partes.extend([
