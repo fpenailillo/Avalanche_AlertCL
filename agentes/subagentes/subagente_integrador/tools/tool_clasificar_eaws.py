@@ -351,10 +351,13 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             f"[ClasificarEAWS] EAWS Paso 1 (v7.5): datos_meteo=True, "
             f"factor={factor_meteorologico}, ventanas=0 → nivel 1 directo"
         )
+        # FIX-WN2-PROYECCION-3D: hoy sin problema ≠ mañana sin problema.
+        # Si WN2 pronostica carga nueva en D+1/D+2, proyectar 48/72h desde 1.
+        _paso1_48h, _paso1_72h = _proyectar_niveles_wn2(1, nombre_ubicacion) or (1, 1)
         return {
             "nivel_eaws_24h": 1,
-            "nivel_eaws_48h": 1,
-            "nivel_eaws_72h": 1,
+            "nivel_eaws_48h": _paso1_48h,
+            "nivel_eaws_72h": _paso1_72h,
             "nombre_nivel_24h": "Débil",
             "factores_eaws": {
                 "estabilidad": "good",
@@ -567,8 +570,14 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, {})
 
     # ─── 5. Proyección 48h y 72h ─────────────────────────────────────────────
-    nivel_48h = _proyectar_nivel(nivel_24h, factor_meteorologico, horas=48, tendencia_pronostico=tendencia_pronostico)
-    nivel_72h = _proyectar_nivel(nivel_24h, factor_meteorologico, horas=72, tendencia_pronostico=tendencia_pronostico)
+    # FIX-WN2-PROYECCION-3D: preferir el pronóstico WN2 de D+1/D+2; la regla
+    # determinista sobre nivel_24h queda como fallback (Alpes, WN2 apagado).
+    _proyeccion_wn2 = _proyectar_niveles_wn2(nivel_24h, nombre_ubicacion)
+    if _proyeccion_wn2:
+        nivel_48h, nivel_72h = _proyeccion_wn2
+    else:
+        nivel_48h = _proyectar_nivel(nivel_24h, factor_meteorologico, horas=48, tendencia_pronostico=tendencia_pronostico)
+        nivel_72h = _proyectar_nivel(nivel_24h, factor_meteorologico, horas=72, tendencia_pronostico=tendencia_pronostico)
 
     # ─── 6. Recomendaciones EAWS ─────────────────────────────────────────────
     recomendaciones = []
@@ -587,13 +596,17 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     # Aplica α+β·nivel por región solo si los gates estadísticos se aprobaron
     # en el entrenamiento offline (coeficientes_calibracion.json).
     # Si el JSON no existe o la región no fue aprobada, retorna identidad.
+    # FIX-CALIB-COHERENTE: calibrar SOLO el nivel primario (24h, donde la
+    # calibración v21 fue validada) y trasladar 48/72h como deltas sobre el
+    # calibrado. Calibrar cada día por separado rompía la monotonía de la
+    # proyección (deltas ±1/día de FIX-WN2-PROYECCION-3D).
     _region_cal = _obtener_region(nombre_ubicacion) if nombre_ubicacion else "andes_chile"
     nivel_24h_raw = nivel_24h
     nivel_48h_raw = nivel_48h
     nivel_72h_raw = nivel_72h
     nivel_24h = _calibrar_nivel(nivel_24h, _region_cal)
-    nivel_48h = _calibrar_nivel(nivel_48h, _region_cal)
-    nivel_72h = _calibrar_nivel(nivel_72h, _region_cal)
+    nivel_48h = max(1, min(5, nivel_24h + (nivel_48h_raw - nivel_24h_raw)))
+    nivel_72h = max(1, min(5, nivel_24h + (nivel_72h_raw - nivel_24h_raw)))
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
 
     # FIX-POST-STORM-PERSIST (v25.16 → v25.17): piso mínimo post-tormenta en Andes Chile.
@@ -1055,3 +1068,55 @@ def _proyectar_nivel(
             # Sin tendencia clara: reducción conservadora solo desde nivel ≥3
             return nivel_24h - 1
         return nivel_24h
+
+
+def _delta_dia_wn2(f: dict) -> int:
+    """
+    Delta diario de nivel EAWS, acotado [-1, +1], desde las features WN2 de
+    UN día futuro (obtener_features_wn2). Umbrales en cm de nieve nueva p50.
+    """
+    if f["heavy_snow"] or f["storm_slab"] or f["nieve_24h_p50"] >= 20.0:
+        return 1    # carga nueva significativa
+    if f["wind_strong"] and f["nieve_24h_p50"] >= 10.0:
+        return 1    # placa de viento con nieve disponible para transporte
+    if f["wet_snow"] or f["wind_strong"] or f["nieve_24h_p50"] >= 5.0:
+        return 0    # actividad persiste (fusión / viento / nevada menor)
+    return -1       # día tranquilo → decaimiento natural
+
+
+def _proyectar_niveles_wn2(nivel_24h: int, nombre_ubicacion: str) -> "tuple[int, int] | None":
+    """
+    FIX-WN2-PROYECCION-3D: proyecta (nivel_48h, nivel_72h) desde el pronóstico
+    WeatherNext2 de D+1 y D+2, en lugar de la regla determinista sobre el
+    nivel de 24h. Retorna None (→ fallback a _proyectar_nivel) si WN2 está
+    desactivado, la zona no tiene coords o el pronóstico no está disponible.
+    """
+    if os.environ.get("USE_WEATHERNEXT2", "false").lower() != "true" or not nombre_ubicacion:
+        return None
+    try:
+        from datetime import datetime as _dt, timedelta, timezone as _tz
+        from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+        from agentes.datos.wn2_features import obtener_features_wn2
+
+        _fref = obtener_fecha_referencia_global() or _dt.now(_tz.utc)
+        f_d1 = obtener_features_wn2(nombre_ubicacion, (_fref + timedelta(days=1)).strftime("%Y-%m-%d"))
+        f_d2 = obtener_features_wn2(nombre_ubicacion, (_fref + timedelta(days=2)).strftime("%Y-%m-%d"))
+        if not (f_d1["disponible"] and f_d2["disponible"]):
+            return None
+
+        nivel_48h = max(1, min(5, nivel_24h + _delta_dia_wn2(f_d1)))
+        nivel_72h = max(1, min(5, nivel_48h + _delta_dia_wn2(f_d2)))
+        # Descenso máx. 1 escalón/día (coherente con FIX-POST-STORM-PERSIST)
+        nivel_72h = max(nivel_72h, nivel_48h - 1)
+        logger.info(
+            f"[ClasificarEAWS] FIX-WN2-PROYECCION-3D: {nombre_ubicacion} "
+            f"24h={nivel_24h} → 48h={nivel_48h} (D+1 p50={f_d1['nieve_24h_p50']:.0f}cm "
+            f"heavy={f_d1['heavy_snow']}) → 72h={nivel_72h} "
+            f"(D+2 p50={f_d2['nieve_24h_p50']:.0f}cm heavy={f_d2['heavy_snow']})"
+        )
+        return nivel_48h, nivel_72h
+    except Exception as _exc:
+        logger.warning(
+            f"[ClasificarEAWS] FIX-WN2-PROYECCION-3D falló — fallback determinista: {_exc}"
+        )
+        return None
