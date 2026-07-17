@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Mountain, TriangleAlert } from 'lucide-react'
+import { Mountain, TriangleAlert, BookOpen, MapPin, ChevronDown } from 'lucide-react'
 import HeroSection from './components/HeroSection'
+import RiskDaysSummary from './components/RiskDaysSummary'
 import TimelineCarousel from './components/TimelineCarousel'
 import ForecastCard from './components/ForecastCard'
 import ProblemsCard from './components/ProblemsCard'
@@ -42,43 +43,70 @@ function BrandHeader() {
           Beta
         </span>
       </div>
-      <h1 className="text-balance text-2xl font-bold leading-snug tracking-tight sm:text-3xl">
-        Riesgo de Avalanchas Chile
+      <h1 className="text-balance text-2xl font-bold uppercase leading-snug tracking-tight sm:text-3xl">
+        Boletín Riesgos de Avalanchas - Chile
       </h1>
       <p className="max-w-xl text-balance text-xs text-white/60 sm:text-sm">
-        Boletines EAWS por zona, generados por agentes de IA especializados
+        Boletines basados en la metodología de EAWS por zonas, generados por
+        agentes de IA especializados en datos satelitales, topográficos,
+        climatológicos y conocimiento experto.
       </p>
+      <a
+        href="https://www.avalanches.org/wp-content/uploads/2022/09/Escala_europea_peligro_aludes_EAWS.pdf"
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-flex items-center gap-1 text-[11px] text-white/60 underline underline-offset-2 transition-colors hover:text-white/90"
+      >
+        <BookOpen className="h-3 w-3" />
+        Metodología · Escala europea de peligro de aludes (EAWS)
+      </a>
     </div>
   )
 }
 
 function SelectorCentros({ centros, seleccionadoId, onSelect }) {
+  const seleccionado = centros.find((c) => c.id === seleccionadoId) ?? centros[0]
+  const nivelSel = ESCALA_EAWS[seleccionado.estadoActual.nivelEAWS]
+
+  // Agrupa los centros por zona preservando el orden geográfico norte → sur
+  const grupos = []
+  const indice = new Map()
+  for (const c of centros) {
+    if (!indice.has(c.zona)) {
+      indice.set(c.zona, grupos.length)
+      grupos.push({ zona: c.zona, centros: [] })
+    }
+    grupos[indice.get(c.zona)].centros.push(c)
+  }
+
   return (
-    <nav className="sticky top-3 z-10 mx-auto mt-4 flex w-fit max-w-full gap-1 overflow-x-auto rounded-full border border-white/15 bg-white/10 p-1 shadow-lg shadow-black/10 backdrop-blur-xl">
-      {centros.map((centro) => {
-        const activo = centro.id === seleccionadoId
-        const nivel = ESCALA_EAWS[centro.estadoActual.nivelEAWS]
-        return (
-          <button
-            key={centro.id}
-            type="button"
-            onClick={() => onSelect(centro.id)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-              activo
-                ? 'bg-white/90 text-slate-900'
-                : 'text-white/75 hover:bg-white/10 hover:text-white'
-            }`}
-          >
-            {centro.nombre}
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: nivel.color }}
-              title={`EAWS ${centro.estadoActual.nivelEAWS} — ${nivel.nombre}`}
-            />
-          </button>
-        )
-      })}
-    </nav>
+    <div className="sticky top-3 z-10 mx-auto mt-4 flex w-fit max-w-full justify-center">
+      <label className="relative flex cursor-pointer items-center gap-2 rounded-full border border-white/15 bg-white/10 py-2 pl-4 pr-3 text-sm text-white shadow-lg shadow-black/10 backdrop-blur-xl transition-colors hover:bg-white/15">
+        <MapPin className="h-4 w-4 shrink-0 text-white/70" />
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: nivelSel.color }}
+          title={`EAWS ${seleccionado.estadoActual.nivelEAWS} — ${nivelSel.nombre}`}
+        />
+        <select
+          value={seleccionadoId}
+          onChange={(e) => onSelect(e.target.value)}
+          className="cursor-pointer appearance-none bg-transparent pr-5 font-medium outline-none [&>optgroup]:text-slate-900 [&>optgroup>option]:text-slate-900"
+          aria-label="Seleccionar centro de montaña"
+        >
+          {grupos.map((g) => (
+            <optgroup key={g.zona} label={g.zona}>
+              {g.centros.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-white/70" />
+      </label>
+    </div>
   )
 }
 
@@ -123,6 +151,7 @@ function EstadoBoletin({ boletin, fechaSeleccionada }) {
 function App() {
   const [centroId, setCentroId] = useState('la-parva')
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null)
+  const [verProyeccion, setVerProyeccion] = useState(false)
   const fechasDisponibles = useIndiceFechas()
   const boletin = useBoletinActivo(fechaSeleccionada)
   const { series: seriesWN2, esDeFecha: seriesDeFecha } = useSeriesWN2(fechaSeleccionada)
@@ -159,11 +188,20 @@ function App() {
           onSeleccionarFecha={setFechaSeleccionada}
         />
 
-        <TimelineCarousel
-          timeline={centro.timeline}
-          esHistorico={!!fechaSeleccionada}
-          fechaBase={fechaSeleccionada}
+        <RiskDaysSummary
+          estadoActual={centro.estadoActual}
+          pronostico={centro.pronostico15}
+          abierto={verProyeccion}
+          onToggle={() => setVerProyeccion((v) => !v)}
         />
+
+        {verProyeccion && (
+          <TimelineCarousel
+            timeline={centro.timeline}
+            esHistorico={!!fechaSeleccionada}
+            fechaBase={fechaSeleccionada}
+          />
+        )}
 
         {/* Grid bento asimétrico */}
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

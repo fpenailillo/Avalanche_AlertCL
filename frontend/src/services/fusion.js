@@ -95,6 +95,10 @@ function fusionarEstadoActual(estadoMock, detalle, dias) {
   return {
     ...estadoMock,
     nivelEAWS: detalle.nivel ?? estadoMock.nivelEAWS ?? 1,
+    // Niveles proyectados a 48/72 h para el resumen de riesgo por día
+    // (el timeline ya los usa vía fusionarTimeline).
+    nivel48h: detalle.nivel48h ?? null,
+    nivel72h: detalle.nivel72h ?? null,
     // Mensaje principal claro (sin jerga); el análisis técnico de la IA
     // queda disponible aparte como descripcionTecnica.
     descripcionIA: descripcionClara(detalle, dias),
