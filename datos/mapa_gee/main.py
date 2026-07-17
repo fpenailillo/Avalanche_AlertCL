@@ -31,7 +31,6 @@ CENTROS_PUNTOS = [
     [-70.129,  -32.837],  # Portillo
     [-70.28,   -33.34],   # La Parva
     [-70.25,   -33.35],   # Valle Nevado
-    [-70.29,   -33.36],   # El Colorado
     [-70.25,   -33.68],   # Lagunillas
     [-70.05,   -33.90],   # Valle de las Arenas
     [-70.37,   -34.17],   # Chapa Verde
@@ -53,7 +52,7 @@ CENTROS_PUNTOS = [
 ]
 
 BUFFER_M     = 30_000  # 30 km alrededor de cada centro
-DIAS_VENTANA = 90      # ventana más amplia para cubrir sur de Chile
+DIAS_VENTANA = 30      # prioriza frescura; los huecos los rellenan imágenes previas
 MAX_NUBOSIDAD = 70     # más permisivo: sur de Chile tiene alta nubosidad
 
 # Bounds estáticos derivados de las coordenadas de los centros + buffer ~0.3°
@@ -111,7 +110,23 @@ def _construir_capas():
         "hasta": ee.Date(coleccion.aggregate_max("system:time_start")).format("YYYY-MM-dd"),
         "hasta_hora": ee.Date(coleccion.aggregate_max("system:time_start")).format("HH:mm"),
     }).getInfo()
-    imagen = coleccion.median().clip(roi)
+
+    # Mosaico "más reciente encima": se enmascaran nubes/cirros (QA60) por
+    # imagen y mosaic() superpone en orden de colección (ascendente por fecha),
+    # de modo que el píxel visible es el más nuevo sin nubes y los huecos los
+    # rellenan imágenes anteriores. La mediana de 90 días difuminaba la nieve
+    # fresca y mostraba condiciones de hasta 3 meses atrás.
+    def _sin_nubes(img):
+        qa = img.select("QA60")
+        libre = qa.bitwiseAnd(1 << 10).eq(0).And(qa.bitwiseAnd(1 << 11).eq(0))
+        return img.updateMask(libre)
+
+    imagen = (
+        coleccion.map(_sin_nubes)
+        .sort("system:time_start")
+        .mosaic()
+        .clip(roi)
+    )
 
     # NDSI y máscara de nieve
     ndsi = imagen.normalizedDifference(["B3", "B11"]).rename("NDSI")
