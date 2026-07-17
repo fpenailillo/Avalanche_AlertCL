@@ -63,7 +63,7 @@ export default function RiskDaysSummary({ estadoActual, pronostico = [], abierto
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                <EawsDangerIcon nivel={dia.nivel} className="h-10 w-10 drop-shadow" />
+                <EawsDangerIcon nivel={dia.nivel} className="h-14 w-14 drop-shadow sm:h-16 sm:w-16" />
                 <span
                   className="text-xs font-bold leading-tight"
                   style={{ color: dia.escala.color }}
