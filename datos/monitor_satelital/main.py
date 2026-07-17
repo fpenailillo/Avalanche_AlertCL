@@ -113,7 +113,7 @@ UBICACIONES_MONITOREO = [
         {'nombre': 'Antuco', 'latitud': -37.4100, 'longitud': -71.4200, 'descripcion': 'Ski Antuco, Los Ángeles, Chile'},
         {'nombre': 'Corralco', 'latitud': -38.3700, 'longitud': -71.5700, 'descripcion': 'Corralco, Volcán Lonquimay, Chile'},
         {'nombre': 'Las Araucarias', 'latitud': -38.7300, 'longitud': -71.7400, 'descripcion': 'Las Araucarias / Llaima, Chile'},
-        {'nombre': 'Los Arenales', 'latitud': -38.8500, 'longitud': -72.0000, 'descripcion': 'Los Arenales, Andes de La Araucanía, Chile'},
+        {'nombre': 'Los Arenales', 'latitud': -38.4100, 'longitud': -71.5800, 'descripcion': 'Los Arenales, ladera sur Volcán Lonquimay, Chile'},
         {'nombre': 'Ski Pucón', 'latitud': -39.5000, 'longitud': -71.9600, 'descripcion': 'Ski Pucón / Pillán, Chile'},
         {'nombre': 'Mocho-Choshuenco', 'latitud': -39.9300, 'longitud': -72.0300, 'descripcion': 'Mocho-Choshuenco, Los Ríos, Chile'},
         {'nombre': 'Antillanca', 'latitud': -40.7756, 'longitud': -72.2046, 'descripcion': 'Antillanca, Volcán Casablanca, Chile'},

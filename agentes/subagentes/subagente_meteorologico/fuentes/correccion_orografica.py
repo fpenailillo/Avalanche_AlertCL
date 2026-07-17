@@ -48,7 +48,6 @@ ALTITUD_REFERENCIA_ZONAS_M: dict[str, int] = {
     "La Parva Sector Medio": 3000,
     "La Parva Sector Alto":  3600,
     "Valle Nevado":          3200,  # 2800–4500 → mid 3200m
-    "El Colorado":           3200,
     # ── Alpes Suizos ─────────────────────────────────────────────────────────
     "Interlaken":            1200,
     "Matterhorn Zermatt":    2600,

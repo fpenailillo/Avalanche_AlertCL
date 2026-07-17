@@ -34,7 +34,9 @@ COORDENADAS_ZONAS: dict[str, tuple[float, float]] = {
     "Valle de las Arenas":  (-33.900, -70.050),
     "Termas del Flaco":     (-34.953, -70.437),
     "Planchón-Peteroa":     (-35.240, -70.570),
-    "Los Arenales":         (-38.850, -72.000),
+    # Ladera sur del Volcán Lonquimay (solapa con Corralco: mismo volcán,
+    # laderas opuestas — Corralco NE, Los Arenales S)
+    "Los Arenales":         (-38.410, -71.580),
     "Mocho-Choshuenco":     (-39.930, -72.030),
     "Ski Chaitén":          (-42.830, -72.680),
     # Alpes suizos (validación H1/H3 SLF)
@@ -69,7 +71,7 @@ BBOX_ZONAS: dict[str, list[float]] = {
     "Valle de las Arenas":  [-70.25, -34.10, -69.85, -33.70],
     "Termas del Flaco":     [-70.64, -35.15, -70.24, -34.75],
     "Planchón-Peteroa":     [-70.77, -35.44, -70.37, -35.04],
-    "Los Arenales":         [-72.20, -39.05, -71.80, -38.65],
+    "Los Arenales":         [-71.78, -38.61, -71.38, -38.21],
     "Mocho-Choshuenco":     [-72.23, -40.13, -71.83, -39.73],
     "Ski Chaitén":          [-72.88, -43.03, -72.48, -42.63],
 }
@@ -242,9 +244,9 @@ POLIGONOS_ZONAS: dict[str, dict] = {
     "Los Arenales": {
         "type": "Polygon",
         "coordinates": [[
-            [-72.20, -39.05], [-71.80, -39.05],
-            [-71.80, -38.65], [-72.20, -38.65],
-            [-72.20, -39.05],
+            [-71.78, -38.61], [-71.38, -38.61],
+            [-71.38, -38.21], [-71.78, -38.21],
+            [-71.78, -38.61],
         ]],
     },
     "Mocho-Choshuenco": {

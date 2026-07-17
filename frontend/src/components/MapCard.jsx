@@ -27,7 +27,7 @@ const COORDS = {
   'valle-de-las-arenas': [-33.90, -70.05],
   'termas-del-flaco': [-34.953, -70.437],
   'planchon-peteroa': [-35.24, -70.57],
-  'los-arenales': [-38.85, -72.00],
+  'los-arenales': [-38.41, -71.58],
   'mocho-choshuenco': [-39.93, -72.03],
   'ski-chaiten': [-42.83, -72.68],
 }

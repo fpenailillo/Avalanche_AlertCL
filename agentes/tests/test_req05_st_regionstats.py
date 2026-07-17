@@ -21,18 +21,19 @@ class TestConstantesZonas:
         from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, BBOX_ZONAS
         assert "La Parva" in COORDENADAS_ZONAS
         assert "Valle Nevado" in COORDENADAS_ZONAS
-        assert "El Colorado" in COORDENADAS_ZONAS
+        assert "El Colorado" not in COORDENADAS_ZONAS  # retirado del reporte (cac60fe)
         assert "La Parva" in BBOX_ZONAS
         assert "Valle Nevado" in BBOX_ZONAS
 
-    def test_coordenadas_en_andes_central(self):
+    def test_coordenadas_en_andes_chile(self):
+        # La lista canónica cubre de Portillo (-32.8) a Cerro Mirador (-53.1)
         from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, ZONAS_ANDES_CHILE
         for zona in ZONAS_ANDES_CHILE:
             if zona not in COORDENADAS_ZONAS:
                 continue
             lat, lon = COORDENADAS_ZONAS[zona]
-            assert -34.0 <= lat <= -33.0, f"{zona}: lat fuera de rango Andes central"
-            assert -71.0 <= lon <= -70.0, f"{zona}: lon fuera de rango Andes central"
+            assert -54.0 <= lat <= -32.0, f"{zona}: lat fuera de rango Andes de Chile"
+            assert -73.5 <= lon <= -69.5, f"{zona}: lon fuera de rango Andes de Chile"
 
     def test_bbox_coherente(self):
         from agentes.datos.constantes_zonas import BBOX_ZONAS

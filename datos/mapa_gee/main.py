@@ -42,7 +42,7 @@ CENTROS_PUNTOS = [
     [-71.42,   -37.41],   # Antuco
     [-71.57,   -38.37],   # Corralco
     [-71.74,   -38.73],   # Las Araucarias
-    [-72.00,   -38.85],   # Los Arenales
+    [-71.58,   -38.41],   # Los Arenales (ladera sur Lonquimay)
     [-71.96,   -39.50],   # Ski Pucón
     [-72.03,   -39.93],   # Mocho-Choshuenco
     [-72.2046, -40.7756], # Antillanca

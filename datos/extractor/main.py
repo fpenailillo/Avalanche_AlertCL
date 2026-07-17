@@ -179,9 +179,9 @@ UBICACIONES_MONITOREO = [
     },
     {
         'nombre': 'Los Arenales',
-        'latitud': -38.8500,
-        'longitud': -72.0000,
-        'descripcion': 'Los Arenales, Temuco, Chile - Centro de Entrenamiento y Esquí Familiar (base 1600m / cima 1845m)'
+        'latitud': -38.4100,
+        'longitud': -71.5800,
+        'descripcion': 'Los Arenales, ladera sur Volcán Lonquimay, Chile - Randonnée / Recreativo (base 1500m / cima 1845m)'
     },
 
     # --- Región de Los Ríos ---
