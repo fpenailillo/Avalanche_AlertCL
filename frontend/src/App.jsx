@@ -49,7 +49,7 @@ function BrandHeader() {
       <p className="max-w-xl text-balance text-xs text-white/60 sm:text-sm">
         Boletines basados en la metodología de EAWS por zonas, generados por
         agentes de IA especializados en datos satelitales, topográficos,
-        climatológicos y conocimiento experto.
+        climatológicos y conocimiento humano experto.
       </p>
       <a
         href="https://www.avalanches.org/wp-content/uploads/2022/09/Escala_europea_peligro_aludes_EAWS.pdf"
