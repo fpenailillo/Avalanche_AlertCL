@@ -1,14 +1,16 @@
 import { CalendarDays, Snowflake, MoveVertical, TriangleAlert } from 'lucide-react'
 import GlassCard from './GlassCard'
 import WeatherIcon from './WeatherIcon'
+import { ESCALA_EAWS } from '../data/mockData'
 
-// Alerta de nevada intensa en el mediano plazo: más allá del horizonte del
-// boletín EAWS (>3 días) con escenario p95 del ensemble sobre 20 cm/día.
+// Alerta de nevada intensa en el mediano plazo: desde el 4º día en adelante
+// (fuera del horizonte EAWS de 3 días: Hoy, Mañana, Día 3 = índices 0-2) con
+// escenario p95 del ensemble sobre 20 cm/día.
 const HORIZONTE_ALERTA_DIAS = 3
 const UMBRAL_NIEVE_P95_CM = 20
 
 const tieneAlertaNieve = (dia, i) =>
-  i > HORIZONTE_ALERTA_DIAS && dia.nieveP95 != null && dia.nieveP95 > UMBRAL_NIEVE_P95_CM
+  i >= HORIZONTE_ALERTA_DIAS && dia.nieveP95 != null && dia.nieveP95 > UMBRAL_NIEVE_P95_CM
 
 function BarraTemp({ min, max, minGlobal, rango }) {
   const izquierda = ((min - minGlobal) / rango) * 100
@@ -23,11 +25,18 @@ function BarraTemp({ min, max, minGlobal, rango }) {
   )
 }
 
-export default function ForecastCard({ pronostico, avisoVigente = false, className = '' }) {
+export default function ForecastCard({ pronostico, estadoActual, avisoVigente = false, className = '' }) {
   const minGlobal = Math.min(...pronostico.map((d) => d.min))
   const maxGlobal = Math.max(...pronostico.map((d) => d.max))
   const rango = maxGlobal - minGlobal
   const esReal = pronostico.some((d) => d.real)
+
+  // Nivel EAWS por día para el horizonte del boletín (Hoy / Mañana / Día 3).
+  const nivelesEAWS = [
+    estadoActual?.nivelEAWS,
+    estadoActual?.nivel48h ?? estadoActual?.nivelEAWS,
+    estadoActual?.nivel72h ?? estadoActual?.nivel48h ?? estadoActual?.nivelEAWS,
+  ]
 
   // Días con alerta de nevada intensa (mediano plazo) para el resumen superior
   const diasAlerta = pronostico.filter(tieneAlertaNieve)
@@ -63,6 +72,8 @@ export default function ForecastCard({ pronostico, avisoVigente = false, classNa
         <div className="scroll-slim max-h-[30rem] divide-y divide-white/10 overflow-y-auto pr-1 md:absolute md:inset-0 md:max-h-none">
           {pronostico.map((dia, i) => {
             const alerta = tieneAlertaNieve(dia, i)
+            const nivelDia = i < 3 ? nivelesEAWS[i] : null
+            const escalaDia = nivelDia != null ? ESCALA_EAWS[nivelDia] : null
             return (
               <div
                 key={i}
@@ -70,9 +81,18 @@ export default function ForecastCard({ pronostico, avisoVigente = false, classNa
                   alerta ? 'rounded-lg bg-amber-400/10 px-1' : ''
                 }`}
               >
-                <div className="w-12 shrink-0">
+                <div className="w-16 shrink-0">
                   <div className="flex items-center gap-1 text-sm font-semibold">
                     {dia.dia}
+                    {escalaDia && (
+                      <span
+                        className="inline-flex h-4 min-w-[1rem] items-center justify-center rounded px-1 text-[11px] font-bold leading-none"
+                        style={{ backgroundColor: escalaDia.color, color: escalaDia.texto }}
+                        title={`Peligro EAWS ${nivelDia} — ${escalaDia.nombre}`}
+                      >
+                        {nivelDia}
+                      </span>
+                    )}
                     {alerta && (
                       <TriangleAlert className="h-3 w-3 text-amber-300" title="Nevada intensa prevista" />
                     )}
@@ -106,7 +126,7 @@ export default function ForecastCard({ pronostico, avisoVigente = false, classNa
                       <MoveVertical className="h-3 w-3" />
                       {dia.isotermaM.toLocaleString('es-CL')} m
                     </span>
-                  ) : dia.nieveP95 != null ? (
+                  ) : i >= 3 && dia.nieveP95 != null ? (
                     <span
                       className={`text-[10px] ${alerta ? 'font-semibold text-amber-200' : 'text-white/50'}`}
                     >

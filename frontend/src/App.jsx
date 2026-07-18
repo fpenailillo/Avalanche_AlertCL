@@ -213,6 +213,7 @@ function App() {
           />
           <ForecastCard
             pronostico={centro.pronostico15}
+            estadoActual={centro.estadoActual}
             avisoVigente={!!fechaSeleccionada && !seriesDeFecha}
             className="md:row-span-2 lg:order-2"
           />
