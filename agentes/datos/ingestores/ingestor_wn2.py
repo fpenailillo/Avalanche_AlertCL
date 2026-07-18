@@ -177,7 +177,7 @@ ensemble_members AS (
     CASE EXTRACT(HOUR FROM forecast_time)
       WHEN 6 THEN 1 WHEN 12 THEN 2 WHEN 18 THEN 3 WHEN 0 THEN 4
     END                                                         AS ventana_orden,
-    DATE(TIMESTAMP_SUB(forecast_time, INTERVAL 3 HOUR))        AS fecha_local,
+    DATE(DATETIME(forecast_time, 'America/Santiago'))         AS fecha_local,
     ABS(temp_2m_c - LAG(temp_2m_c) OVER (
       PARTITION BY init_time, member_id ORDER BY forecast_lead_hours
     ))                                                          AS temp_delta_abs
