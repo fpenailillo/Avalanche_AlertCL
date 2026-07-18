@@ -251,6 +251,29 @@ def _ajustar_frecuencia(
     return escala[idx]
 
 
+_ASPECTOS_ES = {
+    "N": "norte", "NE": "noreste", "E": "este", "SE": "sureste",
+    "S": "sur", "SO": "suroeste", "SW": "suroeste",
+    "O": "oeste", "OE": "oeste", "NO": "noroeste", "NW": "noroeste",
+}
+
+
+def _nombre_orientacion(aspecto: str):
+    """Nombre en español del aspecto, o None si no está determinado (p. ej. 'N/A')."""
+    return _ASPECTOS_ES.get((aspecto or "").strip().upper())
+
+
+def _frase_orientacion(aspecto: str) -> str:
+    """Fragmento ' en orientaciones <x>' o cadena vacía si el aspecto no existe."""
+    orientacion = _nombre_orientacion(aspecto)
+    return f" en orientaciones {orientacion}" if orientacion else ""
+
+
+def _humanizar_riesgo(riesgo: str) -> str:
+    """Convierte el enum de riesgo a texto legible: 'muy_alto' -> 'muy alto'."""
+    return (riesgo or "").replace("_", " ").strip() or "no determinado"
+
+
 def _describir_terreno_riesgo(
     pendiente: float,
     aspecto: str,
@@ -258,21 +281,13 @@ def _describir_terreno_riesgo(
     riesgo: str
 ) -> str:
     """Describe el terreno de mayor riesgo para el boletín."""
-    aspecto_texto = {
-        "N": "orientaciones norte", "NE": "orientaciones noreste",
-        "E": "orientaciones este", "SE": "orientaciones sureste",
-        "S": "orientaciones sur", "SO": "orientaciones suroeste",
-        "SW": "orientaciones suroeste", "O": "orientaciones oeste",
-        "NO": "orientaciones noroeste", "NW": "orientaciones noroeste"
-    }.get(aspecto, f"orientaciones {aspecto}")
-
     zona_texto = ""
     if zona_ha:
         zona_texto = f" ({zona_ha:.0f} ha de zona de inicio)"
 
     return (
-        f"Pendientes de {pendiente:.0f}° en {aspecto_texto}{zona_texto}. "
-        f"Riesgo topográfico combinado: {riesgo}."
+        f"Pendientes de {pendiente:.0f}°{_frase_orientacion(aspecto)}{zona_texto}. "
+        f"Riesgo topográfico combinado: {_humanizar_riesgo(riesgo)}."
     )
 
 
@@ -286,8 +301,8 @@ def _generar_recomendaciones(
 
     if riesgo in ("muy_alto", "alto"):
         recomendaciones.append(
-            f"Evitar pendientes superiores a {pendiente:.0f}° "
-            f"en orientaciones {aspecto}"
+            f"Evitar pendientes superiores a {pendiente:.0f}°"
+            f"{_frase_orientacion(aspecto)}"
         )
         recomendaciones.append(
             "No transitar bajo zonas de inicio identificadas"
