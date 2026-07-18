@@ -3,8 +3,8 @@ Exporta a GCS las series horarias de `clima.pronostico_horas` para que el
 frontend (widget "Evolución del riesgo") muestre íconos y temperatura reales
 por hora durante las próximas ~72 h.
 
-Genera un único objeto público `series_horas.json` con las 6 zonas chilenas
-del PoC. La condición de Google Weather se mapea a los íconos del componente
+Genera un único objeto público `series_horas.json` con las zonas del boletín
+(cobertura completa Chile). La condición de Google Weather se mapea a los íconos del componente
 WeatherIcon del frontend (sun/moon/cloud/cloud-sun/cloud-moon/cloud-rain/
 cloud-snow/snowflake/wind).
 
@@ -28,15 +28,32 @@ GCP_PROJECT = "climas-chileno"
 BUCKET = "avalanche-alertcl-boletines"
 OBJETO = "series_horas.json"
 
-# (zona de salida → nombre tal cual en BigQuery). La Parva se representa con su
-# Sector Bajo, igual que el boletín consolida los sectores a "La Parva".
+# (zona de salida → nombre tal cual en BigQuery), orden geográfico norte → sur.
+# La Parva se representa con su Sector Bajo, igual que el boletín consolida los
+# sectores a "La Parva". El resto coincide 1:1 con el nombre_ubicacion del extractor.
 ZONAS = [
+    ("Ski Arpa", "Ski Arpa"),
+    ("Portillo", "Portillo"),
     ("La Parva", "La Parva Sector Bajo"),
     ("Valle Nevado", "Valle Nevado"),
-    ("Portillo", "Portillo"),
-    ("Ski Arpa", "Ski Arpa"),
     ("Lagunillas", "Lagunillas"),
+    ("Valle de las Arenas", "Valle de las Arenas"),
     ("Chapa Verde", "Chapa Verde"),
+    ("Termas del Flaco", "Termas del Flaco"),
+    ("Planchón-Peteroa", "Planchón-Peteroa"),
+    ("Laguna del Maule", "Laguna del Maule"),
+    ("Nevados de Chillán", "Nevados de Chillán"),
+    ("Antuco", "Antuco"),
+    ("Corralco", "Corralco"),
+    ("Los Arenales", "Los Arenales"),
+    ("Las Araucarias", "Las Araucarias"),
+    ("Ski Pucón", "Ski Pucón"),
+    ("Mocho-Choshuenco", "Mocho-Choshuenco"),
+    ("Antillanca", "Antillanca"),
+    ("Volcán Osorno", "Volcán Osorno"),
+    ("Ski Chaitén", "Ski Chaitén"),
+    ("El Fraile", "El Fraile"),
+    ("Cerro Mirador", "Cerro Mirador"),
 ]
 
 
