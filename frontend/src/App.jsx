@@ -274,7 +274,7 @@ function App() {
             </a>
           </p>
           <img
-            src="https://visitor-badge.laobi.icu/badge?page_id=fpenailillo.avalanche-alertcl"
+            src="https://visitor-badge.laobi.icu/badge?page_id=fpenailillo.avalanche-alertcl&title=visitantes"
             alt="Contador de visitas"
             className="h-5 opacity-70"
           />
