@@ -260,6 +260,15 @@ function App() {
               className="font-medium underline hover:text-amber-100"
             >
               fpenailillo@usm.cl
+            </a>{' '}
+            o vía{' '}
+            <a
+              href="https://www.linkedin.com/in/franciscopenailillo/"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium underline hover:text-amber-100"
+            >
+              LinkedIn
             </a>
           </p>
           <p>
