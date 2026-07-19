@@ -57,10 +57,10 @@ Del contexto acumulado de los cuatro subagentes, debes extraer:
 
 - factor_meteorologico: PRECIPITACION_CRITICA/NEVADA_RECIENTE/VIENTO_FUERTE/FUSION_ACTIVA_CON_CARGA/CICLO_DIURNO_NORMAL/ESTABLE
 - ventanas_criticas_detectadas: usar EXACTAMENTE el valor del campo `num_ventanas_criticas` del resultado de la tool `detectar_ventanas_criticas`. **NO usar `dias_alto_riesgo`** — ese campo cuenta días con riesgo pronosticado general y no refleja la definición EAWS de ventana crítica. Típicamente `num_ventanas_criticas` = 0 en condiciones estables aunque `dias_alto_riesgo` sea > 0.
-- precipitacion_reciente_mm: precipitación medida en las últimas 24h en mm (buscar en condiciones actuales o tendencia 72h)
+- precipitacion_reciente_mm: precipitación de las últimas **24h** en mm, tomada ESTRICTAMENTE de la sección CONDICIONES ACTUALES de S3. **NO usar el acumulado 72h** de la sección de tendencia: ese valor cubre 3 días y sobreestima la precipitación reciente (se almacena como `precip_24h_mm` en el boletín). Si S3 solo reporta el acumulado 72h y no un valor de 24h, dividir aprox. entre 3 o dejar en 0 antes que pasar el acumulado completo.
 - nieve_reciente_cm: nieve nueva estimada en las últimas 24h en cm (si disponible; estimar a partir de precipitación si es nevada: aprox. 10-12 cm por cada 10 mm con temp <0°C)
 - tendencia_pronostico: tendencia meteorológica del pronóstico 3 días (empeorando/estable/mejorando — extraer de la sección PRONÓSTICO 3 DÍAS del informe S3)
-- resumen_meteorologico: párrafo de resumen que DEBE incluir explícitamente: (1) precipitación en mm de las últimas 24h, (2) tipo de precipitación (nieve/lluvia), (3) acumulado estimado en nieve nueva si corresponde, (4) temperatura actual y tendencia
+- resumen_meteorologico: párrafo de resumen que DEBE incluir explícitamente: (1) precipitación en mm de las últimas 24h (el mismo valor 24h de `precipitacion_reciente_mm`, NO el acumulado 72h; si citas el acumulado 72h, rotúlalo explícitamente como "72h"), (2) tipo de precipitación (nieve/lluvia), (3) acumulado estimado en nieve nueva si corresponde, (4) temperatura actual y tendencia
 - temperatura_actual_c: temperatura actual en °C (de la sección CONDICIONES ACTUALES de S3)
 - viento_actual_kmh: viento actual en km/h; si S3 reporta m/s, multiplicar × 3.6
 - pronostico_dias_meteo: lista de hasta 3 objetos extraídos de la tabla PRONÓSTICO 3 DÍAS de S3, cada uno con:
