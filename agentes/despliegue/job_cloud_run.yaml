@@ -30,9 +30,11 @@ spec:
                   value: "true"
                 # LLM: usa Databricks por defecto (token leído desde Secret Manager en runtime)
                 # Secret: projects/climas-chileno/secrets/databricks-token
-              # Tiempo máximo de ejecución: 60 minutos
-              # (5 subagentes × ~20 ubicaciones × ~3 min/ubicación ≈ 50 min)
-          timeoutSeconds: 3600
+              # Tiempo máximo de ejecución: 120 minutos
+              # (5 subagentes × ~22 ubicaciones; a 3600s el pipeline moría por
+              # timeout antes de publicar boletin_activo.json y reprocesaba en el
+              # reintento — ver setup_scheduler_boletin.sh)
+          timeoutSeconds: 7200
           serviceAccountName: funciones-clima-sa@climas-chileno.iam.gserviceaccount.com
       # Reintentos en caso de fallo transitorio
       maxRetries: 1
