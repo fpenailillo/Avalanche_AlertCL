@@ -109,6 +109,12 @@ function fusionarEstadoActual(estadoMock, detalle, dias) {
     validoHasta: validoHasta ? `Válido hasta el ${validoHasta}` : estadoMock.validoHasta,
     confianza: detalle.confianza ?? null,
     tendencia: detalle.tendencia ?? null,
+    // Nivel sostenido por una nevada previa aunque las condiciones de hoy den menos
+    nivelCondiciones: detalle.nivelCondiciones ?? null,
+    persistenciaTormenta: formatearFecha(detalle.persistenciaTormenta, {
+      day: 'numeric',
+      month: 'long',
+    }),
   }
 }
 

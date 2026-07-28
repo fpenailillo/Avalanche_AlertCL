@@ -67,6 +67,10 @@ function normalizarEntrada(entrada) {
       nivel,
       nivel48h: nivelValido(entrada.nivel_eaws_48h),
       nivel72h: nivelValido(entrada.nivel_eaws_72h),
+      // Nivel que dan las condiciones del día + fecha de la nevada que sostiene
+      // el publicado cuando este es mayor (persistencia post-tormenta)
+      nivelCondiciones: nivelValido(entrada.nivel_condiciones),
+      persistenciaTormenta: entrada.persistencia_tormenta ?? null,
       confianza: entrada.confianza ?? null,
       descripcion: entrada.descripcion ?? null,
       tendencia: entrada.tendencia ?? null,

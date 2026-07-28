@@ -1304,6 +1304,7 @@ class ConsultorBigQuery:
                 SELECT
                     DATE(fecha_emision) AS fecha,
                     nivel_eaws_24h,
+                    nivel_eaws_24h_raw,
                     factor_meteorologico,
                     confianza
                 FROM `climas-chileno.clima.boletines_riesgo`
@@ -1336,6 +1337,11 @@ class ConsultorBigQuery:
                 boletines.append({
                     "fecha": str(f["fecha"]),
                     "nivel_eaws_24h": int(f["nivel_eaws_24h"]) if f["nivel_eaws_24h"] else None,
+                    # Nivel previo a calibración y piso post-tormenta: es el que
+                    # refleja las condiciones reales de ese día (FIX-POST-STORM-PERSIST)
+                    "nivel_eaws_24h_raw": (
+                        int(f["nivel_eaws_24h_raw"]) if f.get("nivel_eaws_24h_raw") else None
+                    ),
                     "factor_meteorologico": f.get("factor_meteorologico", "ESTABLE"),
                     "confianza": f.get("confianza", "Media"),
                 })

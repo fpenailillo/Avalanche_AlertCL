@@ -39,12 +39,17 @@ from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-CAMPOS_BOLETIN = """nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_48h,
-    nivel_eaws_72h, confianza, viento_kmh, estado_pinn,
+CAMPOS_BOLETIN = """nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_24h_raw,
+    nivel_eaws_48h, nivel_eaws_72h, confianza, viento_kmh, estado_pinn,
     factor_seguridad_pinn, estado_vit, score_anomalia_vit,
     datos_satelitales_disponibles, relatos_analizados,
     tipo_alud_predominante, indice_riesgo_historico,
     tipo_problema_eaws, wn2_avalanche_problem, boletin_texto"""
+
+# Un día cuenta como tormenta si su nivel de condiciones (RAW, antes del piso)
+# llegó a 4 — el mismo umbral que dispara FIX-POST-STORM-PERSIST.
+# {p} es el prefijo de tabla, necesario donde la consulta une dos fuentes.
+DIA_DE_TORMENTA = "COALESCE({p}nivel_eaws_24h_raw, {p}nivel_eaws_24h) >= 4"
 
 # Un boletín tiene lectura satelital utilizable (el ViT llegó a un veredicto)
 VIT_UTIL = "estado_vit IS NOT NULL AND estado_vit NOT IN ('sin_datos')"
@@ -74,23 +79,51 @@ ultimo_satelital AS (
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
     ) = 1
+),
+-- Tormenta de las 48 h previas que sostiene el nivel cuando este supera al de
+-- las condiciones del día (FIX-POST-STORM-PERSIST). Sirve para explicarlo en la
+-- ficha en vez de mostrar un nivel que los datos del día no justifican.
+evento_tormenta AS (
+    SELECT b.nombre_ubicacion, MAX(v.fecha_emision) AS fecha_evento_tormenta
+    FROM ultimo_boletin b
+    JOIN ventana v
+      ON v.nombre_ubicacion = b.nombre_ubicacion
+     AND DATE(v.fecha_emision) BETWEEN DATE_SUB(DATE(b.fecha_emision), INTERVAL 2 DAY)
+                                   AND DATE_SUB(DATE(b.fecha_emision), INTERVAL 1 DAY)
+     AND {DIA_DE_TORMENTA.format(p='v.')}
+    GROUP BY 1
 )
 SELECT
     b.* EXCEPT (estado_vit, score_anomalia_vit, datos_satelitales_disponibles),
     s.estado_vit, s.score_anomalia_vit, s.datos_satelitales_disponibles,
-    s.fecha_satelital
+    s.fecha_satelital,
+    e.fecha_evento_tormenta
 FROM ultimo_boletin b
 LEFT JOIN ultimo_satelital s USING (nombre_ubicacion)
+LEFT JOIN evento_tormenta e USING (nombre_ubicacion)
 """
 
 SQL_BOLETINES_FECHA = f"""
-SELECT {CAMPOS_BOLETIN},
-       IF({VIT_UTIL}, fecha_emision, NULL) AS fecha_satelital
-FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
-WHERE DATE(fecha_emision) = @fecha
-QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
-) = 1
+WITH dia AS (
+    SELECT {CAMPOS_BOLETIN},
+           IF({VIT_UTIL}, fecha_emision, NULL) AS fecha_satelital
+    FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
+    WHERE DATE(fecha_emision) = @fecha
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
+    ) = 1
+),
+evento_tormenta AS (
+    SELECT nombre_ubicacion, MAX(fecha_emision) AS fecha_evento_tormenta
+    FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
+    WHERE DATE(fecha_emision) BETWEEN DATE_SUB(@fecha, INTERVAL 2 DAY)
+                                  AND DATE_SUB(@fecha, INTERVAL 1 DAY)
+      AND {DIA_DE_TORMENTA.format(p='')}
+    GROUP BY 1
+)
+SELECT d.*, e.fecha_evento_tormenta
+FROM dia d
+LEFT JOIN evento_tormenta e USING (nombre_ubicacion)
 """
 
 
@@ -103,11 +136,26 @@ def _registro_desde_fila_bq(fila) -> dict | None:
     parseado = _parsear_boletin_texto(fila.boletin_texto or "")
     nivel_48h = _nivel_valido(fila.nivel_eaws_48h)
     parseado["tendencia"] = _derivar_tendencia(nivel, nivel_48h, parseado.get("tendencia"))
+
+    # El nivel publicado puede superar al de las condiciones del día por el piso
+    # post-tormenta. Se expone junto a la fecha de la nevada que lo sostiene para
+    # que la ficha lo explique en vez de mostrar un nivel sin respaldo visible.
+    nivel_condiciones = _nivel_valido(fila.nivel_eaws_24h_raw)
+    sostenido_por_tormenta = (
+        nivel_condiciones is not None
+        and nivel > nivel_condiciones
+        and fila.fecha_evento_tormenta is not None
+    )
+
     return {
         "ubicacion": fila.nombre_ubicacion,
         "nivel_eaws": nivel,
         "nivel_eaws_48h": nivel_48h,
         "nivel_eaws_72h": _nivel_valido(fila.nivel_eaws_72h),
+        "nivel_condiciones": nivel_condiciones,
+        "persistencia_tormenta": (
+            fila.fecha_evento_tormenta.isoformat() if sostenido_por_tormenta else None
+        ),
         "confianza": fila.confianza,
         "viento_kmh": fila.viento_kmh,
         "manto": {

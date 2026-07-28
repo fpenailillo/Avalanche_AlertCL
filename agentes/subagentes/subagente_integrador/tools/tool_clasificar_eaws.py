@@ -609,22 +609,27 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
     nivel_72h = max(1, min(5, nivel_24h + (nivel_72h_raw - nivel_24h_raw)))
     info_nivel = NIVELES_PELIGRO.get(nivel_24h, info_nivel)
 
-    # FIX-POST-STORM-PERSIST (v25.16 → v25.17): piso mínimo post-tormenta en Andes Chile.
-    # Tras un nivel ≥ 4, las placas de tormenta persisten 24-48h aunque el PINN
-    # no vea nieve nueva (Schweizer 2003 §4.2: storm slabs activas hasta 48h post-nevada).
-    # Regla v25.17: nivel_hoy ≥ nivel_ayer - 1  (max caída de 1 escalón por día).
-    # v25.16 usaba ayer-2 (LP N4→N2 en un día); ayer-1 es más conservador y alineado
-    # con práctica EAWS operacional (descenso gradual). Ej: ayer N5→hoy mín N4; ayer N4→mín N3.
+    # FIX-POST-STORM-PERSIST (v25.16 → v25.17 → v25.18): piso mínimo post-tormenta
+    # en Andes Chile. Tras un nivel ≥ 4, las placas de tormenta persisten 24-48h
+    # aunque el PINN no vea nieve nueva (Schweizer 2003 §4.2: storm slabs activas
+    # hasta 48h post-nevada).
+    # Regla: piso = nivel_del_evento - días_transcurridos (decae 1 escalón/día).
+    # v25.16 usaba ayer-2 (LP N4→N2 en un día); el descenso gradual es más
+    # conservador y alineado con práctica EAWS operacional.
+    # v25.18: el ancla es el nivel RAW del evento, no el nivel publicado de ayer
+    # —que podía ser él mismo un piso—, para que la persistencia no se encadene
+    # más allá de las 48h ni sin tormenta real detrás.
     # Solo Andes Chile — Alpes tiene persistencia real via IMIS/DEAPSnow.
     if _region_cal == "andes_chile" and nombre_ubicacion:
-        _nivel_ayer = _obtener_nivel_ayer(nombre_ubicacion)
-        if _nivel_ayer is not None and _nivel_ayer >= 4:
-            _piso_24h = _nivel_ayer - 1
+        _evento = _obtener_evento_post_tormenta(nombre_ubicacion)
+        if _evento is not None:
+            _nivel_evento, _dias_evento = _evento
+            _piso_24h = _nivel_evento - _dias_evento
             if nivel_24h < _piso_24h:
                 logger.info(
                     f"[ClasificarEAWS] FIX-POST-STORM-PERSIST: {nombre_ubicacion} "
                     f"nivel {nivel_24h}→{_piso_24h} "
-                    f"(nivel_ayer={_nivel_ayer}, regla=ayer-1)"
+                    f"(evento N{_nivel_evento} hace {_dias_evento}d, regla=evento-días)"
                 )
                 nivel_24h = _piso_24h
                 nivel_48h = max(nivel_48h, max(1, _piso_24h - 1))
@@ -993,17 +998,43 @@ def _determinar_tamano(
     return 2, "default"
 
 
-def _obtener_nivel_ayer(nombre_ubicacion: str):
-    """Consulta el nivel EAWS del día anterior desde BQ para FIX-POST-STORM-PERSIST."""
+def _obtener_evento_post_tormenta(nombre_ubicacion: str):
+    """
+    Último evento de tormenta (nivel RAW ≥ 4) dentro de las 48 h previas.
+
+    Se ancla al nivel RAW —el que reflejaba las condiciones de aquel día— y no
+    al nivel publicado de ayer, que puede ser él mismo un piso post-tormenta:
+    encadenarlos permitía sostener la persistencia sin ninguna tormenta detrás
+    y estirarla más allá de las 48 h que documenta la regla.
+
+    Returns:
+        (nivel_evento, dias_desde_evento) con dias ∈ {1, 2}, o None si no hubo
+        evento en la ventana.
+    """
     try:
-        from agentes.datos.consultor_bigquery import ConsultorBigQuery
-        bq = ConsultorBigQuery()
-        hist = bq.obtener_historial_boletines(nombre_ubicacion, n_dias=2)
-        boletines = hist.get("boletines", [])
-        if boletines:
-            return boletines[0].get("nivel_eaws_24h")
+        from datetime import date, datetime as _dt, timezone as _tz
+
+        from agentes.datos import consultor_bigquery as _cbq
+
+        hist = _cbq.ConsultorBigQuery().obtener_historial_boletines(
+            nombre_ubicacion, n_dias=2
+        )
+        hoy = (_cbq.obtener_fecha_referencia_global() or _dt.now(_tz.utc)).date()
+
+        # boletines viene ordenado por fecha DESC: el evento más reciente manda
+        for boletin in hist.get("boletines", []):
+            nivel = boletin.get("nivel_eaws_24h_raw") or boletin.get("nivel_eaws_24h")
+            if nivel is None or nivel < 4:
+                continue
+            try:
+                fecha = date.fromisoformat(str(boletin.get("fecha")))
+            except ValueError:
+                continue
+            dias = (hoy - fecha).days
+            if 1 <= dias <= 2:
+                return nivel, dias
     except Exception as _e:
-        logger.debug(f"[FIX-POST-STORM-PERSIST] nivel_ayer query falló: {_e}")
+        logger.debug(f"[FIX-POST-STORM-PERSIST] evento post-tormenta query falló: {_e}")
     return None
 
 

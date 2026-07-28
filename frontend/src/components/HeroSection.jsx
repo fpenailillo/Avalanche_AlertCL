@@ -116,6 +116,14 @@ export default function HeroSection({ centro, fechas = [], fechaSeleccionada, on
         </span>
       </div>
 
+      {estado.persistenciaTormenta && estado.nivelCondiciones != null && (
+        <p className="mt-3 max-w-md text-balance rounded-lg bg-white/10 px-3 py-2 text-xs leading-relaxed text-white/75">
+          Nivel sostenido por la nevada del {estado.persistenciaTormenta}: las placas
+          de tormenta siguen activas. Las condiciones de hoy, por sí solas, dan nivel{' '}
+          {estado.nivelCondiciones}.
+        </p>
+      )}
+
       <p className="mt-6 max-w-xl text-balance text-sm leading-relaxed text-white/80 sm:text-base">
         {estado.descripcionIA}
       </p>
