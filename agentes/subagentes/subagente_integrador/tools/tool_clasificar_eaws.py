@@ -14,6 +14,7 @@ sys.path.insert(0, _ROOT)
 sys.path.insert(0, os.path.join(_ROOT, 'datos'))  # → snow_alert/datos/ (dev local)
 
 import logging
+from typing import Optional
 
 from analizador_avalanchas.eaws_constantes import (
     consultar_matriz_eaws,
@@ -377,6 +378,9 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "descripcion_nivel": "Sin problemas de avalancha confirmados por datos meteorológicos (EAWS Paso 1). Manto estable con condiciones calmas.",
             "problema_avalancha_presente": False,
             "tipo_problema_eaws": "no_distinct_avalanche_problem",
+            "problemas_secundarios_eaws": [],
+            # La cota sigue siendo informativa aunque no haya problema confirmado
+            "cota_nieve_m": _problema_tipico(nombre_ubicacion).get("cota_nieve_m"),
         }
 
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
@@ -658,9 +662,50 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         "viento_kmh": viento_kmh,
         "recomendaciones": recomendaciones,
         "descripcion_nivel": info_nivel.get("descripcion", ""),
+        **_problema_tipico(nombre_ubicacion),
+    }
+
+
+def _problema_tipico(nombre_ubicacion: Optional[str]) -> dict:
+    """
+    Problema típico EAWS de la zona (FIX-PROBLEMA-EAWS, v25.19).
+
+    Se resuelve de forma determinista, no vía LLM: `tipo_problema_eaws` quedaba
+    siempre en None y el boletín publicaba el problema del ensemble WN2, ciego a
+    la lluvia observada (La Parva, 25-jul-2026 → new_snow con 11 h de lluvia).
+
+    Nunca interrumpe la clasificación: ante un fallo devuelve los campos en None
+    y el consumidor cae al problema del ensemble como hasta ahora.
+    """
+    vacio = {
         "problema_avalancha_presente": None,
         "tipo_problema_eaws": None,
+        "problemas_secundarios_eaws": [],
+        "cota_nieve_m": None,
     }
+    if not nombre_ubicacion:
+        return vacio
+    try:
+        from agentes.subagentes.subagente_integrador.tools.tool_clasificar_problema_eaws import (
+            ejecutar_clasificar_problema_eaws,
+        )
+        from agentes.datos.consultor_bigquery import obtener_fecha_referencia_global
+
+        referencia = obtener_fecha_referencia_global()
+        resultado = ejecutar_clasificar_problema_eaws(
+            nombre_ubicacion,
+            fecha=referencia.strftime("%Y-%m-%d") if referencia else None,
+        )
+        dominante = resultado.get("problema_dominante")
+        return {
+            "problema_avalancha_presente": bool(dominante and dominante != "no_distinct"),
+            "tipo_problema_eaws": dominante,
+            "problemas_secundarios_eaws": resultado.get("problemas_secundarios", []),
+            "cota_nieve_m": resultado.get("cota_nieve_m"),
+        }
+    except Exception as exc:
+        logger.warning(f"[ClasificarEAWS] problema típico no disponible: {exc}")
+        return vacio
 
 
 def _estabilidad_desde_snowpack(pwl_100, ssi_pwl, sk38_pwl) -> str | None:

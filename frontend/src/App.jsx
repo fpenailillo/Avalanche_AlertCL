@@ -209,6 +209,7 @@ function App() {
             problemas={centro.problemas}
             recomendaciones={centro.recomendaciones}
             tituloRecomendacion={centro.tituloRecomendacion}
+            cotaNieveM={centro.cotaNieveM}
             className="md:col-span-2 lg:order-1 lg:col-span-2"
           />
           <ForecastCard

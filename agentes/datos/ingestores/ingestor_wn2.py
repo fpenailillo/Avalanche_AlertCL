@@ -163,9 +163,13 @@ ensemble_members AS (
       WHEN (ATAN2(-u100,-v100)*180.0/ACOS(-1.0)+360.0)-FLOOR((ATAN2(-u100,-v100)*180.0/ACOS(-1.0)+360.0)/360.0)*360.0 < 292.5 THEN 'W'
       ELSE 'NW'
     END                                                         AS wdir_100m_cardinal_member,
-    temp_2m_c <= 2.0 AND precip_6hr_mm > 0                    AS is_snow_member,
-    temp_2m_c > 2.0  AND precip_6hr_mm > 0                    AS is_rain_member,
-    temp_2m_c BETWEEN 0.0 AND 2.0 AND precip_6hr_mm > 0       AS is_wet_snow_member,
+    -- FIX-ROS-UMBRAL (v25.19): la transición lluvia/nieve real ocurre en torno a
+    -- 1 °C, no a 2 °C. Con el umbral anterior, el 25-jul-2026 en La Parva
+    -- (lluvia observada a 0,8-0,9 °C) ningún miembro contaba como lluvia y
+    -- prob_wet_snow_pct no alcanzaba el 40 % que activa la alerta.
+    temp_2m_c <= 1.0 AND precip_6hr_mm > 0                    AS is_snow_member,
+    temp_2m_c > 1.0  AND precip_6hr_mm > 0                    AS is_rain_member,
+    temp_2m_c BETWEEN -0.5 AND 1.5 AND precip_6hr_mm > 0      AS is_wet_snow_member,
     temp_2m_c < -2.0 AND precip_6hr_mm > 0                    AS is_dry_snow_member,
     precip_6hr_mm > 5.0                                         AS is_heavy_precip_member,
     SQRT(POW(u100,2)+POW(v100,2)) > 8.0  AND precip_6hr_mm > 0 AS is_wind_slab_member,

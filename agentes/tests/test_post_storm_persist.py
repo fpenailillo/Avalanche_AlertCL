@@ -40,15 +40,22 @@ def _boletin(fecha, publicado, raw=None):
 
 
 def _evento(hist, hoy="2026-07-27"):
-    """Ejecuta la búsqueda de evento con historial y fecha de hoy simulados."""
+    """
+    Ejecuta la búsqueda de evento con historial y fecha de hoy simulados.
+
+    Se parchea el módulo real en vez de sustituirlo en sys.modules: la función
+    hace `from agentes.datos import consultor_bigquery`, que resuelve por
+    atributo del paquete cuando otro test ya lo importó, y entonces un parche
+    sobre sys.modules pasa desapercibido.
+    """
     consultor = MagicMock()
     consultor.obtener_historial_boletines.return_value = hist
-    modulo = MagicMock()
-    modulo.ConsultorBigQuery.return_value = consultor
-    modulo.obtener_fecha_referencia_global.return_value = datetime.fromisoformat(
-        f"{hoy}T12:00:00+00:00"
-    )
-    with patch.dict(sys.modules, {"agentes.datos.consultor_bigquery": modulo}):
+    with patch(
+        "agentes.datos.consultor_bigquery.ConsultorBigQuery", return_value=consultor
+    ), patch(
+        "agentes.datos.consultor_bigquery.obtener_fecha_referencia_global",
+        return_value=datetime.fromisoformat(f"{hoy}T12:00:00+00:00"),
+    ):
         return _obtener_evento_post_tormenta("Valle Nevado")
 
 

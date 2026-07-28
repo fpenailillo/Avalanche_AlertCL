@@ -17,10 +17,14 @@ const ICONOS_PROBLEMA = {
   'no-distinct': problemNoDistinct,
 }
 
+const formatearCota = (metros) =>
+  `${metros.toLocaleString('es-CL')} m`
+
 export default function ProblemsCard({
   problemas,
   recomendaciones,
   tituloRecomendacion,
+  cotaNieveM = null,
   className = '',
 }) {
   return (
@@ -29,6 +33,15 @@ export default function ProblemsCard({
       title="Problemas de avalancha · EAWS"
       className={className}
     >
+      {cotaNieveM != null && (
+        <p
+          className="mb-3 flex items-center gap-1.5 text-xs text-white/70"
+          title="Altitud donde la precipitación pasa de lluvia a nieve. Bajo esta cota la lluvia humedece el manto."
+        >
+          <MoveVertical className="h-3.5 w-3.5 shrink-0" />
+          Cota de nieve ~{formatearCota(cotaNieveM)}
+        </p>
+      )}
       <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
         {problemas.map((problema) => (
           <div
@@ -44,10 +57,16 @@ export default function ProblemsCard({
             <div className="min-w-0">
               <div className="text-sm font-semibold">
                 {problema.nombre}
-                {problema.real && (
-                  <span className="ml-2 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300">
-                    En vivo
+                {problema.secundario ? (
+                  <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white/60">
+                    Secundario
                   </span>
+                ) : (
+                  problema.real && (
+                    <span className="ml-2 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-300">
+                      En vivo
+                    </span>
+                  )
                 )}
               </div>
               {(problema.cotas || problema.orientaciones) && (

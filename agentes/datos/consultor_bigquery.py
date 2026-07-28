@@ -548,6 +548,90 @@ class ConsultorBigQuery:
             logger.error(f"Error consultando tendencia meteorológica para {ubicacion}: {e}")
             return {"error": str(e)}
 
+    def obtener_precipitacion_horaria(
+        self,
+        ubicacion: str,
+        fecha_referencia: Optional[datetime] = None,
+        horas: int = 24,
+    ) -> dict:
+        """
+        Precipitación hora a hora con su TIPO OBSERVADO por Google Weather.
+
+        A diferencia de obtener_tendencia_meteorologica, que solo trae cantidad y
+        temperatura, aquí interesa `tipo_precipitacion` (RAIN / SNOW /
+        RAIN_AND_SNOW / …) y `temperatura_bulbo_humedo`: son los que distinguen un
+        evento de lluvia sobre nieve de una nevada, sin inferirlo de la
+        temperatura del aire. Ver agentes/datos/precipitacion.py.
+
+        Args:
+            ubicacion: nombre exacto de la ubicación
+            fecha_referencia: instante de referencia (modo histórico). Si es None
+                usa la fecha global del consultor y, en su defecto, el momento actual.
+            horas: ventana hacia atrás (24 h por defecto = el día del boletín)
+
+        Returns:
+            dict con `disponible`, la lista `horas` y los agregados de
+            precipitacion.resumir_horas() (horas de lluvia, mm por fase, máximos,
+            hay_lluvia_sobre_nieve).
+        """
+        from agentes.datos.precipitacion import resumir_horas
+
+        logger.info(f"[ConsultorBigQuery] precipitación horaria → {ubicacion} ({horas}h)")
+        fecha_referencia = fecha_referencia or _fecha_referencia_global
+        vacio = {"disponible": False, "horas": [], **resumir_horas([])}
+
+        try:
+            ancla = "TIMESTAMP(@fecha_ref)" if fecha_referencia else "CURRENT_TIMESTAMP()"
+            sql = f"""
+                SELECT
+                    hora_inicio,
+                    tipo_precipitacion,
+                    cantidad_precipitacion,
+                    temperatura,
+                    temperatura_bulbo_humedo
+                FROM `{self.GCP_PROJECT}.{self.DATASET}.pronostico_horas`
+                WHERE nombre_ubicacion = @ubicacion
+                  AND hora_inicio >= TIMESTAMP_SUB({ancla}, INTERVAL @horas HOUR)
+                  AND hora_inicio <= {ancla}
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY hora_inicio
+                    ORDER BY marca_tiempo_ingestion DESC
+                ) = 1
+                ORDER BY hora_inicio ASC
+            """
+            parametros = [
+                bigquery.ScalarQueryParameter("ubicacion", "STRING", ubicacion),
+                bigquery.ScalarQueryParameter("horas", "INT64", horas),
+            ]
+            if fecha_referencia:
+                parametros.append(
+                    bigquery.ScalarQueryParameter("fecha_ref", "TIMESTAMP", fecha_referencia)
+                )
+
+            filas = self._ejecutar_query(sql, parametros)
+            if not filas:
+                logger.info(f"[ConsultorBigQuery] sin datos horarios para {ubicacion}")
+                return vacio
+
+            horarias = [
+                {
+                    "hora": str(f["hora_inicio"]),
+                    "tipo": f.get("tipo_precipitacion"),
+                    "precipitacion_mm": f.get("cantidad_precipitacion"),
+                    "temperatura_c": f.get("temperatura"),
+                    "bulbo_humedo_c": f.get("temperatura_bulbo_humedo"),
+                }
+                for f in filas
+            ]
+            return {"disponible": True, "horas": horarias, **resumir_horas(horarias)}
+
+        except (google_exceptions.DeadlineExceeded, concurrent.futures.TimeoutError):
+            logger.error(f"Timeout consultando precipitación horaria para: {ubicacion}")
+            return {**vacio, "error": f"Timeout después de {self.TIMEOUT_SEGUNDOS}s"}
+        except Exception as e:
+            logger.error(f"Error consultando precipitación horaria para {ubicacion}: {e}")
+            return {**vacio, "error": str(e)}
+
     def obtener_pronostico_proximos_dias(
         self,
         ubicacion: str,

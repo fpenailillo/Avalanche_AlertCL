@@ -81,6 +81,11 @@ function normalizarEntrada(entrada) {
       satelital: entrada.satelital ?? {},
       comunidad: entrada.comunidad ?? {},
       problema: entrada.problema ?? null,
+      // Problemas típicos EAWS secundarios y cota de nieve estimada (v25.19)
+      problemasSecundarios: Array.isArray(entrada.problemas_secundarios)
+        ? entrada.problemas_secundarios
+        : [],
+      cotaNieveM: entrada.cota_nieve_m ?? null,
       terrenoRiesgo: entrada.terreno_riesgo ?? null,
       tituloRecomendacion: entrada.titulo_recomendacion ?? null,
       recomendaciones: Array.isArray(entrada.recomendaciones) ? entrada.recomendaciones : [],

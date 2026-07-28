@@ -229,6 +229,9 @@ def _construir_campos_subagentes(tools_llamadas: list, resultado_boletin: dict) 
         # FIX-S1-SEMANTICA (v7.0): trazabilidad EAWS Paso 1
         "problema_avalancha_presente": res_clasificar.get("problema_avalancha_presente"),
         "tipo_problema_eaws": res_clasificar.get("tipo_problema_eaws"),
+        # v25.19: problema típico EAWS completo (dominante + secundarios + cota)
+        "problemas_secundarios_eaws": res_clasificar.get("problemas_secundarios_eaws") or [],
+        "cota_nieve_m": res_clasificar.get("cota_nieve_m"),
         # WN2 v15.0: alertas ensemble + problema avalancha (NULL cuando WN2 inactivo)
         "wn2_alert_heavy_snow": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("heavy_snow") if res_wn2.get("disponible") else None,
         "wn2_alert_storm_slab": (res_wn2.get("diario") or {}).get("alerts_dia", {}).get("storm_slab") if res_wn2.get("disponible") else None,
@@ -448,6 +451,11 @@ def guardar_boletin(resultado_boletin: dict) -> dict:
             # FIX-S1-SEMANTICA (v7.0)
             "problema_avalancha_presente": campos_sa["problema_avalancha_presente"],
             "tipo_problema_eaws": campos_sa["tipo_problema_eaws"],
+            # Lista JSON, igual que patrones_nlp: BigQuery la guarda como STRING
+            "problemas_secundarios_eaws": json.dumps(
+                campos_sa.get("problemas_secundarios_eaws") or [], ensure_ascii=False
+            ),
+            "cota_nieve_m": campos_sa.get("cota_nieve_m"),
             # WN2 v15.0 — NULL cuando WN2 inactivo (compatibilidad retroactiva)
             "wn2_alert_heavy_snow": campos_sa["wn2_alert_heavy_snow"],
             "wn2_alert_storm_slab": campos_sa["wn2_alert_storm_slab"],

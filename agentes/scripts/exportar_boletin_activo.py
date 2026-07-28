@@ -44,7 +44,8 @@ CAMPOS_BOLETIN = """nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_
     factor_seguridad_pinn, estado_vit, score_anomalia_vit,
     datos_satelitales_disponibles, relatos_analizados,
     tipo_alud_predominante, indice_riesgo_historico,
-    tipo_problema_eaws, wn2_avalanche_problem, boletin_texto"""
+    tipo_problema_eaws, problemas_secundarios_eaws, cota_nieve_m,
+    wn2_avalanche_problem, boletin_texto"""
 
 # Un día cuenta como tormenta si su nivel de condiciones (RAW, antes del piso)
 # llegó a 4 — el mismo umbral que dispara FIX-POST-STORM-PERSIST.
@@ -127,6 +128,19 @@ LEFT JOIN evento_tormenta e USING (nombre_ubicacion)
 """
 
 
+def _lista_json(valor) -> list:
+    """Campo STRING de BigQuery que guarda una lista JSON → lista de Python."""
+    if not valor:
+        return []
+    if isinstance(valor, list):
+        return valor
+    try:
+        decodificado = json.loads(valor)
+        return decodificado if isinstance(decodificado, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
 def _registro_desde_fila_bq(fila) -> dict | None:
     """Convierte una fila de boletines_riesgo en el registro del boletín activo."""
     nivel = _nivel_valido(fila.nivel_eaws_24h)
@@ -175,6 +189,9 @@ def _registro_desde_fila_bq(fila) -> dict | None:
             "indice_riesgo_historico": fila.indice_riesgo_historico,
         },
         "problema": fila.tipo_problema_eaws or fila.wn2_avalanche_problem,
+        # v25.19: problema típico propio (dominante ya va en "problema")
+        "problemas_secundarios": _lista_json(fila.problemas_secundarios_eaws),
+        "cota_nieve_m": fila.cota_nieve_m,
         "emitido": fila.fecha_emision.isoformat() if fila.fecha_emision else None,
         **parseado,
     }

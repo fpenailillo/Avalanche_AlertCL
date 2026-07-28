@@ -256,5 +256,17 @@
     "type": "STRING",
     "mode": "NULLABLE",
     "description": "WN2 v15.0: confianza del pronóstico ensemble (alta|media|baja|muy_baja basado en temp_std). NULL cuando USE_WEATHERNEXT2=false."
+  },
+  {
+    "name": "problemas_secundarios_eaws",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "v25.19: problemas típicos EAWS secundarios como lista JSON (ej. [\"new_snow\"]). Complementa tipo_problema_eaws, que lleva el dominante."
+  },
+  {
+    "name": "cota_nieve_m",
+    "type": "INT64",
+    "mode": "NULLABLE",
+    "description": "v25.19: cota de nieve estimada en metros. Medida por la transición lluvia/nieve entre sectores de la zona; si no hay transición observable, isoterma 0 °C del ensemble WN2. NULL cuando nevó en todo el rango de la zona."
   }
 ]

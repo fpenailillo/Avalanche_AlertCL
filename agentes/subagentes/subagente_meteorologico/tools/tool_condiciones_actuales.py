@@ -86,6 +86,7 @@ def ejecutar_obtener_condiciones_actuales_meteo(nombre_ubicacion: str) -> dict:
         prob_precip=prob_precip,
         temperatura=temperatura,
         nieve_nueva_cm=nieve_nueva_cm,
+        tipo_observado=condicion_clima,
     )
 
     resultado = {
@@ -192,10 +193,26 @@ def _evaluar_riesgo_precipitacion(
     prob_precip: float,
     temperatura,
     nieve_nueva_cm: float = None,
+    tipo_observado: str = None,
 ) -> dict:
-    """Evalúa el riesgo de precipitación nival para avalanchas."""
-    # Determinar si precipita como nieve o lluvia
-    if temperatura is None:
+    """
+    Evalúa el riesgo de precipitación nival para avalanchas.
+
+    Args:
+        tipo_observado: tipo de precipitación reportado por el proveedor
+            (`pronostico_horas.tipo_precipitacion`). Cuando está disponible manda
+            sobre la inferencia por temperatura: el 25-jul-2026 llovió en La Parva
+            Sector Bajo a 0,9 °C, temperatura que estos umbrales clasificaban como
+            "nieve_o_aguanieve".
+    """
+    from agentes.datos.precipitacion import fase_desde_condicion
+
+    _fase = fase_desde_condicion(tipo_observado)
+    if _fase == "lluvia":
+        tipo_precipitacion = "lluvia"
+    elif _fase == "nieve":
+        tipo_precipitacion = "nieve"
+    elif temperatura is None:
         tipo_precipitacion = "desconocido"
     elif temperatura <= -2:
         tipo_precipitacion = "nieve"

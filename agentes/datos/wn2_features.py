@@ -51,6 +51,7 @@ def obtener_features_wn2(nombre_ubicacion: str, fecha: str) -> dict:
         wet_snow=False,
         prob_problem="",
         confianza="",
+        cota_0c_m=None,
     )
 
     if os.environ.get("USE_WEATHERNEXT2", "false").lower() != "true":
@@ -96,6 +97,9 @@ def obtener_features_wn2(nombre_ubicacion: str, fecha: str) -> dict:
             wet_snow     = bool(alerts.get("wet_snow",    False)),
             prob_problem = str(d.get("problema_dominante") or ""),
             confianza    = str(d.get("confianza_dia")      or ""),
+            # Cota de la isoterma 0 °C del ensemble (lapse rate variable por MSLP,
+            # fuente_weathernext2). Respalda la cota de nieve observada por sectores.
+            cota_0c_m    = d.get("cota_0c_media_dia_m"),
         )
         logger.debug(
             f"[WN2Features] '{nombre_ubicacion}' {fecha}: "

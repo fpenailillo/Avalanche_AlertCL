@@ -251,18 +251,36 @@ function fusionarComunidad(comMock, observaciones) {
 }
 
 function fusionarProblemas(problemasMock, detalle) {
-  const problema = PROBLEMAS_EAWS[detalle.problema]
-  if (!problema) return problemasMock
-  return [
+  const dominante = PROBLEMAS_EAWS[detalle.problema]
+  if (!dominante) return problemasMock
+
+  const lista = [
     {
-      id: problema.id,
-      nombre: problema.nombre,
+      id: dominante.id,
+      nombre: dominante.nombre,
       cotas: null,
       orientaciones: null,
       detalle: detalle.terrenoRiesgo ?? 'Evaluación automática del sistema multi-agente.',
       real: true,
     },
   ]
+
+  // Problemas secundarios: presentes en la zona pero no dominantes (v25.19)
+  for (const clave of detalle.problemasSecundarios ?? []) {
+    const secundario = PROBLEMAS_EAWS[clave]
+    if (!secundario || lista.some((p) => p.id === secundario.id)) continue
+    lista.push({
+      id: secundario.id,
+      nombre: secundario.nombre,
+      cotas: null,
+      orientaciones: null,
+      detalle: 'También presente en la zona, con menor peso que el problema principal.',
+      real: true,
+      secundario: true,
+    })
+  }
+
+  return lista
 }
 
 const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -327,6 +345,7 @@ export function fusionarCentros(
         satelital: fusionarSatelital(centro.satelital, detalle.satelital, detalle),
         comunidad: fusionarComunidad(centro.comunidad, obs),
         problemas: fusionarProblemas(centro.problemas, detalle),
+        cotaNieveM: detalle.cotaNieveM ?? null,
         recomendaciones: detalle.recomendaciones,
         tituloRecomendacion: detalle.tituloRecomendacion,
       })

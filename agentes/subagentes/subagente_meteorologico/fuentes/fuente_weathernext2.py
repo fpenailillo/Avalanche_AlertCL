@@ -312,8 +312,9 @@ ensemble_members AS (
     CASE
       WHEN r.precip_6hr_mm = 0 AND ABS(r.temp_2m_c) <= 2.0    THEN 'melt_freeze'
       WHEN r.precip_6hr_mm = 0                                   THEN 'no_precip'
-      WHEN r.temp_2m_c > 2.0                                     THEN 'rain'
-      WHEN r.temp_2m_c > 0.0                                     THEN 'wet_snow'
+      -- FIX-ROS-UMBRAL (v25.19): transición lluvia/nieve en ~1 °C, no en 2 °C
+      WHEN r.temp_2m_c > 1.0                                     THEN 'rain'
+      WHEN r.temp_2m_c > -0.5                                    THEN 'wet_snow'
       WHEN SQRT(POW(r.u100,2)+POW(r.v100,2)) > 8.0              THEN 'storm_slab'
       ELSE                                                         'dry_snow'
     END                                                         AS snow_type_member,

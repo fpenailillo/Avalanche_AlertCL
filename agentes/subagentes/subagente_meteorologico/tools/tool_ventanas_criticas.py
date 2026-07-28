@@ -176,6 +176,22 @@ def ejecutar_detectar_ventanas_criticas(
         except Exception:
             pass  # Mantener valores del LLM si el extractor falla
 
+    # ─── FIX-ROS-OBSERVADO (v25.19): tipo de precipitación real ───────────────
+    # La ventana LLUVIA_SOBRE_NIEVE exigía temperatura_actual_C > 2, y esa
+    # temperatura es la del instante de la corrida (~04:00 local, la más fría del
+    # día). El 25-jul-2026 llovió en La Parva Sector Bajo a 0,8-0,9 °C durante
+    # 11 h y la ventana nunca se activó. Google Weather ya publica el tipo
+    # observado hora a hora: se consulta aquí, igual que las banderas WN2.
+    _precip_observada = {}
+    if nombre_ubicacion:
+        try:
+            from agentes.datos.consultor_bigquery import ConsultorBigQuery
+            _precip_observada = ConsultorBigQuery().obtener_precipitacion_horaria(
+                nombre_ubicacion
+            )
+        except Exception:
+            pass  # Sin dato observado se sigue con los umbrales por temperatura
+
     # ─── Umbrales calibrados por región (CR-10A + CR-10B, v10.0) ─────────────
     # ERA5 a 9km promedia espacialmente: en Alpes, el valor puntual de estaciones
     # IMIS es ~2-3× el valor ERA5. En Andes, la subestimación es menor pero
@@ -295,21 +311,41 @@ def ejecutar_detectar_ventanas_criticas(
         })
 
     # ─── Ventana 2: Lluvia sobre nieve ───────────────────────────────────────
-    lluvia_sobre_nieve = (
-        precip_efectiva > _umbral_lluvia
-        and temperatura_actual_C is not None
-        and temperatura_actual_C > 2
-    )
-    if lluvia_sobre_nieve:
+    # FIX-ROS-OBSERVADO (v25.19): el tipo de precipitación observado decide; los
+    # umbrales por temperatura quedan de respaldo cuando no hay dato horario.
+    # Con temperatura se usa el MÁXIMO del día, no la del instante de la corrida.
+    lluvia_sobre_nieve = False
+    if _precip_observada.get("hay_lluvia_sobre_nieve"):
+        lluvia_sobre_nieve = True
         ventanas.append({
             "tipo": "LLUVIA_SOBRE_NIEVE",
             "severidad": "muy_alta",
             "descripcion": (
-                f"Lluvia ({precipitacion_actual_mm:.0f}mm) sobre manto nival "
-                f"a {temperatura_actual_C:.0f}°C: saturación y deslizamiento húmedo"
+                f"Lluvia observada {_precip_observada['horas_lluvia']}h "
+                f"({_precip_observada['mm_lluvia']}mm) sobre manto nival: "
+                f"saturación y deslizamiento húmedo"
             ),
             "tiempo": "actual"
         })
+    else:
+        _temp_dia_C = _precip_observada.get("temperatura_max_c")
+        if _temp_dia_C is None:
+            _temp_dia_C = temperatura_actual_C
+        lluvia_sobre_nieve = (
+            precip_efectiva > _umbral_lluvia
+            and _temp_dia_C is not None
+            and _temp_dia_C > 2
+        )
+        if lluvia_sobre_nieve:
+            ventanas.append({
+                "tipo": "LLUVIA_SOBRE_NIEVE",
+                "severidad": "muy_alta",
+                "descripcion": (
+                    f"Lluvia ({precipitacion_actual_mm:.0f}mm) sobre manto nival "
+                    f"a {_temp_dia_C:.0f}°C: saturación y deslizamiento húmedo"
+                ),
+                "tiempo": "actual"
+            })
 
     # ─── Ventana 3: Ciclo fusión-congelación ─────────────────────────────────
     if ciclo_fusion_congelacion:
