@@ -423,17 +423,30 @@ class IngestorWN2:
         Arma el dict de series diarias WN2 para el frontend (zonas chilenas
         base, sin sectores). Retorna None si no hay zonas con datos.
 
+        Las zonas con sector representativo (SECTOR_REPRESENTATIVO) se publican
+        con la serie de ese sector bajo el nombre de la zona base, igual que el
+        boletín; si esa serie falta, se cae a la serie de la zona base.
+
         fecha_desde (YYYY-MM-DD): descarta los días anteriores a esa fecha
         (evita mostrar días pasados cuando la corrida usada es de días atrás).
         """
-        from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
+        from agentes.datos.constantes_zonas import (
+            SECTOR_REPRESENTATIVO,
+            ZONA_BASE_DE_SECTOR,
+            ZONAS_ANDES_CHILE,
+        )
 
         series = []
         for nombre, diarios in sorted(series_por_zona.items()):
+            # El sector representativo se publica bajo el nombre de su zona base
+            zona = ZONA_BASE_DE_SECTOR.get(nombre, nombre)
             # Solo zonas base chilenas: los sectores tienen su serie en BQ/bronce
-            if nombre not in ZONAS_ANDES_CHILE or " Sector " in nombre:
+            if zona not in ZONAS_ANDES_CHILE or " Sector " in zona:
                 continue
             if not diarios:
+                continue
+            # La zona base cede ante su sector representativo cuando este trae datos
+            if series_por_zona.get(SECTOR_REPRESENTATIVO.get(nombre)):
                 continue
 
             dias = []
@@ -454,7 +467,7 @@ class IngestorWN2:
                     "problema": fila.get("problema_dominante"),
                     "confianza": fila.get("confianza_dia"),
                 })
-            series.append({"zona": nombre, "dias": dias})
+            series.append({"zona": zona, "dias": dias})
 
         if not series:
             return None

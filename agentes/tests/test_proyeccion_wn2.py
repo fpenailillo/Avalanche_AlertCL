@@ -187,6 +187,27 @@ class TestConsolidarRegistros:
         boletines = _consolidar_registros([None, _registro("Portillo", 2, 2, 1)])
         assert len(boletines) == 1
 
+    def test_sector_representativo_manda_aunque_no_sea_el_peor(self):
+        """La Parva se publica con su Sector Medio, no con el sector dominante."""
+        boletines = _consolidar_registros([
+            _registro("La Parva Sector Bajo", 3, 3, 3),
+            _registro("La Parva Sector Medio", 2, 2, 1),
+            _registro("La Parva Sector Alto", 4, 4, 4),
+        ])
+        assert len(boletines) == 1
+        b = boletines[0]
+        assert b["zona"] == "La Parva"
+        assert (b["nivel_eaws"], b["nivel_eaws_48h"], b["nivel_eaws_72h"]) == (2, 2, 1)
+
+    def test_sin_sector_representativo_cae_al_peor(self):
+        """Si la corrida no trajo el Sector Medio, vuelve el criterio conservador."""
+        boletines = _consolidar_registros([
+            _registro("La Parva Sector Bajo", 3, 3, 3),
+            _registro("La Parva Sector Alto", 4, 4, 4),
+        ])
+        assert len(boletines) == 1
+        assert boletines[0]["nivel_eaws"] == 4
+
 
 # ── _parsear_boletin_texto (pronóstico 3d + precipitación) ────────────────────
 

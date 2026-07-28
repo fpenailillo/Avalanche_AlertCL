@@ -587,3 +587,15 @@ ZONAS_DISPONIBLES: list[str] = sorted(COORDENADAS_ZONAS.keys())
 
 ZONAS_ANDES_CHILE: list[str] = [z for z, m in METADATA_ZONAS.items() if m.get("region") == "andes_chile"]
 ZONAS_ALPES_SWISS: list[str] = [z for z, m in METADATA_ZONAS.items() if m.get("region") == "alpes_swiss"]
+
+# ─── Sector representativo por zona base ──────────────────────────────────────
+# Zona base publicada al frontend → sector cuyo dato la representa. La Parva se
+# representa con su Sector Medio (2.500–3.800 m): rango de cotas equiparable al
+# de Valle Nevado (2.800–4.500 m, zona única), lo que hace comparables ambas
+# fichas. Sin entrada aquí, la zona se consolida con el peor de sus sectores.
+SECTOR_REPRESENTATIVO: dict[str, str] = {
+    "La Parva": "La Parva Sector Medio",
+}
+
+# Inverso: sector representativo → zona base bajo la que se publica.
+ZONA_BASE_DE_SECTOR: dict[str, str] = {s: z for z, s in SECTOR_REPRESENTATIVO.items()}

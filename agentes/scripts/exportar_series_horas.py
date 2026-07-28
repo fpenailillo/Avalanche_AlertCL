@@ -29,12 +29,12 @@ BUCKET = "avalanche-alertcl-boletines"
 OBJETO = "series_horas.json"
 
 # (zona de salida → nombre tal cual en BigQuery), orden geográfico norte → sur.
-# La Parva se representa con su Sector Bajo, igual que el boletín consolida los
-# sectores a "La Parva". El resto coincide 1:1 con el nombre_ubicacion del extractor.
+# La Parva se representa con su Sector Medio (SECTOR_REPRESENTATIVO), igual que
+# el boletín. El resto coincide 1:1 con el nombre_ubicacion del extractor.
 ZONAS = [
     ("Ski Arpa", "Ski Arpa"),
     ("Portillo", "Portillo"),
-    ("La Parva", "La Parva Sector Bajo"),
+    ("La Parva", "La Parva Sector Medio"),
     ("Valle Nevado", "Valle Nevado"),
     ("Lagunillas", "Lagunillas"),
     ("Valle de las Arenas", "Valle de las Arenas"),

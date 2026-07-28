@@ -23,7 +23,11 @@ from datetime import date, datetime, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from agentes.datos.ingestores.ingestor_wn2 import IngestorWN2
-from agentes.datos.constantes_zonas import COORDENADAS_ZONAS, ZONAS_ANDES_CHILE
+from agentes.datos.constantes_zonas import (
+    COORDENADAS_ZONAS,
+    SECTOR_REPRESENTATIVO,
+    ZONAS_ANDES_CHILE,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger(__name__)
@@ -55,10 +59,13 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Zonas base chilenas con coordenadas (sin sectores ni suizas)
+    # Zonas base chilenas con coordenadas (sin sectores ni suizas); las que
+    # tienen sector representativo se consultan en la coordenada de ese sector
+    # (construir_contenido_series las republica bajo el nombre de la zona base)
     zonas = [
-        z for z in ZONAS_ANDES_CHILE
-        if " Sector " not in z and z in COORDENADAS_ZONAS
+        SECTOR_REPRESENTATIVO.get(z, z)
+        for z in ZONAS_ANDES_CHILE
+        if " Sector " not in z and SECTOR_REPRESENTATIVO.get(z, z) in COORDENADAS_ZONAS
     ]
     logger.info(f"Zonas a backfillear: {zonas}")
 

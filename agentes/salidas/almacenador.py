@@ -707,10 +707,16 @@ def _consolidar_registros(registros: list) -> list:
     imposibles ("en aumento" con el sector dominante estable) y rompía la
     garantía de deltas ±1/día de la proyección. Trade-off aceptado: un sector
     no dominante con 48h alto ya no eleva el 48h publicado.
+
+    Excepción: las zonas de SECTOR_REPRESENTATIVO se publican siempre con el
+    dato de ese sector (no con el peor), para que su rango de cotas sea
+    comparable con el de las zonas sin sectores. El peor sector queda como
+    respaldo si la corrida no trajo el representativo.
     """
-    from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
+    from agentes.datos.constantes_zonas import SECTOR_REPRESENTATIVO, ZONAS_ANDES_CHILE
 
     por_zona: dict[str, dict] = {}
+    respaldo: dict[str, dict] = {}
     for registro in registros:
         if not registro:
             continue
@@ -720,9 +726,23 @@ def _consolidar_registros(registros: list) -> list:
                         f"(zona '{zona}' fuera de ZONAS_ANDES_CHILE)")
             continue
 
-        previo = por_zona.get(zona)
-        if previo is None or registro["nivel_eaws"] > previo["nivel_eaws"]:
+        if SECTOR_REPRESENTATIVO.get(zona) == registro["ubicacion"]:
             por_zona[zona] = dict(registro)
+            continue
+
+        previo = respaldo.get(zona)
+        if previo is None or registro["nivel_eaws"] > previo["nivel_eaws"]:
+            respaldo[zona] = dict(registro)
+
+    for zona, registro in respaldo.items():
+        if zona in por_zona:
+            continue
+        if zona in SECTOR_REPRESENTATIVO:
+            logger.warning(
+                f"Consolidación: sin boletín de '{SECTOR_REPRESENTATIVO[zona]}' — "
+                f"'{zona}' se publica con el peor sector ('{registro['ubicacion']}')"
+            )
+        por_zona[zona] = registro
 
     boletines = []
     for zona, registro in sorted(por_zona.items()):

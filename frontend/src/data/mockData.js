@@ -77,7 +77,9 @@ function mkCentro(id, nombre, zona, elevacion, exposicion) {
 export const CENTROS = {
   'ski-arpa':            mkCentro('ski-arpa',            'Ski Arpa',                    'Andes del Aconcagua',    '2.600 – 3.700 m', 'S'),
   portillo:              mkCentro('portillo',             'Portillo',                    'Valle del Aconcagua',    '2.580 – 3.310 m', 'NE'),
-  'la-parva':            mkCentro('la-parva',             'La Parva',                    'Andes Centrales',        '2.200 – 4.500 m', 'SE'),
+  // La Parva se reporta con su Sector Medio (2.500–3.800 m): cotas comparables
+  // con Valle Nevado. Ver SECTOR_REPRESENTATIVO en agentes/datos/constantes_zonas.py.
+  'la-parva':            mkCentro('la-parva',             'La Parva',                    'Andes Centrales',        '2.500 – 3.800 m', 'SE'),
   'valle-nevado':        mkCentro('valle-nevado',         'Valle Nevado',                'Andes Centrales',        '2.800 – 4.500 m', 'NO'),
   lagunillas:            mkCentro('lagunillas',           'Lagunillas',                  'Cajón del Maipo',        '2.250 – 2.700 m', 'SO'),
   'valle-de-las-arenas': mkCentro('valle-de-las-arenas', 'Valle de las Arenas',          'Cajón del Maipo',        '2.200 – 3.200 m', 'SO'),
