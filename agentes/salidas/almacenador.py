@@ -107,19 +107,35 @@ def _extraer_nivel(boletin_texto: str, patron: str) -> Optional[int]:
     return None
 
 
+# Tools ópticas que sí conocen la disponibilidad real de la lectura (MODIS /
+# Sentinel-2). detectar_anomalias_satelitales y calcular_snowline se derivan de
+# las métricas de procesar_ndsi y no declaran disponibilidad propia, así que no
+# pueden ser evidencia por sí solas.
+TOOLS_LECTURA_OPTICA = {"procesar_ndsi", "analizar_vit"}
+
+
 def _datos_satelitales_disponibles(tools_llamadas: list) -> bool:
     """
-    Determina si había datos satelitales disponibles en la sesión.
+    Determina si hubo lectura satelital óptica utilizable en la sesión.
+
+    Se mira el resultado de la tool, no su mera invocación: con nubosidad o sin
+    imagen reciente, procesar_ndsi retorna disponible=False y el subagente puede
+    incluso no llegar a analizar_vit. Contar la llamada como evidencia hacía que
+    el frontend anunciara "Imagen disponible" sin imagen alguna.
 
     Args:
         tools_llamadas: Lista de llamadas a tools con sus resultados
 
     Returns:
-        bool: True si se obtuvo datos satelitales disponibles
+        bool: True si alguna tool óptica retornó disponible=True
     """
-    nombres_tools = [t.get("tool", "") for t in tools_llamadas]
-    tools_satelitales = {"procesar_ndsi", "detectar_anomalias_satelitales", "analizar_vit", "calcular_snowline"}
-    return bool(tools_satelitales & set(nombres_tools))
+    for entrada in tools_llamadas:
+        if entrada.get("tool") not in TOOLS_LECTURA_OPTICA:
+            continue
+        resultado = entrada.get("resultado")
+        if isinstance(resultado, dict) and resultado.get("disponible") is True:
+            return True
+    return False
 
 
 def _extraer_resultado_tool(tools_llamadas: list, nombre_tool: str) -> dict:

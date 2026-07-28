@@ -18,6 +18,7 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
 )
 from agentes.salidas.almacenador import (
     _consolidar_registros,
+    _datos_satelitales_disponibles,
     _derivar_tendencia,
     _parsear_boletin_texto,
 )
@@ -207,6 +208,55 @@ class TestConsolidarRegistros:
         ])
         assert len(boletines) == 1
         assert boletines[0]["nivel_eaws"] == 4
+
+
+# ── _datos_satelitales_disponibles ────────────────────────────────────────────
+
+def _llamada(tool, **resultado):
+    return {"tool": tool, "iteracion": 0, "resultado": resultado}
+
+
+class TestDatosSatelitalesDisponibles:
+    def test_lectura_optica_util(self):
+        """Traza de una zona con imagen: NDSI y ViT con datos."""
+        assert _datos_satelitales_disponibles([
+            _llamada("consultar_estado_manto", disponible=True),
+            _llamada("procesar_ndsi", disponible=True),
+            _llamada("analizar_vit", disponible=True),
+        ]) is True
+
+    def test_ndsi_sin_lectura_y_sin_vit(self):
+        """Nubosidad: procesar_ndsi retorna disponible=False y no se llama al ViT."""
+        assert _datos_satelitales_disponibles([
+            _llamada("consultar_estado_manto", disponible=True),
+            _llamada("procesar_ndsi", disponible=False),
+            _llamada("analizar_via_earth_ai", disponible=True),
+        ]) is False
+
+    def test_ndsi_sin_lectura_con_vit_sin_datos(self):
+        """La otra variante observada: el ViT sí corre, pero sin serie que analizar."""
+        assert _datos_satelitales_disponibles([
+            _llamada("procesar_ndsi", disponible=False),
+            _llamada("analizar_vit", disponible=False, estado_vit="sin_datos"),
+        ]) is False
+
+    def test_tools_derivadas_no_encienden_el_flag(self):
+        """snowline y anomalías se derivan del NDSI: no son evidencia propia."""
+        assert _datos_satelitales_disponibles([
+            _llamada("procesar_ndsi", disponible=False),
+            _llamada("detectar_anomalias_satelitales", alertas_satelitales=[]),
+            _llamada("calcular_snowline", snowline_estimada_m=3000),
+        ]) is False
+
+    def test_sin_tools_satelitales(self):
+        assert _datos_satelitales_disponibles([_llamada("analizar_dem", disponible=True)]) is False
+
+    def test_resultado_ausente_o_no_dict(self):
+        """Trazas viejas sin campo 'resultado' no deben contar como disponibles."""
+        assert _datos_satelitales_disponibles([
+            {"tool": "procesar_ndsi", "iteracion": 0},
+            {"tool": "analizar_vit", "resultado": "texto plano"},
+        ]) is False
 
 
 # ── _parsear_boletin_texto (pronóstico 3d + precipitación) ────────────────────
