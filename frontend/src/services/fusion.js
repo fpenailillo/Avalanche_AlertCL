@@ -186,15 +186,26 @@ function fusionarTopografico(topoMock, manto, detalle) {
   }
 }
 
+const MISMO_DIA = (a, b) =>
+  new Date(a).toDateString() === new Date(b).toDateString()
+
 function fusionarSatelital(satMock, satelital, detalle) {
   if (!satelital?.estado || satelital.estado === 'sin_datos') return satMock
+  // El ViT no tiene lectura todos los días: la fecha del análisis puede ser
+  // anterior a la del boletín y se muestra tal cual, nunca como si fuera de hoy.
+  const fechaAnalisis = satelital.fecha ?? detalle.emitido
   return {
     estadoVit: capitalizar(satelital.estado),
     scoreAnomalia: satelital.score_anomalia ?? null,
     datosDisponibles: satelital.datos_disponibles ?? null,
     fechaPasada:
-      formatearFecha(detalle.emitido, { dateStyle: 'medium', timeStyle: 'short' }) ??
+      formatearFecha(fechaAnalisis, { dateStyle: 'medium', timeStyle: 'short' }) ??
       satMock.fechaPasada,
+    desfasado: !!(
+      fechaAnalisis &&
+      detalle.emitido &&
+      !MISMO_DIA(fechaAnalisis, detalle.emitido)
+    ),
     real: true,
   }
 }

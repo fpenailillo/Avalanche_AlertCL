@@ -48,7 +48,10 @@ function VistaReal({ datos }) {
         <span>
           Pipeline S2 en vivo
           <br />
-          Boletín: {datos.fechaPasada}
+          <span className={datos.desfasado ? 'text-amber-300/80' : undefined}>
+            Análisis: {datos.fechaPasada}
+            {datos.desfasado && ' · anterior al boletín'}
+          </span>
         </span>
         {datos.datosDisponibles && (
           <span

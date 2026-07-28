@@ -685,6 +685,9 @@ def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
             "estado": campos_sa.get("estado_vit"),
             "score_anomalia": campos_sa.get("score_anomalia_vit"),
             "datos_disponibles": _datos_satelitales_disponibles(tools_llamadas),
+            # Lectura de esta misma corrida (el export desde BQ sí puede traer
+            # una anterior: ahí la fecha del análisis se resuelve en la query)
+            "fecha": resultado.get("timestamp") if campos_sa.get("estado_vit") else None,
         },
         "comunidad": {
             "relatos_analizados": campos_sa.get("relatos_analizados"),

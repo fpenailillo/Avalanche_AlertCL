@@ -39,28 +39,53 @@ from agentes.datos.constantes_zonas import ZONAS_ANDES_CHILE
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-CAMPOS_BOLETIN = """
-SELECT nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_48h,
-       nivel_eaws_72h, confianza, viento_kmh, estado_pinn,
-       factor_seguridad_pinn, estado_vit, score_anomalia_vit,
-       datos_satelitales_disponibles, relatos_analizados,
-       tipo_alud_predominante, indice_riesgo_historico,
-       tipo_problema_eaws, wn2_avalanche_problem, boletin_texto
-"""
+CAMPOS_BOLETIN = """nombre_ubicacion, fecha_emision, nivel_eaws_24h, nivel_eaws_48h,
+    nivel_eaws_72h, confianza, viento_kmh, estado_pinn,
+    factor_seguridad_pinn, estado_vit, score_anomalia_vit,
+    datos_satelitales_disponibles, relatos_analizados,
+    tipo_alud_predominante, indice_riesgo_historico,
+    tipo_problema_eaws, wn2_avalanche_problem, boletin_texto"""
 
+# Un boletín tiene lectura satelital utilizable (el ViT llegó a un veredicto)
+VIT_UTIL = "estado_vit IS NOT NULL AND estado_vit NOT IN ('sin_datos')"
+
+# El boletín publicado es SIEMPRE el más reciente de cada ubicación: la frescura
+# meteorológica manda. El análisis ViT es intermitente (cobertura de pasadas y
+# nubosidad dejan ~4-5 ubicaciones sin lectura cada día), así que sus campos se
+# completan aparte con la última lectura útil de la ventana, fechada con
+# fecha_satelital para que el frontend no la muestre como si fuera de hoy.
 SQL_ULTIMOS_BOLETINES = f"""
-{CAMPOS_BOLETIN}
-FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
-WHERE DATE(fecha_emision) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
-QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY nombre_ubicacion ORDER BY
-        (estado_vit IS NOT NULL AND estado_vit NOT IN ('sin_datos')) DESC,
-        fecha_emision DESC
-) = 1
+WITH ventana AS (
+    SELECT {CAMPOS_BOLETIN}
+    FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
+    WHERE DATE(fecha_emision) >= DATE_SUB(CURRENT_DATE(), INTERVAL 7 DAY)
+),
+ultimo_boletin AS (
+    SELECT * FROM ventana
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
+    ) = 1
+),
+ultimo_satelital AS (
+    SELECT nombre_ubicacion, estado_vit, score_anomalia_vit,
+           datos_satelitales_disponibles, fecha_emision AS fecha_satelital
+    FROM ventana
+    WHERE {VIT_UTIL}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY nombre_ubicacion ORDER BY fecha_emision DESC
+    ) = 1
+)
+SELECT
+    b.* EXCEPT (estado_vit, score_anomalia_vit, datos_satelitales_disponibles),
+    s.estado_vit, s.score_anomalia_vit, s.datos_satelitales_disponibles,
+    s.fecha_satelital
+FROM ultimo_boletin b
+LEFT JOIN ultimo_satelital s USING (nombre_ubicacion)
 """
 
 SQL_BOLETINES_FECHA = f"""
-{CAMPOS_BOLETIN}
+SELECT {CAMPOS_BOLETIN},
+       IF({VIT_UTIL}, fecha_emision, NULL) AS fecha_satelital
 FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
 WHERE DATE(fecha_emision) = @fecha
 QUALIFY ROW_NUMBER() OVER (
@@ -93,6 +118,8 @@ def _registro_desde_fila_bq(fila) -> dict | None:
             "estado": fila.estado_vit,
             "score_anomalia": fila.score_anomalia_vit,
             "datos_disponibles": bool(fila.datos_satelitales_disponibles),
+            # Puede ser anterior al boletín: el ViT no tiene lectura todos los días
+            "fecha": fila.fecha_satelital.isoformat() if fila.fecha_satelital else None,
         },
         "comunidad": {
             "relatos_analizados": fila.relatos_analizados,
