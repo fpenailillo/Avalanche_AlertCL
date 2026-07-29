@@ -145,12 +145,14 @@ class TestDerivarTendencia:
 
 # ── _consolidar_registros ─────────────────────────────────────────────────────
 
-def _registro(ubicacion, n24, n48, n72):
+def _registro(ubicacion, n24, n48, n72, problema=None, secundarios=None):
     return {
         "ubicacion": ubicacion,
         "nivel_eaws": n24,
         "nivel_eaws_48h": n48,
         "nivel_eaws_72h": n72,
+        "problema": problema,
+        "problemas_secundarios": secundarios or [],
     }
 
 
@@ -199,6 +201,38 @@ class TestConsolidarRegistros:
         b = boletines[0]
         assert b["zona"] == "La Parva"
         assert (b["nivel_eaws"], b["nivel_eaws_48h"], b["nivel_eaws_72h"]) == (2, 2, 1)
+
+    def test_problema_de_otro_sector_llega_como_secundario(self):
+        """
+        La Parva, 25-jul-2026: llovió en el Sector Bajo mientras el Medio —el
+        representativo— nevaba. El dominante sigue siendo el del Medio, pero la
+        nieve húmeda del Bajo no puede desaparecer de la ficha.
+        """
+        boletines = _consolidar_registros([
+            _registro("La Parva Sector Bajo", 4, 5, 5, problema="wet_snow",
+                      secundarios=["new_snow"]),
+            _registro("La Parva Sector Medio", 4, 5, 4, problema="new_snow"),
+            _registro("La Parva Sector Alto", 4, 5, 4, problema="new_snow"),
+        ])
+        assert len(boletines) == 1
+        b = boletines[0]
+        assert b["problema"] == "new_snow"
+        assert b["problemas_secundarios"] == ["wet_snow"]
+
+    def test_no_distinct_no_se_lista_como_secundario(self):
+        boletines = _consolidar_registros([
+            _registro("La Parva Sector Medio", 2, 2, 2, problema="new_snow"),
+            _registro("La Parva Sector Bajo", 2, 2, 2, problema="no_distinct"),
+        ])
+        assert boletines[0]["problemas_secundarios"] == []
+
+    def test_zona_sin_sectores_conserva_sus_secundarios(self):
+        boletines = _consolidar_registros([
+            _registro("Portillo", 3, 3, 2, problema="wet_snow",
+                      secundarios=["new_snow"]),
+        ])
+        assert boletines[0]["problema"] == "wet_snow"
+        assert boletines[0]["problemas_secundarios"] == ["new_snow"]
 
     def test_sin_sector_representativo_cae_al_peor(self):
         """Si la corrida no trajo el Sector Medio, vuelve el criterio conservador."""

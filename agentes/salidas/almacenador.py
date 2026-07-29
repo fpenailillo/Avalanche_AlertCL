@@ -719,6 +719,8 @@ def _registro_desde_resultado(resultado: dict) -> Optional[dict]:
             "indice_riesgo_historico": campos_sa.get("indice_riesgo_historico"),
         },
         "problema": campos_sa.get("tipo_problema_eaws") or campos_sa.get("wn2_avalanche_problem"),
+        "problemas_secundarios": campos_sa.get("problemas_secundarios_eaws") or [],
+        "cota_nieve_m": campos_sa.get("cota_nieve_m"),
         "emitido": resultado.get("timestamp"),
         **parseado,
     }
@@ -744,6 +746,11 @@ def _consolidar_registros(registros: list) -> list:
 
     por_zona: dict[str, dict] = {}
     respaldo: dict[str, dict] = {}
+    # Problemas típicos vistos en CUALQUIER sector de la zona: el sector que
+    # representa a la zona no siempre tiene el problema más relevante. La Parva,
+    # 25-jul-2026: llovió en el Sector Bajo (wet_snow) mientras el Medio —el
+    # representativo— nevaba, y la ficha publicaba solo new_snow.
+    problemas_de_la_zona: dict[str, list] = {}
     for registro in registros:
         if not registro:
             continue
@@ -752,6 +759,11 @@ def _consolidar_registros(registros: list) -> list:
             logger.info(f"Consolidación: '{registro['ubicacion']}' descartada "
                         f"(zona '{zona}' fuera de ZONAS_ANDES_CHILE)")
             continue
+
+        vistos = problemas_de_la_zona.setdefault(zona, [])
+        for problema in [registro.get("problema"), *(registro.get("problemas_secundarios") or [])]:
+            if problema and problema not in vistos:
+                vistos.append(problema)
 
         if SECTOR_REPRESENTATIVO.get(zona) == registro["ubicacion"]:
             por_zona[zona] = dict(registro)
@@ -774,8 +786,29 @@ def _consolidar_registros(registros: list) -> list:
     boletines = []
     for zona, registro in sorted(por_zona.items()):
         registro.pop("ubicacion", None)
+        registro["problemas_secundarios"] = _secundarios_de_la_zona(
+            registro.get("problema"),
+            registro.get("problemas_secundarios"),
+            problemas_de_la_zona.get(zona, []),
+        )
         boletines.append({"zona": zona, **registro})
     return boletines
+
+
+def _secundarios_de_la_zona(dominante, propios, todos_los_sectores) -> list:
+    """
+    Secundarios del registro publicado, incluidos los de los otros sectores.
+
+    Mantiene el orden: primero los del sector que representa a la zona, después
+    los que solo aparecen en sus hermanos. `no_distinct` no se lista: es la
+    ausencia de problema, no un problema.
+    """
+    secundarios = []
+    for problema in [*(propios or []), *todos_los_sectores]:
+        if problema and problema != dominante and problema != "no_distinct":
+            if problema not in secundarios:
+                secundarios.append(problema)
+    return secundarios
 
 
 def _subir_json_publico(bucket, ruta: str, contenido: dict) -> str:
