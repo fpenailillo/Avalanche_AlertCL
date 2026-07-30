@@ -97,6 +97,8 @@ def clasificar_problemas(
     pinn: Optional[dict] = None,
     topografia: Optional[dict] = None,
     exposicion_zona: Optional[str] = None,
+    nivel_eaws: Optional[int] = None,
+    factor_meteorologico: Optional[str] = None,
 ) -> dict:
     """
     Decide el problema dominante y los secundarios a partir de las señales.
@@ -240,10 +242,10 @@ def clasificar_problemas(
             "proxy": True,
         })
 
-    return _resolver(candidatos)
+    return _resolver(candidatos, nivel_eaws, factor_meteorologico)
 
 
-def _resolver(candidatos: list[dict]) -> dict:
+def _resolver(candidatos: list[dict], nivel_eaws=None, factor_meteorologico=None) -> dict:
     """
     Elige el dominante y ordena los secundarios.
 
@@ -252,6 +254,9 @@ def _resolver(candidatos: list[dict]) -> dict:
     indirectas y encabezar el boletín con ellas sobrevendería su fiabilidad.
     """
     if not candidatos:
+        derivado = _derivar_de_contexto(nivel_eaws, factor_meteorologico)
+        if derivado:
+            return derivado
         return {
             "problema_dominante": "no_distinct",
             "problemas_secundarios": [],
@@ -275,6 +280,63 @@ def _resolver(candidatos: list[dict]) -> dict:
         "problemas_secundarios": secundarios,
         "confianza": dominante["confianza"],
         "evidencia": [c["evidencia"] for c in ordenados],
+    }
+
+
+# Nivel EAWS desde el cual un boletín sin problema declarado es incoherente:
+# a partir de "notable" la metodología supone un proceso que explique el peligro.
+NIVEL_EXIGE_PROBLEMA = 3
+
+# factor_meteorologico (del subagente meteorológico) → problema típico que implica
+_FACTOR_A_PROBLEMA = (
+    ("LLUVIA_SOBRE_NIEVE", "wet_snow"),
+    ("FUSION", "wet_snow"),          # FUSION_ACTIVA_CON_CARGA, CICLO_FUSION_CONGELACION
+    ("PRECIPITACION_CRITICA", "new_snow"),
+    ("NEVADA_RECIENTE", "new_snow"),
+    ("VIENTO_FUERTE", "wind_slab"),
+)
+
+
+def _derivar_de_contexto(nivel_eaws, factor_meteorologico) -> Optional[dict]:
+    """
+    Problema para un nivel alto que ninguna señal directa explica.
+
+    Ocurre cuando el nivel viene sostenido por la persistencia post-tormenta y
+    las condiciones del día ya cedieron: Antillanca, 29-jul-2026 — nivel 3 con
+    raw 2, PINN estable (FS 2,17), ViT estable, ensemble en low_load y 19 h de
+    lluvia que sumaron 0,9 mm (bajo el umbral de humedecimiento). Publicar
+    "sin problema distintivo" con peligro notable contradice la metodología:
+    si el peligro persiste, persiste el proceso que lo causó.
+
+    El problema se deduce del factor meteorológico, que es determinista, y viaja
+    con confianza baja y la evidencia explicando de dónde sale. Bajo el umbral de
+    nivel no se deduce nada: un nivel 1-2 sin problema es una situación normal.
+    """
+    if not nivel_eaws or nivel_eaws < NIVEL_EXIGE_PROBLEMA:
+        return None
+
+    factor = (factor_meteorologico or "").upper()
+    for clave, problema in _FACTOR_A_PROBLEMA:
+        if clave in factor:
+            return {
+                "problema_dominante": problema,
+                "problemas_secundarios": [],
+                "confianza": CONFIANZA_PROXY,
+                "evidencia": [
+                    f"Nivel {nivel_eaws} sin señal directa del día: problema "
+                    f"deducido del factor meteorológico {factor_meteorologico}"
+                ],
+            }
+
+    # Peligro notable sin factor meteorológico activo: el proceso está en el manto
+    return {
+        "problema_dominante": "persistent_weak_layer",
+        "problemas_secundarios": [],
+        "confianza": CONFIANZA_PROXY,
+        "evidencia": [
+            f"Nivel {nivel_eaws} sostenido sin señal meteorológica ni de "
+            f"precipitación: se atribuye al estado del manto (sin sondeo que lo confirme)"
+        ],
     }
 
 
@@ -367,9 +429,16 @@ def interpolar_cota(observaciones: list[tuple], bulbo_humedo_c=None,
 def ejecutar_clasificar_problema_eaws(
     ubicacion: str,
     fecha: Optional[str] = None,
+    nivel_eaws: Optional[int] = None,
+    factor_meteorologico: Optional[str] = None,
 ) -> dict:
     """
     Clasifica el problema típico de la ubicación consultando el pipeline.
+
+    Args:
+        nivel_eaws, factor_meteorologico: contexto del boletín. Permiten deducir
+            un problema cuando el nivel es ≥3 y ninguna señal del día lo explica
+            (ver _derivar_de_contexto). Omitirlos solo desactiva esa deducción.
 
     Nunca levanta excepción: ante un fallo de datos retorna `no_distinct` con la
     razón, para no bloquear la emisión del boletín.
@@ -414,6 +483,8 @@ def ejecutar_clasificar_problema_eaws(
             manto=manto,
             topografia=topografia,
             exposicion_zona=metadata.get("exposicion_predominante"),
+            nivel_eaws=nivel_eaws,
+            factor_meteorologico=factor_meteorologico,
         )
         resultado["cota_nieve_m"] = _cota_de_la_zona(
             consultor, ubicacion, referencia, precipitacion, wn2

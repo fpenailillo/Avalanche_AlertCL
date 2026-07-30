@@ -166,6 +166,65 @@ class TestProblemasIndividuales:
         assert r["problemas_secundarios"] == []
 
 
+class TestNivelAltoSinSeñalDirecta:
+    """
+    Caso Antillanca, 29-jul-2026: nivel 3 (raw 2, sostenido por el piso
+    post-tormenta), PINN estable con FS 2,17, ViT estable, ensemble en low_load y
+    19 h de lluvia que sumaron 0,9 mm — bajo el umbral de humedecimiento. La
+    clasificación devolvía `no_distinct`, que con peligro notable contradice la
+    metodología: si el peligro persiste, persiste el proceso que lo causó.
+    """
+
+    def test_fusion_activa_implica_nieve_humeda(self):
+        r = clasificar_problemas(
+            precipitacion=_precip(horas_lluvia=19, mm_lluvia=0.9, bulbo_max=3.1),
+            wn2={"prob_problem": "low_load"},
+            nivel_eaws=3,
+            factor_meteorologico="FUSION_ACTIVA_CON_CARGA",
+        )
+        assert r["problema_dominante"] == "wet_snow"
+        assert r["confianza"] == "baja"
+        assert "deducido del factor meteorológico" in " ".join(r["evidencia"])
+
+    def test_nevada_reciente_implica_nieve_nueva(self):
+        r = clasificar_problemas(
+            nivel_eaws=4, factor_meteorologico="NEVADA_RECIENTE"
+        )
+        assert r["problema_dominante"] == "new_snow"
+        assert r["confianza"] == "baja"
+
+    def test_viento_fuerte_implica_placa(self):
+        r = clasificar_problemas(nivel_eaws=3, factor_meteorologico="VIENTO_FUERTE")
+        assert r["problema_dominante"] == "wind_slab"
+
+    def test_sin_factor_se_atribuye_al_manto(self):
+        r = clasificar_problemas(nivel_eaws=3, factor_meteorologico="ESTABLE")
+        assert r["problema_dominante"] == "persistent_weak_layer"
+        assert r["confianza"] == "baja"
+
+    def test_nivel_bajo_conserva_no_distinct(self):
+        """Un nivel 1-2 sin problema es una situación normal: no se deduce nada."""
+        for nivel in (1, 2):
+            r = clasificar_problemas(
+                nivel_eaws=nivel, factor_meteorologico="FUSION_ACTIVA_CON_CARGA"
+            )
+            assert r["problema_dominante"] == "no_distinct", nivel
+
+    def test_sin_contexto_no_deduce(self):
+        r = clasificar_problemas(factor_meteorologico="FUSION_ACTIVA_CON_CARGA")
+        assert r["problema_dominante"] == "no_distinct"
+
+    def test_señal_directa_tiene_prioridad_sobre_la_deduccion(self):
+        """Con lluvia real medida, el problema viene del dato, no del factor."""
+        r = clasificar_problemas(
+            precipitacion=_precip(horas_lluvia=6, mm_lluvia=8.0),
+            nivel_eaws=3,
+            factor_meteorologico="NEVADA_RECIENTE",
+        )
+        assert r["problema_dominante"] == "wet_snow"
+        assert r["confianza"] == "alta"
+
+
 class TestTransicionLluviaNieve:
     def test_bulbo_humedo_sobre_umbral_con_precipitacion(self):
         r = clasificar_problemas(precipitacion=_precip(bulbo_max=1.2, mm_total=3.0))

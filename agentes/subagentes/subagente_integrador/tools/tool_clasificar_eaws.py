@@ -380,7 +380,9 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
             "tipo_problema_eaws": "no_distinct_avalanche_problem",
             "problemas_secundarios_eaws": [],
             # La cota sigue siendo informativa aunque no haya problema confirmado
-            "cota_nieve_m": _problema_tipico(nombre_ubicacion).get("cota_nieve_m"),
+            "cota_nieve_m": _problema_tipico(
+                nombre_ubicacion, nivel_eaws=1, factor_meteorologico=factor_meteorologico
+            ).get("cota_nieve_m"),
         }
 
     # ─── 1. Determinar estabilidad dominante ─────────────────────────────────
@@ -662,11 +664,15 @@ def ejecutar_clasificar_riesgo_eaws_integrado(
         "viento_kmh": viento_kmh,
         "recomendaciones": recomendaciones,
         "descripcion_nivel": info_nivel.get("descripcion", ""),
-        **_problema_tipico(nombre_ubicacion),
+        **_problema_tipico(nombre_ubicacion, nivel_24h, factor_meteorologico),
     }
 
 
-def _problema_tipico(nombre_ubicacion: Optional[str]) -> dict:
+def _problema_tipico(
+    nombre_ubicacion: Optional[str],
+    nivel_eaws: Optional[int] = None,
+    factor_meteorologico: Optional[str] = None,
+) -> dict:
     """
     Problema típico EAWS de la zona (FIX-PROBLEMA-EAWS, v25.19).
 
@@ -695,6 +701,8 @@ def _problema_tipico(nombre_ubicacion: Optional[str]) -> dict:
         resultado = ejecutar_clasificar_problema_eaws(
             nombre_ubicacion,
             fecha=referencia.strftime("%Y-%m-%d") if referencia else None,
+            nivel_eaws=nivel_eaws,
+            factor_meteorologico=factor_meteorologico,
         )
         dominante = resultado.get("problema_dominante")
         return {

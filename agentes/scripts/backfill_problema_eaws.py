@@ -73,7 +73,8 @@ ORDER BY fecha, nombre_ubicacion
 
 SQL_PROBLEMA_ACTUAL = f"""
 SELECT nombre_ubicacion, DATE(fecha_emision) AS fecha,
-       tipo_problema_eaws, wn2_avalanche_problem, cota_nieve_m
+       tipo_problema_eaws, wn2_avalanche_problem, cota_nieve_m,
+       nivel_eaws_24h, factor_meteorologico
 FROM `{GCP_PROJECT}.{DATASET}.{TABLA_BOLETINES}`
 WHERE DATE(fecha_emision) BETWEEN @desde AND @hasta
 """
@@ -117,18 +118,32 @@ def problemas_actuales(cliente, desde: str, hasta: str) -> dict:
         (f.nombre_ubicacion, f.fecha.isoformat()): {
             "problema": f.tipo_problema_eaws or f.wn2_avalanche_problem,
             "cota": f.cota_nieve_m,
+            "nivel": f.nivel_eaws_24h,
+            "factor": f.factor_meteorologico,
         }
         for f in job.result()
     }
 
 
-def reclasificar(ubicacion: str, fecha: str) -> dict:
-    """Clasifica con la fecha del boletín como referencia global del consultor."""
+def reclasificar(ubicacion: str, fecha: str, contexto: dict = None) -> dict:
+    """
+    Clasifica con la fecha del boletín como referencia global del consultor.
+
+    `contexto` lleva el nivel EAWS y el factor meteorológico ya publicados: sin
+    ellos la tool no puede deducir el problema de un nivel alto que las señales
+    del día no explican (ver _derivar_de_contexto).
+    """
+    contexto = contexto or {}
     establecer_fecha_referencia_global(
         datetime.fromisoformat(f"{fecha}T23:59:59").replace(tzinfo=timezone.utc)
     )
     try:
-        return ejecutar_clasificar_problema_eaws(ubicacion, fecha=fecha)
+        return ejecutar_clasificar_problema_eaws(
+            ubicacion,
+            fecha=fecha,
+            nivel_eaws=contexto.get("nivel"),
+            factor_meteorologico=contexto.get("factor"),
+        )
     finally:
         establecer_fecha_referencia_global(None)
 
@@ -181,12 +196,12 @@ def main() -> int:
 
     cambios = []
     for ubicacion, fecha in filas:
-        resultado = reclasificar(ubicacion, fecha)
+        previo = antes.get((ubicacion, fecha), {})
+        resultado = reclasificar(ubicacion, fecha, previo)
         if not resultado.get("disponible"):
             logger.warning(f"  {fecha} {ubicacion}: sin datos — se omite")
             continue
 
-        previo = antes.get((ubicacion, fecha), {})
         nuevo = resultado.get("problema_dominante")
         if previo.get("problema") == nuevo and previo.get("cota") == resultado.get("cota_nieve_m"):
             continue
