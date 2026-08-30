@@ -58,7 +58,7 @@ class SubagenteSatelital(BaseSubagente):
     """
 
     NOMBRE = "SubagenteSatelital"
-    MODELO = "databricks-qwen3-next-80b-a3b-instruct"  # transitorio: Anthropic cuando ANTHROPIC_API_KEY esté disponible
+    MODELO = "system.ai.qwen3-next-80b-a3b-instruct"  # transitorio: Anthropic cuando ANTHROPIC_API_KEY esté disponible
     MAX_TOKENS = 4096
     MAX_ITERACIONES = 10
 

@@ -121,12 +121,19 @@ class ClienteAnthropic:
 
 class ClienteDatabricks:
     """
-    Wrapper del SDK OpenAI apuntando al Databricks AI Gateway.
-    Convierte tool definitions Anthropic → OpenAI y normaliza la respuesta
-    de vuelta al formato Anthropic para que base_subagente.py no cambie.
+    Wrapper del SDK OpenAI (Responses API) apuntando al Databricks AI Gateway.
+    Convierte tool definitions y el historial de mensajes Anthropic → Responses
+    API, y normaliza la respuesta de vuelta al formato Anthropic para que
+    base_subagente.py no cambie.
+
+    FIX-DBX-RESPONSES-API (2026-08-30): Databricks retiró el endpoint
+    "databricks-qwen3-next-80b-a3b-instruct" vía /chat/completions (rechazaba
+    todo con HTTP 400 "Cannot create or query foundation model endpoints").
+    El modelo gratuito ahora se sirve como "system.ai.qwen3-next-80b-a3b-instruct"
+    solo a través de /responses (formato input/output, no messages/choices).
     """
 
-    MODELO_DEFAULT = "databricks-qwen3-next-80b-a3b-instruct"
+    MODELO_DEFAULT = "system.ai.qwen3-next-80b-a3b-instruct"
     BASE_URL_DEFAULT = (
         "https://dbc-6f162706-efdf.cloud.databricks.com/ai-gateway/mlflow/v1"
     )
@@ -195,28 +202,30 @@ class ClienteDatabricks:
     def error_servidor(self):
         return self._APIStatusError
 
-    # ── Conversiones Anthropic → OpenAI ──────────────────────────────────────
+    # ── Conversiones Anthropic → Responses API ───────────────────────────────
 
     def _tools_a_openai(self, tools: list) -> list:
-        """Convierte definición de tools Anthropic → OpenAI."""
+        """Convierte definición de tools Anthropic → Responses API (formato plano)."""
         return [
             {
                 "type": "function",
-                "function": {
-                    "name": t["name"],
-                    "description": t.get("description", ""),
-                    "parameters": t.get(
-                        "input_schema",
-                        {"type": "object", "properties": {}},
-                    ),
-                },
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get(
+                    "input_schema",
+                    {"type": "object", "properties": {}},
+                ),
             }
             for t in tools
         ]
 
-    def _mensajes_a_openai(self, system: str, messages: list) -> list:
-        """Convierte historial de mensajes Anthropic → OpenAI."""
-        resultado = [{"role": "system", "content": system}]
+    def _mensajes_a_openai(self, messages: list) -> list:
+        """Convierte historial de mensajes Anthropic → items de Responses API.
+
+        El system prompt se pasa aparte vía el parámetro `instructions`
+        (no forma parte de `input`).
+        """
+        resultado: list = []
 
         for msg in messages:
             rol = msg["role"]
@@ -224,34 +233,37 @@ class ClienteDatabricks:
 
             if rol == "user":
                 if isinstance(contenido, str):
-                    resultado.append({"role": "user", "content": contenido})
+                    resultado.append({
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": contenido}],
+                    })
                 elif isinstance(contenido, list):
                     # Lista: puede mezclar tool_results y texto
-                    tool_results = []
                     texto_extra = []
                     for item in contenido:
                         if (
                             isinstance(item, dict)
                             and item.get("type") == "tool_result"
                         ):
-                            tool_results.append({
-                                "role": "tool",
-                                "tool_call_id": item["tool_use_id"],
-                                "content": item["content"],
+                            resultado.append({
+                                "type": "function_call_output",
+                                "call_id": item["tool_use_id"],
+                                "output": item["content"],
                             })
                         else:
                             texto_extra.append(str(item))
-                    resultado.extend(tool_results)
                     if texto_extra:
                         resultado.append({
                             "role": "user",
-                            "content": " ".join(texto_extra),
+                            "content": [{
+                                "type": "input_text",
+                                "text": " ".join(texto_extra),
+                            }],
                         })
 
             elif rol == "assistant":
                 if isinstance(contenido, list):
                     texto = ""
-                    tool_calls = []
                     for bloque in contenido:
                         tipo = (
                             bloque.type
@@ -280,63 +292,62 @@ class ClienteDatabricks:
                                 if hasattr(bloque, "id")
                                 else bloque.get("id", "")
                             )
-                            tool_calls.append({
-                                "id": bid,
-                                "type": "function",
-                                "function": {
-                                    "name": nombre,
-                                    "arguments": json.dumps(
-                                        inp, ensure_ascii=False
-                                    ),
-                                },
+                            resultado.append({
+                                "type": "function_call",
+                                "call_id": bid,
+                                "name": nombre,
+                                "arguments": json.dumps(
+                                    inp, ensure_ascii=False
+                                ),
                             })
-                    msg_asistente: dict = {
-                        "role": "assistant",
-                        "content": texto or None,
-                    }
-                    if tool_calls:
-                        msg_asistente["tool_calls"] = tool_calls
-                    resultado.append(msg_asistente)
+                    if texto:
+                        resultado.append({
+                            "role": "assistant",
+                            "content": [{"type": "output_text", "text": texto}],
+                        })
                 else:
                     resultado.append({
                         "role": "assistant",
-                        "content": str(contenido),
+                        "content": [{
+                            "type": "output_text",
+                            "text": str(contenido),
+                        }],
                     })
 
         return resultado
 
-    # ── Normalización OpenAI → Anthropic ─────────────────────────────────────
+    # ── Normalización Responses API → Anthropic ──────────────────────────────
 
     def _normalizar_respuesta(self, resp) -> RespuestaNormalizada:
-        """Convierte respuesta OpenAI → RespuestaNormalizada (formato Anthropic)."""
-        choice = resp.choices[0]
-        message = choice.message
-        finish_reason = choice.finish_reason
-
+        """Convierte respuesta Responses API → RespuestaNormalizada (formato Anthropic)."""
         bloques: list = []
+        tiene_tool_use = False
 
-        if message.content:
-            bloques.append(BloqueTexto(text=message.content))
-
-        if getattr(message, "tool_calls", None):
-            for tc in message.tool_calls:
+        for item in resp.output:
+            tipo = getattr(item, "type", None)
+            if tipo == "message":
+                for bloque_c in item.content:
+                    if getattr(bloque_c, "type", None) == "output_text":
+                        bloques.append(BloqueTexto(text=bloque_c.text))
+            elif tipo == "function_call":
+                tiene_tool_use = True
                 try:
-                    args = json.loads(tc.function.arguments)
+                    args = json.loads(item.arguments)
                 except (json.JSONDecodeError, TypeError):
-                    args = {"_raw": tc.function.arguments}
+                    args = {"_raw": item.arguments}
                 bloques.append(BloqueToolUse(
-                    id=tc.id,
-                    name=tc.function.name,
+                    id=item.call_id,
+                    name=item.name,
                     input=args,
                 ))
 
-        stop_reason = "tool_use" if finish_reason == "tool_calls" else "end_turn"
+        stop_reason = "tool_use" if tiene_tool_use else "end_turn"
         uso = _Usage(
             input_tokens=getattr(
-                getattr(resp, "usage", None), "prompt_tokens", 0
+                getattr(resp, "usage", None), "input_tokens", 0
             ),
             output_tokens=getattr(
-                getattr(resp, "usage", None), "completion_tokens", 0
+                getattr(resp, "usage", None), "output_tokens", 0
             ),
         )
         return RespuestaNormalizada(
@@ -349,14 +360,15 @@ class ClienteDatabricks:
 
     def crear_mensaje(self, *, model, max_tokens, system, tools, messages):
         tools_oi = self._tools_a_openai(tools)
-        messages_oi = self._mensajes_a_openai(system, messages)
+        input_oi = self._mensajes_a_openai(messages)
         # FIX-LLM-DETER (v20.0): temperature=0.0 para determinismo.
         # seed=42 eliminado — Databricks Qwen3-80B rechaza el campo (HTTP 400).
-        resp = self._cliente.chat.completions.create(
+        resp = self._cliente.responses.create(
             model=self._modelo,
-            max_tokens=max_tokens,
+            max_output_tokens=max_tokens,
+            instructions=system,
             tools=tools_oi,
-            messages=messages_oi,
+            input=input_oi,
             timeout=self.TIMEOUT_SEGUNDOS,
             temperature=0.0,
         )

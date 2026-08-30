@@ -55,7 +55,7 @@ class BaseSubagente(ABC):
     """
 
     NOMBRE = "BaseSubagente"
-    MODELO = "databricks-qwen3-next-80b-a3b-instruct"
+    MODELO = "system.ai.qwen3-next-80b-a3b-instruct"
     PROVEEDOR = "databricks"
     MAX_TOKENS = 4096
     MAX_ITERACIONES = 10

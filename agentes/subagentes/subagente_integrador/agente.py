@@ -35,7 +35,7 @@ class SubagenteIntegrador(BaseSubagente):
     """
 
     NOMBRE = "SubagenteIntegrador"
-    MODELO = "databricks-qwen3-next-80b-a3b-instruct"  # transitorio: Anthropic cuando ANTHROPIC_API_KEY esté disponible
+    MODELO = "system.ai.qwen3-next-80b-a3b-instruct"  # transitorio: Anthropic cuando ANTHROPIC_API_KEY esté disponible
     MAX_TOKENS = 6144  # Más tokens para el boletín completo
     MAX_ITERACIONES = 6
 
