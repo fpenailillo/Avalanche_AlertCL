@@ -137,6 +137,33 @@ function EstadoBoletin({ boletin, fechaSeleccionada }) {
     )
   }
 
+  // FIX-BOLETIN-FRESCURA: el backend marca el boletín cuando los datos ya no
+  // son del día. Antes se republicaba con la fecha de hoy y una caída del
+  // pipeline podía pasar una semana inadvertida.
+  if (boletin.obsoleto) {
+    const dias = boletin.antiguedadHoras ? Math.floor(boletin.antiguedadHoras / 24) : null
+    const antiguedad =
+      dias && dias >= 1
+        ? `hace ${dias} ${dias === 1 ? 'día' : 'días'}`
+        : boletin.antiguedadHoras
+          ? `hace ${Math.round(boletin.antiguedadHoras)} h`
+          : null
+    const emitido = boletin.fechaBoletin
+      ? new Date(`${boletin.fechaBoletin}T12:00:00`).toLocaleDateString('es-CL', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })
+      : null
+    return (
+      <p className="mx-auto mt-3 flex w-fit items-center gap-1.5 rounded-full border border-amber-300/40 bg-amber-400/15 px-3 py-1 text-[11px] text-amber-100 backdrop-blur-sm">
+        <TriangleAlert className="h-3 w-3" />
+        Boletín sin actualizar{emitido ? ` — último análisis del ${emitido}` : ''}
+        {antiguedad ? ` (${antiguedad})` : ''}. No refleja las condiciones de hoy.
+      </p>
+    )
+  }
+
   const fecha = boletin.generado
     ? new Date(boletin.generado).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })
     : null

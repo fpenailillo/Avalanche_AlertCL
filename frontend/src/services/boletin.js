@@ -120,6 +120,10 @@ async function obtenerBoletinDesde(url) {
   return {
     generado: cuerpo.generado ?? null,
     fechaBoletin: cuerpo.fecha_boletin ?? null,
+    // FIX-BOLETIN-FRESCURA: el backend declara si los datos ya no son del día.
+    obsoleto: cuerpo.obsoleto === true,
+    antiguedadHoras:
+      typeof cuerpo.antiguedad_horas === 'number' ? cuerpo.antiguedad_horas : null,
     boletines,
   }
 }
@@ -326,9 +330,17 @@ export function useBoletinActivo(fecha = null) {
     let montado = true
     const promesa = fecha ? obtenerBoletinFecha(fecha) : obtenerBoletinActivo()
     promesa
-      .then(({ generado, fechaBoletin, boletines }) => {
+      .then(({ generado, fechaBoletin, obsoleto, antiguedadHoras, boletines }) => {
         if (montado) {
-          setResultado({ paraFecha: fecha, estado: 'en-linea', boletines, generado, fechaBoletin })
+          setResultado({
+            paraFecha: fecha,
+            estado: 'en-linea',
+            boletines,
+            generado,
+            fechaBoletin,
+            obsoleto,
+            antiguedadHoras,
+          })
         }
       })
       .catch((error) => {

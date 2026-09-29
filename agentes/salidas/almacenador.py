@@ -42,6 +42,17 @@ SCHEMA_PATH = os.path.join(os.path.dirname(__file__), "schema_boletines.json")
 BUCKET_BOLETIN_ACTIVO = os.environ.get("BUCKET_BOLETIN_ACTIVO", "avalanche-alertcl-boletines")
 OBJETO_BOLETIN_ACTIVO = "boletin_activo.json"
 
+# FIX-BOLETIN-FRESCURA (2026-09-29): el boletín activo se fechaba con
+# CURRENT_DATE en vez de con la emisión real de los datos. Entre el 22 y el
+# 28-sep, con el pipeline caído (token Databricks sin scopes de inferencia), el
+# exportador siguió encontrando el boletín del 21 en su ventana de 7 días y lo
+# republicó siete veces, cada vez con la fecha del día y una copia nueva en
+# historico/. La caída quedó invisible una semana. Ahora la fecha sale de los
+# datos y, si superan el umbral, el JSON lo declara para que el frontend avise.
+UMBRAL_OBSOLESCENCIA_HORAS = float(
+    os.environ.get("BOLETIN_MAX_ANTIGUEDAD_HORAS", "24")
+)
+
 
 class ErrorAlmacenamiento(Exception):
     """Excepción levantada cuando falla el almacenamiento de boletines."""
@@ -837,11 +848,45 @@ def _actualizar_indice_fechas(bucket, fecha: str) -> None:
     _subir_json_publico(bucket, "indice_boletines.json", {"fechas": sorted(fechas, reverse=True)})
 
 
-def subir_boletin_fecha(boletines: list, fecha: str, es_activo: bool = False) -> Optional[str]:
+def _emitido_mas_reciente(boletines: list) -> Optional[datetime]:
+    """
+    Instante de emisión más reciente del consolidado, en UTC.
+
+    Es la frescura real de los datos, independiente de cuándo se publiquen:
+    lo que fecha el boletín es el análisis, no la corrida del exportador.
+    """
+    emitidos = []
+    for b in boletines:
+        crudo = b.get("emitido")
+        if not crudo:
+            continue
+        if isinstance(crudo, datetime):
+            momento = crudo
+        else:
+            try:
+                momento = datetime.fromisoformat(str(crudo).replace("Z", "+00:00"))
+            except ValueError:
+                continue
+        if momento.tzinfo is None:
+            momento = momento.replace(tzinfo=timezone.utc)
+        emitidos.append(momento.astimezone(timezone.utc))
+    return max(emitidos) if emitidos else None
+
+
+def subir_boletin_fecha(
+    boletines: list,
+    fecha: str,
+    es_activo: bool = False,
+    antiguedad_horas: Optional[float] = None,
+    obsoleto: bool = False,
+) -> Optional[str]:
     """
     Sube un boletín consolidado a GCS bajo historico/boletin_<fecha>.json y
     actualiza el índice de fechas. Si es_activo, también sobreescribe
     boletin_activo.json. Nunca levanta excepción.
+
+    antiguedad_horas y obsoleto viajan en el JSON para que el frontend pueda
+    advertir que los datos no son del día (ver UMBRAL_OBSOLESCENCIA_HORAS).
     """
     if not boletines:
         logger.warning("Boletín: sin zonas chilenas con nivel válido — no se exporta")
@@ -851,8 +896,11 @@ def subir_boletin_fecha(boletines: list, fecha: str, es_activo: bool = False) ->
         "generado": datetime.now(timezone.utc).isoformat(),
         "fecha_boletin": fecha,
         "fuente": "pipeline-s5",
+        "obsoleto": obsoleto,
         "boletines": boletines,
     }
+    if antiguedad_horas is not None:
+        contenido["antiguedad_horas"] = round(antiguedad_horas, 1)
     try:
         bucket = storage.Client(project=GCP_PROJECT).bucket(BUCKET_BOLETIN_ACTIVO)
         uri = _subir_json_publico(bucket, f"historico/boletin_{fecha}.json", contenido)
@@ -870,9 +918,43 @@ def subir_boletin_fecha(boletines: list, fecha: str, es_activo: bool = False) ->
 
 
 def subir_boletin_activo(boletines: list) -> Optional[str]:
-    """Sube el boletín activo (hoy UTC) + copia histórica + índice."""
-    fecha = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return subir_boletin_fecha(boletines, fecha, es_activo=True)
+    """
+    Sube el boletín activo + copia histórica + índice.
+
+    FIX-BOLETIN-FRESCURA: la fecha sale de la emisión real de los datos, no de
+    la fecha de la corrida. Así la copia histórica cae en el día que le
+    corresponde (y se sobrescribe en vez de clonarse) y el índice no gana
+    fechas sin boletín propio. Si los datos exceden el umbral, el JSON sale
+    marcado como obsoleto y se registra un WARNING.
+    """
+    ahora = datetime.now(timezone.utc)
+    emitido = _emitido_mas_reciente(boletines)
+
+    if emitido is None:
+        # Sin 'emitido' utilizable no se puede medir frescura: se mantiene el
+        # comportamiento previo (fecha de la corrida) y se avisa.
+        logger.warning(
+            "Boletín activo: ningún registro trae 'emitido' — se fecha con la "
+            "corrida y no se puede evaluar la frescura"
+        )
+        return subir_boletin_fecha(boletines, ahora.strftime("%Y-%m-%d"), es_activo=True)
+
+    antiguedad_horas = (ahora - emitido).total_seconds() / 3600
+    obsoleto = antiguedad_horas > UMBRAL_OBSOLESCENCIA_HORAS
+    if obsoleto:
+        logger.warning(
+            f"Boletín activo OBSOLETO: los datos más recientes son de "
+            f"{emitido.isoformat()} ({antiguedad_horas:.1f} h > "
+            f"{UMBRAL_OBSOLESCENCIA_HORAS:.0f} h de umbral). Se publica marcado "
+            f"como obsoleto y fechado con su día real, no con hoy."
+        )
+    return subir_boletin_fecha(
+        boletines,
+        emitido.strftime("%Y-%m-%d"),
+        es_activo=True,
+        antiguedad_horas=antiguedad_horas,
+        obsoleto=obsoleto,
+    )
 
 
 def exportar_boletin_activo(resultados: list) -> Optional[str]:
