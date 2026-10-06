@@ -15,6 +15,10 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
     _estabilidad_desde_snowpack,
 )
 
+# Medido: ~159s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 
 class TestSnowpackPWL:
     """Fase D (H3): capa débil persistente IMIS → estabilidad (FIX-PWL-SNOWPACK)."""

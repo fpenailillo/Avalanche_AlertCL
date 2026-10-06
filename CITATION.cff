@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "Si usas este software o sus resultados en tu investigación, por favor cítalo así."
+title: "Avalanche_AlertCL: sistema multi-agente de predicción de riesgo de avalanchas para los Andes chilenos"
+abstract: >-
+  Sistema multi-agente que genera boletines de riesgo de avalanchas bajo el estándar
+  EAWS para zonas de montaña chilenas. Ante la ausencia de una red densa de observación
+  del manto nivoso en Chile, infiere el peligro a partir de fuentes indirectas
+  —modelos digitales de elevación, imágenes satelitales, pronóstico ensemble
+  WeatherNext 2 y relatos de la comunidad de montañistas— orquestando cinco subagentes
+  especializados sobre modelos de lenguaje.
+type: software
+authors:
+  - family-names: "Peñailillo"
+    given-names: "Francisco"
+    email: "fpenailillom@correo.uss.cl"
+    affiliation: "Universidad Técnica Federico Santa María (UTFSM)"
+version: "1.0.0"
+date-released: "2026-10-06"
+repository-code: "https://github.com/fpenailillo/Avalanche_AlertCL"
+url: "https://fpenailillo.github.io/Avalanche_AlertCL/"
+keywords:
+  - avalanchas
+  - EAWS
+  - nieve
+  - Andes
+  - sistemas multi-agente
+  - modelos de lenguaje
+  - teledetección
+# NOTA: falta el campo 'license'. El repositorio aún no tiene LICENSE — ver
+# docs/auditoria_repositorio.md §3.3. Añadir aquí el identificador SPDX
+# (p. ej. MIT, Apache-2.0, CC-BY-4.0) cuando se confirme con la universidad.

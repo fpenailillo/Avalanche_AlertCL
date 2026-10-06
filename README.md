@@ -61,8 +61,11 @@ graph LR
         E4 --> BQ
         E5 --> BQ
 
-        subgraph CapaAgentes [Capa de Agentes / agentes/]
+        subgraph CapaAgentes [Capa de Agentes / agentes/ — Cloud Run Jobs]
             direction LR
+            J1[/orquestador-avalanchas<br/>08:00 UTC/]
+            J2[/ingestor-wn2/]
+
             O{{Orquestador}}
             S1(S1: Topográfico)
             S2(S2: Satelital)
@@ -70,20 +73,28 @@ graph LR
             S4(S4: Sit. Briefing)
             S5(S5: Integrador EAWS)
 
+            J1 --> O
             O --> S1
             S1 --> S2 --> S3 --> S4 --> S5
         end
 
+        CS -- Diario --> J1
+        CS -- Diario --> J2
+        J2 -- Pronóstico ensemble --> BQ
         BQ -- Lectura de contexto --> O
 
         subgraph CapaResultados [Capa de Resultados]
             direction TB
             BQ_Res[(BigQuery<br/>boletines_riesgo)]
-            GCS[[Cloud Storage<br/>JSON files]]
+            J3[/exportar-boletin-activo<br/>10:30 UTC/]
+            J4[/exportar-series-horas/]
+            GCS[[Cloud Storage<br/>boletin_activo.json<br/>series_horas.json]]
         end
 
         S5 -- Guarda 34 campos --> BQ_Res
-        S5 -- Exporta JSON --> GCS
+        BQ_Res --> J3 --> GCS
+        BQ --> J4 --> GCS
+        GCS -- Lee --> FE[Frontend<br/>GitHub Pages]
     end
 
     style GCP fill:#f8f9fa,stroke:#dadce0,stroke-width:2px
@@ -91,6 +102,7 @@ graph LR
     style CapaAgentes fill:#e6f4ea,stroke:#34a853,stroke-width:2px
     style CapaResultados fill:#fce8e6,stroke:#ea4335,stroke-width:2px
     style BQ fill:#fef7e0,stroke:#fbbc04,stroke-width:2px
+    style FE fill:#f3e8fd,stroke:#9334e6,stroke-width:2px
 ```
 
 ## Los 5 Agentes Especializados
@@ -106,6 +118,44 @@ S4 - Agente Contextual (Briefing): Analiza miles de relatos históricos y report
 
 S5 - Agente Integrador EAWS: Es el "juez final". Toma las conclusiones de los cuatro agentes anteriores, evalúa la estabilidad, frecuencia y tamaño esperado de las avalanchas, y redacta el boletín final con el nivel de peligro (del 1 al 5).
 
+## Cómo se ejecuta en producción
+
+El sistema no es un servicio permanente: son **cuatro Cloud Run Jobs** que Cloud Scheduler
+dispara a lo largo del día, todos sobre la misma imagen de contenedor.
+
+| Job | Cuándo | Qué hace |
+|---|---|---|
+| `orquestador-avalanchas` | 08:00 UTC | Recorre S1→S5 por cada zona y guarda los boletines en BigQuery |
+| `ingestor-wn2` | Diario | Ingesta el pronóstico ensemble de WeatherNext 2 |
+| `exportar-boletin-activo` | 10:30 UTC | Reconstruye `boletin_activo.json` desde BigQuery y lo publica en GCS |
+| `exportar-series-horas` | Diario | Publica las series horarias que consume el frontend |
+
+La publicación va **desacoplada** a propósito: si el orquestador excede su `task-timeout`,
+muere antes de publicar, pero los boletines ya están zona por zona en BigQuery. El job de
+las 10:30 los recoge de todos modos, de forma que el frontend nunca se queda congelado.
+
+**Los commits no despliegan el backend.** El workflow de GitHub Actions solo publica el
+frontend en GitHub Pages. Para actualizar la imagen de los jobs hay que lanzar la build a
+mano:
+
+```bash
+gcloud builds submit --config agentes/despliegue/cloudbuild.yaml .
+```
+
+## Desarrollo local
+
+```bash
+pip install -r requirements-dev.txt     # incluye las dependencias de ejecución
+gcloud auth application-default login
+
+pytest -m "not integration"             # unitarios: segundos, sin red
+pytest                                  # suite completa: consulta BigQuery en vivo
+```
+
+La configuración de pytest vive en `pyproject.toml`, así que los tests funcionan desde
+cualquier directorio. Los que necesitan credenciales GCP y red están marcados como
+`integration`.
+
 ##  Estructura del Repositorio
 Para quienes deseen explorar el código fuente, el proyecto está organizado de la siguiente manera:
 
@@ -117,6 +167,8 @@ Para quienes deseen explorar el código fuente, el proyecto está organizado de 
 
 /notebooks_validacion: Entorno de investigación académica utilizado para comparar los resultados de la IA contra boletines de expertos humanos y validar las hipótesis de la tesis.
 
-/docs: Documentación teórica, papers relevantes, fundamentos de la matriz EAWS y la propuesta original de la tesis.
+/docs: Documentación teórica, papers relevantes, fundamentos de la matriz EAWS y la propuesta original de la tesis. Los informes de validación por ronda están archivados en `docs/validacion/historico/`; `docs/auditoria_repositorio.md` recoge el estado del repositorio y lo que queda pendiente.
+
+Las carpetas `historico/` (en `agentes/scripts/`, `datos/` y `docs/validacion/`) guardan material de un solo uso que la tesis cita como evidencia. No se ejecuta ni se mantiene: está ahí por trazabilidad.
 
 ####  Descargo de Responsabilidad > Este es un proyecto desarrollado con fines de investigación académica y pruebas de concepto. La información predictiva generada por esta Inteligencia Artificial es experimental y bajo ninguna circunstancia reemplaza el criterio humano experto, la capacitación adecuada ni el uso de equipos de seguridad en terreno (ARVA, pala, sonda). La montaña es un entorno dinámico y peligroso.

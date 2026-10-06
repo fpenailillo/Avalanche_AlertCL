@@ -1,0 +1,45 @@
+# Declaración del proyecto y configuración de herramientas.
+#
+# Nota sobre el despliegue: la imagen de Cloud Run NO instala este paquete.
+# El Dockerfile copia agentes/ y datos/analizador_avalanchas/ y fija PYTHONPATH,
+# así que este archivo no altera el despliegue. Sirve para (a) poder instalar el
+# proyecto en modo editable al desarrollar y (b) dar a pytest una configuración
+# única, de modo que los tests dejen de depender del directorio de trabajo.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avalanche-alertcl"
+version = "1.0.0"
+description = "Sistema multi-agente de predicción de riesgo de avalanchas para los Andes chilenos (boletines EAWS)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Francisco Peñailillo", email = "fpenailillom@correo.uss.cl" }]
+keywords = ["avalanchas", "EAWS", "nieve", "multi-agente", "LLM", "Andes"]
+
+# Las dependencias NO se duplican aquí: se leen de los requirements existentes,
+# que siguen siendo la única fuente de verdad (los usa el Dockerfile).
+dynamic = ["dependencies", "optional-dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["agentes/despliegue/requirements.txt"] }
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+[tool.setuptools]
+packages = ["agentes", "datos"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["agentes/tests"]
+pythonpath = ["."]
+addopts = "--strict-markers"
+
+markers = [
+    "integration: consulta BigQuery, GCS o Earth Engine en vivo; necesita credenciales GCP y red. Excluir con -m 'not integration'.",
+    "slow: tarda más de 30 s. Normalmente implica integration.",
+]

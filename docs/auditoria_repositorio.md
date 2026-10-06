@@ -2,10 +2,11 @@
 
 **Fecha:** 2026-10-06 · **Rama auditada:** `main` @ `0b86d48`
 
-> **Estado:** auditoría completada y **Fases 1 a 3 ejecutadas** (ver §5). Las secciones 2
+> **Estado:** auditoría completada y **Fases 1 a 4 ejecutadas** (ver §5). Las secciones 2
 > y 3 describen el diagnóstico original; donde una recomendación ya se aplicó, está
-> marcada como **Ejecutado**. Quedan abiertas la Fase 0 (§3.4.b), la Fase 4 y las dos
-> decisiones manuales señaladas en §2.1.b y §2.3.
+> marcada como **Ejecutado**. Queda abierta la **Fase 0** (§3.4.b, el conflicto de H4) y
+> tres decisiones tuyas: el `LICENSE` (§3.3), cuál `RESULTADOS_VALIDACION.md` es canónico
+> (§2.3) y qué hacer con los dos `.docx` sin versionar (§2.4).
 
 | Antes | Después |
 |---|---|
@@ -13,6 +14,8 @@
 | 248 MB en disco · `.git` 38 MB | **232 MB** · `.git` **23 MB** |
 | 3 ramas (`main`, `develop`, `feat/*`) | **1** (`main`) |
 | 641 tests | **634** (se retiró `test_tools.py`, que probaba código muerto) |
+| Suite completa: 18 min 32 s, 14 en rojo | **523 unitarios en 20 s, todos verdes** + 111 `integration` |
+| Sin configuración de pytest ni CI de tests | `pyproject.toml` + workflow `tests.yml` |
 
 Este informe responde a dos preguntas: **qué sobra** en el repositorio y **qué falta**
 para que la versión final sea reproducible y citable. Cada afirmación va acompañada del
@@ -274,10 +277,15 @@ sea la misma versión en todos los servicios.
 
 ### 3.3 Sin licencia ni forma de citar
 
-No hay `LICENSE` ni `CITATION.cff`. El repositorio es público y acompaña una tesis: sin
-licencia explícita, nadie puede reutilizar el código legalmente, y sin `CITATION.cff` no
-hay forma canónica de citarlo. Para un trabajo cuyo propósito declarado es «democratizar
-el acceso a la seguridad invernal», es una omisión que contradice el objetivo.
+El repositorio es público y acompaña una tesis: sin licencia explícita, nadie puede
+reutilizar el código legalmente, y sin `CITATION.cff` no hay forma canónica de citarlo.
+Para un trabajo cuyo propósito declarado es «democratizar el acceso a la seguridad
+invernal», es una omisión que contradice el objetivo.
+
+**Parcialmente resuelto.** `CITATION.cff` creado, con los datos académicos tal como los
+declara el README (Magíster, UTFSM, 2026). **`LICENSE` sigue pendiente por decisión
+tuya**, a confirmar con la universidad; `CITATION.cff` lleva un comentario marcando el
+hueco y el campo `license` que falta rellenar con su identificador SPDX.
 
 ### 3.4 La suite de tests no es ejecutable de forma rutinaria
 
@@ -465,14 +473,106 @@ si el pipeline QC debe ser operacional o quedarse en validación.
 
 ---
 
+## 3.ter Fase 4 ejecutada: lo que faltaba
+
+### Partición medida de la suite
+
+Antes de marcar nada se midió **cada archivo de test por separado** (una corrida completa
+por archivo, no una estimación). Los 9 archivos más lentos concentran 983 s de los 1113 s
+totales; los otros 23 tardan menos de 10 s cada uno:
+
+| Archivo | Reloj | Marcado |
+|---|---:|---|
+| `test_fix_cr7.py` | 238 s | `integration`, `slow` |
+| `test_fix_wn2.py` | 215 s | `integration`, `slow` |
+| `test_fix_cr17a.py` | 189 s | `integration`, `slow` |
+| `test_fix_h.py` | 159 s | `integration`, `slow` |
+| `test_fix_geo.py` | 94 s | `integration`, `slow` |
+| `test_fix_cr10.py` | 32 s | `integration`, `slow` |
+| `test_fase0_datos.py` | 24 s | `integration` (combinado con su `skipif` previo) |
+| `test_conexion.py` | 23 s | `integration` |
+| `test_fix_pinn_wn2.py` | 10 s | `integration` **solo en `TestFallbackWN2Determinista`** |
+
+El último se marcó por clase, no por archivo: solo esa clase alcanza BigQuery a través de
+`obtener_features_wn2`; el resto del archivo (PINN/EAWS, surcharge) es unitario y se queda
+en el grupo rápido.
+
+**Resultado:** 523 unitarios + 111 de integración.
+
+```
+pytest -m "not integration"   → 513 passed, 12 skipped en 20,21 s
+```
+
+Los 14 tests que estaban en rojo cayeron **todos** en el grupo `integration`, lo que
+confirma que dependen de BigQuery en vivo y no de una regresión del código. El grupo
+unitario queda verde, que es lo que hace viable ponerlo en CI.
+
+### Archivos creados
+
+- **`pyproject.toml`** — declara el paquete y centraliza la configuración de pytest
+  (`testpaths`, `pythonpath`, `--strict-markers` y los dos marcadores). Verificado: los
+  tests ahora corren desde cualquier directorio, que era el problema de §3.1. No duplica
+  dependencias: las lee de los `requirements.txt` existentes vía
+  `[tool.setuptools.dynamic]`, para no crear otra fuente de verdad. **No afecta al
+  despliegue**: la imagen no instala el paquete, copia los árboles y fija `PYTHONPATH`.
+- **`requirements-dev.txt`** — incluye los requirements de ejecución con `-r` y añade lo
+  que faltaba declarar: `pytest`, `requests`, `pandas`, `numpy`, `scikit-learn`, `joblib`.
+  Resolución verificada con `pip install --dry-run`, sin conflictos. `scipy` no hace
+  falta: `n05_pruebas_estadisticas.py` implementa los contrastes a mano, declarándolo
+  explícitamente para evitar la dependencia.
+- **`CITATION.cff`** — ver §3.3.
+- **`.github/workflows/tests.yml`** — corre `pytest -m "not integration"` en cada push a
+  `main` y en cada PR que toque `agentes/`, `datos/` o la configuración. El runner no
+  tiene credenciales GCP, por eso excluye `integration`.
+
+### 3.ter.b Deriva corregida entre `cloudbuild.yaml` y los jobs reales
+
+Consultados los cuatro jobs con `gcloud run jobs describe` y comparados contra lo que
+declara `cloudbuild.yaml`. Memoria, CPU y timeout coinciden en tres de ellos. **El
+orquestador no:**
+
+| | `cloudbuild.yaml` | Job real |
+|---|---|---|
+| `orquestador-avalanchas` task-timeout | 3600 s | **7200 s** |
+
+La deriva estaba latente, no activa: la rama `create` de `cloudbuild.yaml` solo se ejecuta
+si el job no existe, así que nunca pisó el valor real. Pero si alguna vez se borrase y
+recreara el job, habría vuelto a nacer con 3600 s — **justo el timeout que causó que el
+orquestador muriese antes de publicar `boletin_activo.json`**, que es el incidente para el
+que existe el job desacoplado. Corregido a 7200 s.
+
+También se añadió el **paso 6** a `cloudbuild.yaml` con `exportar-boletin-activo`, que es
+lo que recomendaba §3.5.b. Sus parámetros (300 s, 1 Gi, 1 CPU) se tomaron del job real,
+verificado, no del script. Los cuatro jobs se despliegan ya por el mismo camino.
+
+### 3.ter.c Hallazgo menor: un import roto en los notebooks de H2
+
+`notebooks_validacion/02_analisis_ablacion.py:161` y
+`03_comparacion_snowlab.py:161` contienen, dentro de la rama `if args.ground_truth:`:
+
+```python
+from databricks import cargar_ground_truth_csv
+# TODO: implementar emparejamiento por (ubicacion, fecha)
+```
+
+No existe ningún módulo `databricks` en el repositorio ni el paquete está instalado: el
+comentario dice «Importar loader del notebook 01», y el notebook 01 es
+`01_validacion_f1_score.py`. Es código inacabado que reventaría con `ImportError` en
+cuanto alguien pase `--ground-truth`. **No lo toqué** — forma parte del análisis de H2 y
+arreglarlo es completar el emparejamiento que el `TODO` deja a medias, no limpieza.
+
+---
+
 ## 4. Decisiones registradas
 
 | Tema | Decisión |
 |---|---|
-| Alcance de esta pasada | Solo auditoría; no se modificó ningún archivo del repositorio |
+| Alcance | Primero solo auditoría; después se autorizó ejecutar las Fases 1 a 4 |
 | PDFs de `docs/papers-relevantes/` (~18 MB) | **Mantener todos** — respaldo metodológico de la tesis |
 | Los 14 informes de ronda en `docs/validacion/` | **Archivar** en `docs/validacion/historico/` |
 | Ramas `develop` y `feat/mejoras-h1h3h4-datadriven` | **Borrar ambas** (local y origin); se descarta `39d610e` |
+| `LICENSE` | **Ninguna por ahora**, a confirmar con la universidad |
+| Afiliación en `CITATION.cff` | La que declara el README: Magíster, UTFSM, 2026 |
 
 Sobre el archivado: `docs/validacion/` contiene 26 archivos. 14 son informes
 `rondaN_vXX_resultados.md` (rondas 5 a 18) y 11 son documentos vigentes
@@ -548,7 +648,7 @@ a la imagen — pero conviene confirmarlo en una corrida real.
 
 **Pendiente de decisión manual:** cuál de los dos `RESULTADOS_VALIDACION.md` es el canónico.
 
-### Fase 4 — PENDIENTE: aditivo (cierra los vacíos de §3)
+### Fase 4 — Aditivo ✅ EJECUTADA (salvo el LICENSE, por decisión)
 
 1. `pyproject.toml` con el paquete declarado, configuración de pytest y marcadores
    `integration` / `slow`; marcar los tests que tocan BigQuery.

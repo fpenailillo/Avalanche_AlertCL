@@ -107,6 +107,8 @@ class TestPINNSurcharge:
         )
 
 
+@pytest.mark.integration  # obtener_features_wn2 consulta BigQuery; el resto
+                          # del archivo (PINN/EAWS, surcharge) es unitario
 class TestFallbackWN2Determinista:
     """Si nieve_nueva_cm no viene del LLM, el PINN consulta WN2 directamente."""
 

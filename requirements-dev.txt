@@ -1,0 +1,23 @@
+# Dependencias de desarrollo y validación académica.
+# Instalar con:  pip install -r requirements-dev.txt
+#
+# Las dependencias de ejecución del sistema multi-agente viven en
+# agentes/despliegue/requirements.txt (y una por Cloud Function en datos/*/).
+# Este archivo solo añade lo que hace falta para correr los tests y los
+# notebooks de validación, que no se despliegan.
+
+-r agentes/despliegue/requirements.txt
+
+# ── Tests ────────────────────────────────────────────────────────────────────
+pytest==9.0.2
+requests==2.31.0
+
+# ── Validación académica (notebooks_validacion/) ─────────────────────────────
+# pandas/numpy los usan tanto los tests como los notebooks; el pipeline QC de
+# datos/qc/snow_depth_qc.py también los necesita.
+pandas==2.2.3
+numpy==1.26.4
+
+# Modelo supervisado H3 (RF snowpack) — notebooks_validacion/modelo_h3_supervisado.py
+scikit-learn==1.6.1
+joblib==1.4.2

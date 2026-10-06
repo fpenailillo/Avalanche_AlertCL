@@ -36,10 +36,15 @@ def _tiene_credenciales_gcp() -> bool:
 
 _gcp_disponible = _tiene_credenciales_gcp()
 
-pytestmark = pytest.mark.skipif(
-    not _gcp_disponible,
-    reason="Sin credenciales GCP (ejecutar 'gcloud auth application-default login')"
-)
+# Medido: ~24s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not _gcp_disponible,
+        reason="Sin credenciales GCP (ejecutar 'gcloud auth application-default login')"
+    ),
+]
 
 
 UMBRAL_NULOS_CRITICO = 0.50  # 50% de nulos → tabla con problemas graves

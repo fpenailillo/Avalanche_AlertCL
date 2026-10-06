@@ -10,6 +10,10 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
     ejecutar_clasificar_riesgo_eaws_integrado,
 )
 
+# Medido: ~94s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 _TOPO_GRANDE = {
     "desnivel_inicio_deposito_m": 900.0,
     "zona_inicio_ha": 60.0,

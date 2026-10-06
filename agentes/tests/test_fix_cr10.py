@@ -15,6 +15,10 @@ from agentes.subagentes.subagente_integrador.tools.tool_clasificar_eaws import (
     ejecutar_clasificar_riesgo_eaws_integrado,
 )
 
+# Medido: ~32s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 _INTERLAKEN  = "Interlaken"
 _LA_PARVA    = "La Parva Sector Alto"
 

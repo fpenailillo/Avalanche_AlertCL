@@ -17,6 +17,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
 
 from google.cloud import bigquery
 
+# Medido: ~23s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [pytest.mark.integration]
+
 
 GCP_PROJECT = os.environ.get("GCP_PROJECT") or os.environ.get("ID_PROYECTO", "climas-chileno")
 DATASET = os.environ.get("DATASET_ID", "clima")

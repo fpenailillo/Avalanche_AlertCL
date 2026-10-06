@@ -36,7 +36,7 @@ steps:
             --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
             --region=us-central1 --project=$PROJECT_ID \
             --memory=4Gi --cpu=2 \
-            --task-timeout=3600 \
+            --task-timeout=7200 \
             --max-retries=1 \
             --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
             --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1,USE_WEATHERNEXT2=true
@@ -86,6 +86,33 @@ steps:
             --args="agentes/scripts/exportar_series_horas.py,--horas,72" \
             --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
             --set-env-vars=GCP_PROJECT=climas-chileno,ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
+
+  # Paso 6: Crear o actualizar el Cloud Run Job exportar-boletin-activo
+  # Publicación desacoplada: si el orquestador excede su task-timeout muere antes
+  # de publicar boletin_activo.json, pero los boletines ya están zona por zona en
+  # BigQuery. Este job los recoge a las 10:30 UTC y publica igualmente.
+  # El scheduler (publicar-boletin-activo) lo crea setup_scheduler_boletin.sh.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'crear-o-actualizar-boletin-activo'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud run jobs describe exportar-boletin-activo \
+          --region=us-central1 --project=$PROJECT_ID > /dev/null 2>&1 \
+        && gcloud run jobs update exportar-boletin-activo \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+        || gcloud run jobs create exportar-boletin-activo \
+            --image=gcr.io/$PROJECT_ID/snow-alert-agentes:$BUILD_ID \
+            --region=us-central1 --project=$PROJECT_ID \
+            --memory=1Gi --cpu=1 \
+            --task-timeout=300 \
+            --max-retries=1 \
+            --command=python \
+            --args="agentes/scripts/exportar_boletin_activo.py" \
+            --service-account=funciones-clima-sa@climas-chileno.iam.gserviceaccount.com \
+            --set-env-vars=ID_PROYECTO=climas-chileno,DATASET_ID=clima,REGION=us-central1
 
 options:
   logging: CLOUD_LOGGING_ONLY

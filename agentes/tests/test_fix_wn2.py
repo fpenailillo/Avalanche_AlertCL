@@ -15,6 +15,10 @@ import pytest
 from datetime import date
 from unittest.mock import MagicMock, patch
 
+# Medido: ~215s de reloj — consulta BigQuery en vivo.
+# Excluir con:  pytest -m "not integration"
+pytestmark = [pytest.mark.integration, pytest.mark.slow]
+
 
 # ── FuenteWeatherNext2.obtener_ventanas_6h ────────────────────────────────────
 
