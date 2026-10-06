@@ -22,7 +22,7 @@ import logging
 import os
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 import functions_framework
 from flask import Request
@@ -138,11 +138,6 @@ UBICACIONES_ANALISIS = [
 # ============================================================================
 # EXCEPCIONES PERSONALIZADAS
 # ============================================================================
-
-class ErrorAnalisisTopografico(Exception):
-    """Error durante el análisis topográfico con GEE."""
-    pass
-
 
 class ErrorAlmacenamientoBigQuery(Exception):
     """Error al almacenar datos en BigQuery."""

@@ -209,8 +209,9 @@ agentes/
 │
 ├── despliegue/
 │   ├── Dockerfile
-│   ├── cloudbuild.yaml
-│   ├── job_cloud_run.yaml
+│   ├── cloudbuild.yaml                # Única fuente de verdad de los Cloud Run Jobs
+│   ├── setup_scheduler_boletin.sh     # Job+scheduler exportar-boletin-activo
+│   ├── setup_scheduler_ingestor_wn2.sh
 │   └── requirements.txt
 │
 └── tests/

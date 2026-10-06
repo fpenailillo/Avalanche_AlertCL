@@ -85,24 +85,25 @@ grep -rn "analisis_pendientes" --include=*.py --include=*.md --include=*.yaml .
 # → sin resultados
 ```
 
-### 2.1.b Pendiente de decisión: `agentes/subagentes/subagente_nlp/`
+### 2.1.b `agentes/subagentes/subagente_nlp/` — NO es código muerto
 
-`docs/revision_metodologica.md:96` ya señalaba que este subagente fue *«reemplazado por
-S4 Situational Briefing»*. La verificación lo confirma a medias, por eso **no se tocó** en
-esta limpieza:
+`docs/revision_metodologica.md:96` lo daba por *«reemplazado por S4 Situational
+Briefing»*, y en una primera lectura lo parece: el orquestador conserva el **nombre** del
+atributo pero instancia otra clase
+(`agente_principal.py:80` → `self.subagente_nlp = AgenteSituationalBriefing()`).
 
-- El orquestador conserva el **nombre** del atributo pero instancia otra clase:
-  `agentes/orquestador/agente_principal.py:80` → `self.subagente_nlp = AgenteSituationalBriefing()`.
-  La clase `SubagenteNLP` de `subagente_nlp/agente.py` no se instancia en producción.
-- Pero `subagente_nlp/conocimiento_base_andino.py` **sí está vivo**: lo importan
-  `notebooks_validacion/n06_analisis_nlp_sintetico.py` (7 veces) y
-  `subagente_nlp/tools/tool_conocimiento_historico.py`.
-- `agentes/prompts/registro_versiones.py:69` sigue registrando el hash de
-  `agentes.subagentes.subagente_nlp.prompts`.
+La verificación completa dice otra cosa: **este paquete es el objeto de estudio de la
+hipótesis H2** de la tesis («el SubagenteNLP mejora el F1-macro en más de 5 puntos»).
+Dependen de él:
 
-Es decir, el paquete está medio muerto: la capa de agente sobra, la base de conocimiento
-andino no. Separarlas es refactor, no limpieza, y afecta al registro de versiones de
-prompts — que es trazabilidad de tesis. **Queda a tu criterio.**
+- `notebooks_validacion/02_analisis_ablacion.py` — el experimento de ablación de H2
+- `notebooks_validacion/n05_pruebas_estadisticas.py` — el contraste estadístico de H2
+- `notebooks_validacion/n06_analisis_nlp_sintetico.py` — 7 imports de `conocimiento_base_andino`
+- `agentes/validacion/metricas_eaws.py` — las métricas de delta NLP y de ablación
+- `agentes/prompts/registro_versiones.py:69` — el hash SHA-256 de sus prompts
+
+Eliminarlo haría irreproducible H2. **Se conserva íntegro, deliberadamente.** Que no se
+ejecute en producción es precisamente el resultado de H2, no una señal de que sobre.
 
 ### 2.2 Scripts de un solo uso ya ejecutados
 
@@ -403,6 +404,64 @@ bloque a `cloudbuild.yaml` como paso 6, igual que los otros tres.
 
 El que existe está en `claude/CLAUDE.md`, dentro de un directorio ignorado por git, así
 que no acompaña al repositorio.
+
+---
+
+## 3.bis Segunda pasada: símbolos no utilizados
+
+Barrido con un detector AST propio sobre los 193 archivos `.py` versionados: se recogen
+todos los `def`/`class` de nivel de módulo y se contrasta cada nombre contra el resto del
+repositorio (`.py`, `.md`, `.yaml`, `.sh`), incluyendo coincidencias dentro de cadenas
+para no perder despacho dinámico.
+
+De 134 candidatos brutos, 113 resultaron falsos positivos: clases `Test*` que pytest
+descubre sin que nadie las referencie, y `recibir_observacion`, que es el entrypoint HTTP
+de su Cloud Function (`@functions_framework.http` en la línea inmediatamente anterior).
+
+**Eliminados — 447 líneas, verificados con una sola aparición en todo el repositorio:**
+
+| Archivo | Símbolos |
+|---|---|
+| `subagente_meteorologico/tools/tool_tendencia_72h.py` | `_calcular_estadisticas_historial`, `_detectar_ciclos_temperatura`, `_evaluar_tendencia_viento`, `_detectar_eventos_precipitacion` — 4 helpers privados que su propio `ejecutar_*` nunca llama |
+| `datos/monitor_satelital/fuentes.py` | `obtener_fuentes_ordenadas_por_prioridad`, `seleccionar_satelite_goes`, `validar_fuente_disponible`, `obtener_todas_las_fuentes_para_ubicacion` |
+| `datos/monitor_satelital/productos.py` | `ErrorProductoNoDisponible`, `procesar_goes_termico`, `obtener_vis_params_goes_termico` |
+| `datos/monitor_satelital/sentinel1_sar.py` | `crear_mascara_nieve_humeda`, `compilar_metricas_sar_bigquery` |
+| `datos/monitor_satelital/indicadores_nieve.py` | `calcular_cambio_snowline`, `calcular_tasa_cambio_nieve` |
+| `datos/monitor_satelital/metricas.py` | `calcular_albedo_nieve` |
+| `datos/analizador_avalanchas/main.py` | `ErrorAnalisisTopografico` — excepción nunca lanzada |
+
+Más 9 imports que quedaron huérfanos tras esos borrados (`Optional`, `List`, `Tuple`,
+`NDSI_VALOR_NOCHE`, `KELVIN_A_CELSIUS`, `VIS_GOES_TERMICO`, `NDSI_VALOR_NUBE`).
+
+**Conservados pese a figurar como no usados:**
+
+- `invalidar_cache_snowpack` y `invalidar_cache_wn2` (`snowpack_features.py`,
+  `wn2_features.py`): envoltorios de `lru_cache.cache_clear()` documentados como *«útil en
+  tests o al cambiar la fecha de referencia»*. Son exactamente lo que hace falta al
+  reprocesar varias fechas en un mismo proceso, como en la revalidación de H4.
+- Todo `subagente_nlp/` (ver §2.1.b).
+
+**Manifiestos de despliegue eliminados:** `agentes/despliegue/job_cloud_run.yaml` y
+`job_ingestor_wn2.yaml`. Ningún script los aplica — `cloudbuild.yaml` crea los jobs con
+flags inline de `gcloud run jobs create`, así que eran una tercera fuente de verdad que
+nadie leía. `docs/revision_metodologica.md:84` ya señalaba sus IDs hardcodeados como
+pendiente. Si los aplicas a mano con `gcloud run jobs replace`, recupéralos del historial.
+
+### 3.bis.b Hallazgo: una rama que no podría funcionar en producción
+
+`agentes/datos/consultor_bigquery.py:1901` tiene un bloque `if apply_qc:` que importa
+`pandas` y `datos.qc.snow_depth_qc` de forma diferida. Dos problemas:
+
+1. **Ninguno de los dos llega a la imagen.** `pandas` no está en
+   `agentes/despliegue/requirements.txt`, y el `Dockerfile` solo copia `agentes/` y
+   `datos/analizador_avalanchas/` — `datos/qc/` se queda fuera.
+2. **Nada activa la rama.** `apply_qc` tiene default `False` y no hay una sola llamada en
+   el repositorio que lo ponga en `True`.
+
+Es decir, hoy no falla porque nunca se ejecuta. El día que alguien pase `apply_qc=True`
+en producción, revienta con `ModuleNotFoundError`. **No lo toqué**: decidir entre añadir
+`pandas` al requirements y copiar `datos/qc/` en la imagen, o retirar la rama, depende de
+si el pipeline QC debe ser operacional o quedarse en validación.
 
 ---
 

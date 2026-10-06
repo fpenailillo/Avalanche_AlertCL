@@ -12,7 +12,7 @@ transforman observaciones puntuales en tendencias de cambio.
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional
 
 import ee
 
@@ -151,43 +151,6 @@ def calcular_snowline(
         }
 
 
-def calcular_cambio_snowline(
-    snowline_actual: Optional[float],
-    snowline_anterior_24h: Optional[float],
-    snowline_anterior_72h: Optional[float]
-) -> Dict[str, Optional[float]]:
-    """
-    Calcula el cambio de snowline respecto a capturas anteriores.
-
-    Args:
-        snowline_actual: Elevación snowline actual (msnm)
-        snowline_anterior_24h: Snowline de hace 24 horas
-        snowline_anterior_72h: Snowline de hace 72 horas
-
-    Returns:
-        dict: Cambios de snowline:
-            - snowline_cambio_24h_m: cambio vs 24h atrás (+ subió, - bajó)
-            - snowline_cambio_72h_m: cambio vs 72h atrás
-    """
-    resultado = {
-        'snowline_cambio_24h_m': None,
-        'snowline_cambio_72h_m': None,
-    }
-
-    if snowline_actual is not None:
-        if snowline_anterior_24h is not None:
-            resultado['snowline_cambio_24h_m'] = round(
-                snowline_actual - snowline_anterior_24h, 0
-            )
-
-        if snowline_anterior_72h is not None:
-            resultado['snowline_cambio_72h_m'] = round(
-                snowline_actual - snowline_anterior_72h, 0
-            )
-
-    return resultado
-
-
 # =============================================================================
 # CAMBIO DE COBERTURA DE NIEVE
 # =============================================================================
@@ -307,24 +270,6 @@ def calcular_cambio_cobertura(
             'pct_cobertura_actual': None,
             'pct_cobertura_anterior': None,
         }
-
-
-def calcular_tasa_cambio_nieve(
-    deltas_diarios: List[float]
-) -> Optional[float]:
-    """
-    Calcula la tasa promedio de cambio de cobertura de nieve.
-
-    Args:
-        deltas_diarios: Lista de cambios diarios de cobertura (%)
-
-    Returns:
-        float: Tasa promedio de cambio (%/día)
-    """
-    if not deltas_diarios:
-        return None
-
-    return round(sum(deltas_diarios) / len(deltas_diarios), 2)
 
 
 # =============================================================================

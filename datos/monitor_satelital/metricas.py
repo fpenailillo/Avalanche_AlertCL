@@ -18,8 +18,6 @@ from constantes import (
     UMBRAL_NUBES_NUBLADO,
     UMBRAL_NDSI_NIEVE,
     NDSI_VALOR_NUBE,
-    NDSI_VALOR_NOCHE,
-    KELVIN_A_CELSIUS,
     TIMEOUT_DESCARGA_SEGUNDOS,
 )
 
@@ -337,51 +335,6 @@ def calcular_metricas_sentinel2(
 # =============================================================================
 # MÉTRICAS ALBEDO
 # =============================================================================
-
-def calcular_albedo_nieve(
-    imagen_ndsi: ee.Image,
-    imagen_albedo: ee.Image,
-    roi: ee.Geometry,
-    escala: int = 500
-) -> Optional[float]:
-    """
-    Calcula el albedo promedio en zonas de nieve.
-
-    Args:
-        imagen_ndsi: Imagen NDSI para identificar nieve
-        imagen_albedo: Imagen con banda Snow_Albedo_Daily_Tile
-        roi: Región de interés
-        escala: Escala de reducción
-
-    Returns:
-        float o None: Albedo promedio en zonas de nieve (1-100%)
-    """
-    try:
-        # Máscara de nieve (NDSI >= umbral)
-        mascara_nieve = imagen_ndsi.gte(UMBRAL_NDSI_NIEVE)
-
-        # Aplicar máscara al albedo
-        albedo_enmascarado = imagen_albedo.updateMask(mascara_nieve)
-
-        stats = _getinfo_con_timeout(albedo_enmascarado.reduceRegion(
-            reducer=ee.Reducer.mean(),
-            geometry=roi,
-            scale=escala,
-            maxPixels=1e9
-        ))
-
-        albedo = stats.get('Snow_Albedo_Daily_Tile')
-
-        if albedo is not None:
-            logger.info(f"Albedo de nieve promedio: {albedo:.1f}%")
-            return round(albedo, 2)
-
-        return None
-
-    except Exception as e:
-        logger.error(f"Error al calcular albedo: {str(e)}")
-        return None
-
 
 # =============================================================================
 # COMPILACIÓN DE MÉTRICAS

@@ -12,7 +12,7 @@ import json
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from agentes.subagentes.subagente_meteorologico.tools.tool_ventanas_criticas import (
     ejecutar_detectar_ventanas_criticas,

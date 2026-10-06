@@ -242,23 +242,6 @@ def calcular_wet_snow_index(
         raise
 
 
-def crear_mascara_nieve_humeda(
-    wet_snow_index: ee.Image,
-    umbral_db: float = UMBRAL_WET_SNOW_DB
-) -> ee.Image:
-    """
-    Crea una máscara binaria de nieve húmeda basada en el WSI.
-
-    Args:
-        wet_snow_index: Imagen con wet snow index
-        umbral_db: Umbral en dB para clasificar como nieve húmeda
-
-    Returns:
-        ee.Image: Máscara binaria (1 = nieve húmeda, 0 = no)
-    """
-    return wet_snow_index.lt(umbral_db).rename('wet_snow_mask')
-
-
 def calcular_metricas_sar(
     imagen_sar: ee.Image,
     imagen_referencia: Optional[ee.Image],
@@ -441,33 +424,3 @@ def obtener_productos_sar(
         return resultado
 
 
-def compilar_metricas_sar_bigquery(
-    productos_sar: Dict[str, Any]
-) -> Dict[str, Any]:
-    """
-    Formatea las métricas SAR para BigQuery.
-
-    Args:
-        productos_sar: Resultado de obtener_productos_sar()
-
-    Returns:
-        dict: Métricas formateadas para BigQuery
-    """
-    metricas = {
-        'sar_disponible': productos_sar.get('disponible', False),
-        'sar_fecha': None,
-        'sar_pct_nieve_humeda': None,
-        'sar_vv_medio_db': None,
-        'sar_delta_vv_db': None,
-    }
-
-    if productos_sar.get('disponible'):
-        metadatos = productos_sar.get('metadatos', {})
-        metricas_sar = productos_sar.get('metricas', {})
-
-        metricas['sar_fecha'] = metadatos.get('fecha_str')
-        metricas['sar_pct_nieve_humeda'] = metricas_sar.get('sar_pct_nieve_humeda')
-        metricas['sar_vv_medio_db'] = metricas_sar.get('sar_vv_medio_db')
-        metricas['sar_delta_vv_db'] = metricas_sar.get('sar_delta_vv_db')
-
-    return metricas

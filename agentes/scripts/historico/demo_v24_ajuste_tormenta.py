@@ -18,7 +18,7 @@ Ejecutar:
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../.."))
 
 from agentes.subagentes.subagente_topografico.tools.tool_calcular_pinn import (
     ejecutar_calcular_pinn,

@@ -6,7 +6,7 @@ geográfica de cada ubicación, con fallbacks automáticos.
 """
 
 import logging
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional
 
 from constantes import (
     FUENTES_POR_REGION,
@@ -218,46 +218,6 @@ def obtener_resolucion(fuente: str) -> int:
     return RESOLUCIONES.get(fuente, 500)
 
 
-def obtener_fuentes_ordenadas_por_prioridad(
-    config_ubicacion: Dict[str, Any],
-    tipo_captura: str
-) -> List[Tuple[str, str]]:
-    """
-    Obtiene lista de fuentes ordenadas por prioridad para una captura.
-
-    Para capturas diurnas: fuente_principal → fuente_diaria → VIIRS
-    Para capturas nocturnas: solo térmica (LST, ERA5)
-
-    Args:
-        config_ubicacion: Configuración de fuentes de la ubicación
-        tipo_captura: 'diurna' o 'nocturna_termica'
-
-    Returns:
-        list: Lista de tuplas (fuente, producto) en orden de prioridad
-    """
-    fuentes = []
-
-    if tipo_captura == 'nocturna_termica':
-        # Capturas nocturnas: solo térmico
-        fuentes.append(('MODIS', 'lst'))
-        fuentes.append(('ERA5-Land', 'temperatura'))
-    else:
-        # Capturas diurnas
-        fuente_principal = config_ubicacion.get('fuente_principal', 'MODIS')
-
-        # Fuente principal para visual
-        if fuente_principal.startswith('GOES'):
-            fuentes.append((fuente_principal, 'visual'))
-
-        # MODIS siempre como respaldo diario
-        fuentes.append(('MODIS', 'visual'))
-
-        # VIIRS como alternativa
-        fuentes.append(('VIIRS', 'visual'))
-
-    return fuentes
-
-
 def hay_cobertura_goes(longitud: float) -> bool:
     """
     Verifica si las coordenadas tienen cobertura GOES.
@@ -274,106 +234,3 @@ def hay_cobertura_goes(longitud: float) -> bool:
     return -170 <= longitud <= -30
 
 
-def seleccionar_satelite_goes(longitud: float) -> str:
-    """
-    Selecciona el satélite GOES apropiado según la longitud.
-
-    Args:
-        longitud: Longitud en grados decimales
-
-    Returns:
-        str: 'GOES-18' o 'GOES-16'
-    """
-    if not hay_cobertura_goes(longitud):
-        raise ErrorFuenteNoDisponible(
-            f"Sin cobertura GOES para longitud {longitud}"
-        )
-
-    # GOES-18 para el Pacífico y costa oeste de Américas
-    # GOES-16 para el Atlántico y costa este
-    if longitud < -100:
-        return 'GOES-18'
-    else:
-        return 'GOES-16'
-
-
-def validar_fuente_disponible(fuente: str, producto: str) -> bool:
-    """
-    Valida si una fuente y producto están disponibles.
-
-    Args:
-        fuente: Nombre de la fuente
-        producto: Tipo de producto
-
-    Returns:
-        bool: True si la combinación es válida
-    """
-    try:
-        obtener_coleccion_gee(fuente, producto)
-        return True
-    except ErrorFuenteNoDisponible:
-        return False
-
-
-def obtener_todas_las_fuentes_para_ubicacion(
-    nombre_ubicacion: str,
-    latitud: float,
-    longitud: float,
-    tipo_captura: str
-) -> Dict[str, Any]:
-    """
-    Obtiene todas las fuentes a consultar para una ubicación y captura.
-
-    Args:
-        nombre_ubicacion: Nombre de la ubicación
-        latitud: Latitud
-        longitud: Longitud
-        tipo_captura: 'manana', 'tarde', 'noche'
-
-    Returns:
-        dict: Información de fuentes con:
-            - config: Configuración general
-            - fuentes_visual: Lista de fuentes para imagen visual
-            - fuentes_ndsi: Lista de fuentes para NDSI
-            - fuentes_lst: Lista de fuentes para LST
-            - fuentes_era5: Fuente ERA5 siempre incluida
-    """
-    config = obtener_configuracion_fuente(nombre_ubicacion, latitud, longitud)
-
-    resultado = {
-        'config': config,
-        'fuentes_visual': [],
-        'fuentes_ndsi': [],
-        'fuentes_lst': [],
-        'fuentes_era5': [('ERA5-Land', 'nieve')],  # Siempre incluido como gap-filler
-    }
-
-    tipo = 'nocturna_termica' if tipo_captura == 'noche' else 'diurna'
-
-    if tipo == 'diurna':
-        # Fuentes visuales
-        fuente_principal = config.get('fuente_principal', 'MODIS')
-        if fuente_principal.startswith('GOES'):
-            resultado['fuentes_visual'].append((fuente_principal, 'visual'))
-        resultado['fuentes_visual'].append(('MODIS', 'visual_terra'))
-        resultado['fuentes_visual'].append(('MODIS', 'visual_aqua'))
-
-        # NDSI
-        resultado['fuentes_ndsi'].append(('MODIS', 'ndsi_terra'))
-        resultado['fuentes_ndsi'].append(('MODIS', 'ndsi_aqua'))
-
-        # LST diurno
-        resultado['fuentes_lst'].append(('MODIS', 'lst'))
-
-    else:
-        # Captura nocturna: solo LST y ERA5
-        resultado['fuentes_lst'].append(('MODIS', 'lst'))
-
-    logger.info(
-        f"Fuentes configuradas para {nombre_ubicacion} ({tipo_captura}): "
-        f"visual={len(resultado['fuentes_visual'])}, "
-        f"ndsi={len(resultado['fuentes_ndsi'])}, "
-        f"lst={len(resultado['fuentes_lst'])}"
-    )
-
-    return resultado

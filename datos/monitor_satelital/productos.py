@@ -33,14 +33,12 @@ from constantes import (
     VIS_NDSI_SNOW,
     VIS_LST,
     VIS_GOES_PSEUDO_COLOR,
-    VIS_GOES_TERMICO,
     VIS_ERA5_SNOW_DEPTH,
     DIAS_BUSQUEDA_GOES,
     DIAS_BUSQUEDA_MODIS,
     DIAS_BUSQUEDA_ERA5,
     DIAS_BUSQUEDA_SENTINEL2,
     RADIO_TILE_METROS,
-    NDSI_VALOR_NUBE,
     LST_FACTOR_ESCALA,
     KELVIN_A_CELSIUS,
     TIMEOUT_DESCARGA_SEGUNDOS,
@@ -58,11 +56,6 @@ def _getinfo_con_timeout(objeto_ee, timeout: int = TIMEOUT_DESCARGA_SEGUNDOS):
             return futuro.result(timeout=timeout)
         except concurrent.futures.TimeoutError:
             raise TimeoutError(f"GEE getInfo() timeout después de {timeout}s")
-
-
-class ErrorProductoNoDisponible(Exception):
-    """Excepción cuando el producto satelital no está disponible."""
-    pass
 
 
 # =============================================================================
@@ -197,27 +190,9 @@ def procesar_goes_visual(imagen: ee.Image) -> ee.Image:
     ]).rename(['R', 'G', 'B'])
 
 
-def procesar_goes_termico(imagen: ee.Image) -> ee.Image:
-    """
-    Procesa banda térmica de GOES.
-
-    Args:
-        imagen: Imagen GOES
-
-    Returns:
-        ee.Image: Banda térmica en Kelvin
-    """
-    return imagen.select([BANDAS_GOES['ir_termico']]).rename(['LST_Kelvin'])
-
-
 def obtener_vis_params_goes_visual() -> Dict[str, Any]:
     """Retorna parámetros de visualización para GOES visual."""
     return VIS_GOES_PSEUDO_COLOR
-
-
-def obtener_vis_params_goes_termico() -> Dict[str, Any]:
-    """Retorna parámetros de visualización para GOES térmico."""
-    return VIS_GOES_TERMICO
 
 
 # =============================================================================
