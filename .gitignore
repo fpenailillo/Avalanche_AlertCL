@@ -41,13 +41,16 @@ gce_credentials.json
 
 # ─── Datos locales (no se versionan) ─────────────────────────────────────────
 datos_locales/
-data/external/
+**/data/external/
 outputs/
 exports/
 *.geotiff
 *.tiff
 *.tif
 boletines_locales/
+
+# ─── Archivos de bloqueo de Office ───────────────────────────────────────────
+~$*
 
 # ─── IDE ─────────────────────────────────────────────────────────────────────
 .idea/

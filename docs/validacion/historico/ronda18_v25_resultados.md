@@ -124,7 +124,7 @@ Los fixes v23–v25 fueron diseñados para operación en tiempo real con acceso 
 - WeatherNext 2 (pronóstico ensemble 64 miembros)
 - Satélite S2 (ViT + NDSI delta)
 
-En el demo controlado (`agentes/scripts/demo_v24_ajuste_tormenta.py`) con estas fuentes simuladas:
+En el demo controlado (`agentes/scripts/historico/demo_v24_ajuste_tormenta.py`) con estas fuentes simuladas:
 
 | Versión | MAE tormentas (n=3) | Sesgo |
 |---|---|---|

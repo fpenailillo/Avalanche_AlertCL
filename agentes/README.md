@@ -200,7 +200,12 @@ agentes/
 ├── scripts/
 │   ├── generar_boletin.py             # CLI por ubicación individual
 │   ├── generar_todos.py               # Genera boletines para preset de ubicaciones
-│   └── generar_boletines_invierno.py  # Genera serie histórica de invierno completa
+│   ├── generar_boletines_invierno.py  # Genera serie histórica de invierno completa
+│   ├── exportar_boletin_activo.py     # Publica boletin_activo.json (job desacoplado)
+│   ├── exportar_series_horas.py       # Series horarias para el frontend
+│   ├── exportar_observaciones.py      # Exporta observaciones de la comunidad
+│   └── historico/                     # Scripts de un solo uso ya ejecutados, citados
+│                                      # por los informes de validación (no se ejecutan)
 │
 ├── despliegue/
 │   ├── Dockerfile
@@ -210,7 +215,6 @@ agentes/
 │
 └── tests/
     ├── test_subagentes.py
-    ├── test_tools.py
     ├── test_boletin_completo.py
     ├── test_conexion.py
     ├── test_fase0_datos.py

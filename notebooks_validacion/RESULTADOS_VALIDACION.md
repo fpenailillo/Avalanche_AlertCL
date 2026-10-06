@@ -8,7 +8,7 @@
 > Las rondas 6–18 (v7.0 → v25.0) están documentadas en
 > `docs/validacion/rondaN_*.md`; el índice completo está en
 > `docs/validacion/RESULTADOS_VALIDACION.md`. El estado más reciente es la
-> **Ronda 18 (v25.0, 2026-05-23)**: `docs/validacion/ronda18_v25_resultados.md`.
+> **Ronda 18 (v25.0, 2026-05-23)**: `docs/validacion/historico/ronda18_v25_resultados.md`.
 > Las versiones de validación (v3.0 → v25.0) son una única línea evolutiva y
 > corresponden al `VERSION_GLOBAL` de `agentes/prompts/registro_versiones.py`.
 

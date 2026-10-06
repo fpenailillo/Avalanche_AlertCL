@@ -23,7 +23,7 @@ Las correcciones de bajo riesgo identificadas en esta revisión ya fueron aplica
 | Versionado de prompts con integridad verificable | `agentes/prompts/registro_versiones.py` — semver por subagente + hash SHA-256 + changelog (VERSION_GLOBAL v25.17) |
 | Tests de regresión por FIX | `agentes/tests/` — 28 archivos, ~530 tests, incl. `test_fix_pinn_wn2.py`, `test_req01_persistencia_temporal.py` |
 | Trazabilidad por ronda de validación | `docs/validacion/rondaN_*.md` — cada ronda registra versión, branch, commit, fecha y nº de runs |
-| Diagnóstico honesto de regresiones | `docs/validacion/ronda18_v25_resultados.md` — explica por qué H4 empeoró (fuentes WN2/S2 no disponibles en validación histórica) en vez de reportar solo el MAE global que mejoró |
+| Diagnóstico honesto de regresiones | `docs/validacion/historico/ronda18_v25_resultados.md` — explica por qué H4 empeoró (fuentes WN2/S2 no disponibles en validación histórica) en vez de reportar solo el MAE global que mejoró |
 | Manejo de errores y reintentos | `agentes/subagentes/base_subagente.py` (backoff exponencial), excepciones custom (`ErrorOrquestador`, `ErrorSubagente`) |
 | Higiene de secretos | `.gitignore` robusto; sin API keys en el código ni en el historial; tokens vía env vars / Secret Manager |
 | Frontend con degradación elegante | `frontend/src/services/boletin.js` — fetch a GCS con timeout y fallback a datos demo con aviso visible |
@@ -34,22 +34,22 @@ Las correcciones de bajo riesgo identificadas en esta revisión ya fueron aplica
 
 ### M1 (crítico) — Documentos-resumen de validación congelados y contradictorios ✅ corregido
 
-`docs/validacion/RESULTADOS_VALIDACION.md` quedó en la Ronda 3 (v4.0, 2026-05-02) y `notebooks_validacion/RESULTADOS_VALIDACION.md` en la Ronda 5 (v6.2, 2026-05-03), mientras los reportes por ronda llegan hasta la Ronda 18 (v25.0, 2026-05-23). Quien lea solo los resúmenes concluye QWK H3 = −0.031 cuando el valor vigente es +0.3496 (`ronda18_v25_resultados.md`). **Aplicado:** ambos documentos ahora llevan una nota de "documento histórico" con puntero al estado vigente, y el de `docs/` incluye un índice de las 18 rondas.
+`docs/validacion/RESULTADOS_VALIDACION.md` quedó en la Ronda 3 (v4.0, 2026-05-02) y `notebooks_validacion/RESULTADOS_VALIDACION.md` en la Ronda 5 (v6.2, 2026-05-03), mientras los reportes por ronda llegan hasta la Ronda 18 (v25.0, 2026-05-23). Quien lea solo los resúmenes concluye QWK H3 = −0.031 cuando el valor vigente es +0.3496 (`docs/validacion/historico/ronda18_v25_resultados.md`). **Aplicado:** ambos documentos ahora llevan una nota de "documento histórico" con puntero al estado vigente, y el de `docs/` incluye un índice de las 18 rondas.
 
 ### M2 (crítico) — Criterios de éxito que cambian entre rondas sin justificación consolidada
 
-- H3: el objetivo era QWK ≥ 0.59 (Techel et al. 2022) en los resúmenes; en `ronda18_v25_resultados.md` se evalúa contra "Objetivo H3 (≥0.35)" y se declara el 0.59 "inalcanzable con n=30".
+- H3: el objetivo era QWK ≥ 0.59 (Techel et al. 2022) en los resúmenes; en `docs/validacion/historico/ronda18_v25_resultados.md` se evalúa contra "Objetivo H3 (≥0.35)" y se declara el 0.59 "inalcanzable con n=30".
 - H4: objetivo QWK ≥ 0.60 en `docs/validacion/RESULTADOS_VALIDACION.md` vs ≥ 0.40 en `notebooks_validacion/RESULTADOS_VALIDACION.md`.
 
 Relajar umbrales después de ver los resultados ("moving the goalposts") es la objeción metodológica más probable de un comité. **Recomendación:** documento único de hipótesis con los umbrales originales, los vigentes, la fecha y la justificación de cada cambio; en la tesina, presentar los resultados contra ambos umbrales y justificar la recalibración con argumentos independientes del resultado (p. ej. potencia alcanzable con n=30).
 
 ### M3 (alto) — Cambio de dataset de validación a mitad del proceso
 
-H1/H3 se validaron primero con n=24 (3 estaciones × 10 fechas, invierno 2023-24, `notebooks_validacion/07_validacion_slf_suiza.py`) y desde la Ronda 13 con el test set DEAPSnow 2018-2020, n=30 (`ronda13_v17_suiza_resultados.md`). Las progresiones entre rondas con datasets distintos no son comparables directamente. **Recomendación:** declarar el cambio de dataset en la tesina y no mezclar ambas series en una misma tabla de progresión sin anotarlo.
+H1/H3 se validaron primero con n=24 (3 estaciones × 10 fechas, invierno 2023-24, `notebooks_validacion/07_validacion_slf_suiza.py`) y desde la Ronda 13 con el test set DEAPSnow 2018-2020, n=30 (`docs/validacion/historico/ronda13_v17_suiza_resultados.md`). Las progresiones entre rondas con datasets distintos no son comparables directamente. **Recomendación:** declarar el cambio de dataset en la tesina y no mezclar ambas series en una misma tabla de progresión sin anotarlo.
 
 ### M4 (alto) — Riesgo de sobreajuste al conjunto de prueba por el ciclo fix→revalidar
 
-Las 18 rondas diagnostican errores inspeccionando los mismos pares que luego se usan para validar (87 pares Snowlab; 24/30 pares suizos). Tras 18 iteraciones, las métricas finales sobre esos conjuntos son estimaciones optimistas del desempeño real (el conjunto de prueba actuó de facto como conjunto de desarrollo). `ronda18_v25_resultados.md` ya identifica la solución correcta: **validación prospectiva en la temporada 2025 (junio–septiembre)** con datos nunca vistos. **Recomendación:** declarar esta limitación explícitamente en la tesina y tratar las métricas históricas como métricas de desarrollo, reservando la validación prospectiva como evaluación confirmatoria.
+Las 18 rondas diagnostican errores inspeccionando los mismos pares que luego se usan para validar (87 pares Snowlab; 24/30 pares suizos). Tras 18 iteraciones, las métricas finales sobre esos conjuntos son estimaciones optimistas del desempeño real (el conjunto de prueba actuó de facto como conjunto de desarrollo). `docs/validacion/historico/ronda18_v25_resultados.md` ya identifica la solución correcta: **validación prospectiva en la temporada 2025 (junio–septiembre)** con datos nunca vistos. **Recomendación:** declarar esta limitación explícitamente en la tesina y tratar las métricas históricas como métricas de desarrollo, reservando la validación prospectiva como evaluación confirmatoria.
 
 ### M5 (alto) — H2 validada únicamente con datos sintéticos calibrados al objetivo
 
@@ -93,7 +93,7 @@ Los resúmenes de validación decían "Tesis Doctoral MTI UTFSM" mientras el REA
 
 ### I4 (medio) — Scripts ad-hoc y componentes obsoletos sin marcar
 
-`agentes/scripts/demo_v24_ajuste_tormenta.py`, `demo_fix_sat_storm.py`, `migrar_schema_boletines.py` vs `migrar_schema_boletines_v7.py`, y `agentes/subagentes/subagente_nlp/` (reemplazado por S4 Situational Briefing). Nota: `demo_v24_ajuste_tormenta.py` SÍ se cita en `ronda18_v25_resultados.md` como evidencia de la mejora operacional — no eliminarlo sin actualizar esa referencia. **Recomendación:** sección "scripts vigentes vs históricos" en `agentes/README.md` o mover los obsoletos a `agentes/scripts/legacy/`.
+`agentes/scripts/historico/demo_v24_ajuste_tormenta.py`, `demo_fix_sat_storm.py`, `migrar_schema_boletines.py` vs `migrar_schema_boletines_v7.py`, y `agentes/subagentes/subagente_nlp/` (reemplazado por S4 Situational Briefing). Nota: `demo_v24_ajuste_tormenta.py` SÍ se cita en `docs/validacion/historico/ronda18_v25_resultados.md` como evidencia de la mejora operacional — no eliminarlo sin actualizar esa referencia. **Recomendación:** sección "scripts vigentes vs históricos" en `agentes/README.md` o mover los obsoletos a `agentes/scripts/legacy/`.
 
 ### I5 (medio) — Sin entorno Python reproducible para validación y tests
 

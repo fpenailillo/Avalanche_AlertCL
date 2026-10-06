@@ -193,7 +193,7 @@ Reproceso completado 2026-05-18. Primera validación con DEAPSnow IMIS 2018-2020
 | n pares | 30 | — | — |
 
 Patrón dominante: sistema **subestima** en Suiza (opuesto a La Parva). Nivel 3 GT = 36.7%, predicho = 20%.
-Ver análisis completo en `ronda13_v17_suiza_resultados.md`.
+Ver análisis completo en `historico/ronda13_v17_suiza_resultados.md`.
 
 ---
 
@@ -201,11 +201,11 @@ Ver análisis completo en `ronda13_v17_suiza_resultados.md`.
 
 | Archivo | Contenido |
 |---------|-----------|
-| `docs/validacion/ronda13_v17_suiza_resultados.md` | **H1/H3 R13 v17.0 (DEAPSnow 2018-2020)** |
-| `docs/validacion/ronda12_v17_resultados.md` | Análisis detallado R12 H4 |
-| `docs/validacion/ronda11_v16_resultados.md` | Análisis R11 + diagnóstico FIX-CR16A |
-| `docs/validacion/ronda10_v15_resultados.md` | Análisis R10 + diagnóstico regresión |
-| `docs/validacion/ronda8_v80_resultados.md` | Mejor línea base histórica H4 (v8.0) |
-| `docs/validacion/ronda9_v90_resultados.md` | Último reproceso H3 Suiza previo (2023-2024) |
+| `docs/validacion/historico/ronda13_v17_suiza_resultados.md` | **H1/H3 R13 v17.0 (DEAPSnow 2018-2020)** |
+| `docs/validacion/historico/ronda12_v17_resultados.md` | Análisis detallado R12 H4 |
+| `docs/validacion/historico/ronda11_v16_resultados.md` | Análisis R11 + diagnóstico FIX-CR16A |
+| `docs/validacion/historico/ronda10_v15_resultados.md` | Análisis R10 + diagnóstico regresión |
+| `docs/validacion/historico/ronda8_v80_resultados.md` | Mejor línea base histórica H4 (v8.0) |
+| `docs/validacion/historico/ronda9_v90_resultados.md` | Último reproceso H3 Suiza previo (2023-2024) |
 | `agentes/tests/test_fix_s1_semantica.py` | Tests unitarios S1 semántica EAWS |
 | `agentes/tests/test_req05_st_regionstats.py` | Tests REQ-05 stats regionales |

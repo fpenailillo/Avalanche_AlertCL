@@ -205,7 +205,7 @@ tormenta está activo (evita falsos positivos en calma).
 
 Evaluación sobre los mismos 3 eventos de tormenta documentados en §2 (Snowlab ≥ 3),
 usando condiciones ERA5 reales + estimación WN2 de nieve nueva y señal NDSI de S2.
-Script: `agentes/scripts/demo_v24_ajuste_tormenta.py`.
+Script: `agentes/scripts/historico/demo_v24_ajuste_tormenta.py`.
 
 | Fecha | Ground truth | v22.0 | v23.0 | v24.0 | v25.0 | Δ v22 | Δ v25 |
 |---|---|---|---|---|---|---|---|
@@ -340,7 +340,7 @@ La validación retroactiva completa (120 runs, 118 OK) con AndesAI v25.0 mostró
 | H4 La Parva | QWK = −0.080 | ❌ < 0.40 | WN2/satélite no disponible históricamente |
 | H4 tormentas | MAE = 2.417 | ❌ > 1.00 | ERA5 subestima convección andina |
 
-La brecha H4 es estructural al framework de validación histórica (ver `ronda18_v25_resultados.md`).  
+La brecha H4 es estructural al framework de validación histórica (ver `historico/ronda18_v25_resultados.md`).  
 Validación real de v25 pendiente con boletines Snowlab La Parva temporada 2025.
 
 ---
@@ -354,5 +354,5 @@ Validación real de v25 pendiente con boletines Snowlab La Parva temporada 2025.
   *Journal of Glaciology*, 63(241), 803–822.
 - Snowlab La Parva (CAA, Domingo Valdivieso Ducci) — ground truth H4 AndesAI.
 - REQ-2026-09: Integración Dataset Caro et al. 2026 en AndesAI.
-- `docs/validacion/ronda18_v25_resultados.md` — métricas completas v25.
-- Ronda 17 resultados v22.0: `docs/validacion/ronda17_v22_resultados.md`.
+- `docs/validacion/historico/ronda18_v25_resultados.md` — métricas completas v25.
+- Ronda 17 resultados v22.0: `docs/validacion/historico/ronda17_v22_resultados.md`.
